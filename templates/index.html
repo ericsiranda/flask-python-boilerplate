@@ -142,7 +142,7 @@
                         <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-400">Tersimpan</span></td>
                         <td class="px-4 py-3">${sizeMB} MB</td>
                         <td class="px-4 py-3 flex gap-2">
-                            <button onclick="previewVideo('${file.pathname}')" class="text-green-400 hover:underline text-xs">Preview</button>
+                            <button onclick="previewVideo('${file.url}')" class="text-green-400 hover:underline text-xs">Preview</button>
                             <button onclick="deleteVideo('${file.url}', '${file.pathname}')" class="text-red-400 hover:underline text-xs">Hapus</button>
                         </td>
                     `;
@@ -154,18 +154,14 @@
             }
         }
 
-        // ==================== PREVIEW VIDEO (TANPA EKSTENSI) ====================
-        function previewVideo(pathname) {
+        // ==================== PREVIEW VIDEO (PUBLIC STORE) ====================
+        // Untuk public store, kita bisa akses URL langsung dari Vercel Blob
+        function previewVideo(fileUrl) {
             const container = document.getElementById('rawVideoContainer');
-            container.innerHTML = '<div class="text-center text-gray-400 text-xs p-4">Memuat video...</div>';
-            
-            // Hilangkan ekstensi .mp4 dari URL
-            const pathWithoutExt = pathname.replace(/\.mp4$/, '');
-            const streamUrl = `/stream/${pathWithoutExt}?t=${Date.now()}`;
             
             container.innerHTML = `
                 <video 
-                    src="${streamUrl}" 
+                    src="${fileUrl}" 
                     controls 
                     preload="metadata"
                     class="w-full h-full object-contain rounded-lg bg-black"

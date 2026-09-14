@@ -1,8 +1,7 @@
 import os
-from flask import Flask, render_template, jsonify, request, Response
+from flask import Flask, render_template, jsonify, request
 from vercel.blob import put
 import vercel_blob
-import requests
 
 app = Flask(__name__)
 
@@ -23,10 +22,11 @@ def upload_video():
         
         file_content = file.read()
         
+        # PUBLIC STORE - tidak perlu access='private'
         result = put(
             file.filename,
             file_content,
-            access='private',
+            access='public',
             multipart=True
         )
         
@@ -77,50 +77,6 @@ def delete_file():
         vercel_blob.delete(url)
         
         return jsonify({'success': True, 'message': 'File berhasil dihapus'})
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# ==================== STREAM VIDEO (TANPA EKSTENSI .mp4) ====================
-@app.route('/stream/<path:pathname>', methods=['GET'])
-def stream_video(pathname):
-    """
-    Stream video dari Vercel Blob private.
-    URL: /stream/namafile (tanpa .mp4)
-    """
-    try:
-        # Tambahkan kembali ekstensi .mp4
-        if not pathname.endswith('.mp4'):
-            pathname = pathname + '.mp4'
-        
-        token = os.environ.get('BLOB_READ_WRITE_TOKEN')
-        
-        if not token:
-            return jsonify({'error': 'Token tidak ditemukan'}), 500
-        
-        blob_url = f"https://blob.vercel-storage.com/{pathname}"
-        
-        headers = {
-            'Authorization': f'Bearer {token}'
-        }
-        
-        req = requests.get(blob_url, headers=headers, stream=True)
-        
-        if req.status_code != 200:
-            return jsonify({
-                'error': f'Gagal: {req.status_code}',
-                'detail': req.text[:300]
-            }), req.status_code
-        
-        return Response(
-            req.iter_content(chunk_size=8192),
-            status=200,
-            content_type=req.headers.get('Content-Type', 'video/mp4'),
-            headers={
-                'Accept-Ranges': 'bytes',
-                'Cache-Control': 'private, max-age=3600',
-            }
-        )
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
