@@ -1,6 +1,7 @@
 import os
-from flask import Flask, render_template, jsonify, request, send_file
+from flask import Flask, render_template, jsonify, request, send_file, Response
 from vercel.blob import put
+from vercel.blob import get as blob_get
 from io import BytesIO
 
 app = Flask(__name__)
@@ -19,10 +20,8 @@ def upload_video():
         if file.filename == '':
             return jsonify({'error': 'Nama file kosong'}), 400
         
-        # Baca isi file
         file_content = file.read()
         
-        # Upload ke Vercel Blob dengan akses private
         result = put(
             file.filename,
             file_content,
@@ -41,15 +40,21 @@ def upload_video():
 
 @app.route('/api/file/<path:pathname>', methods=['GET'])
 def get_file(pathname):
+    """Mengambil file private dari Vercel Blob dan mengirimkannya ke browser."""
     try:
-        # Ambil file private dari Vercel Blob
-        # SDK resmi akan otomatis menggunakan token untuk autentikasi
-        blob_content = get(pathname)
+        blob_content = blob_get(pathname)
         
-        return send_file(
-            BytesIO(blob_content),
+        if blob_content is None:
+            return jsonify({'error': 'File tidak ditemukan'}), 404
+        
+        # Kirim sebagai response streaming
+        return Response(
+            blob_content,
             mimetype='video/mp4',
-            as_attachment=False
+            headers={
+                'Content-Disposition': 'inline',
+                'Accept-Ranges': 'bytes'
+            }
         )
     except Exception as e:
         return jsonify({'error': str(e)}), 500
