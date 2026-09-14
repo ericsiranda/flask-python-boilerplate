@@ -1,6 +1,6 @@
 import os
-from flask import Flask, render_template, jsonify
-from vercel_blob import generate_client_token
+from flask import Flask, render_template, jsonify, request
+from vercel.blob import presign_url
 
 app = Flask(__name__)
 
@@ -11,11 +11,16 @@ def index():
 @app.route('/api/upload-token', methods=['POST'])
 def upload_token():
     try:
-        token = generate_client_token(
-            allowed_content_types=['video/*'],
-            maximum_size_in_bytes=500 * 1024 * 1024,
+        data = request.json
+        filename = data.get('filename', 'video.mp4')
+        
+        signed_url = presign_url(
+            pathname=f"uploads/{filename}",
+            operation="put",
+            valid_until=300
         )
-        return jsonify({'token': token})
+        
+        return jsonify({'url': signed_url})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
