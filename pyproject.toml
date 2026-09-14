@@ -5,7 +5,7 @@ description = "Flask + Vercel"
 dependencies = [
     "Flask",
     "gunicorn~=23.0.0",
-    "vercel",
+    "vercel-blob",
 ]
 
 [tool.vercel]

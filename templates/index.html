@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Upload Video Mentah</title>
-    <!-- Menggunakan Tailwind CSS agar tampilan modern -->
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
@@ -26,7 +25,6 @@
             </button>
         </form>
 
-        <!-- Area Status -->
         <div id="status" class="mt-6 text-center text-sm p-3 rounded-lg bg-gray-700/50 hidden"></div>
     </div>
 
@@ -36,7 +34,6 @@
             const statusDiv = document.getElementById('status');
             const file = fileInput.files[0];
 
-            // Tampilkan area status
             statusDiv.classList.remove('hidden');
 
             if (!file) {
@@ -44,48 +41,36 @@
                 return;
             }
 
-            statusDiv.innerHTML = '<span class="text-blue-400">⏳ Meminta URL upload aman...</span>';
+            statusDiv.innerHTML = '<span class="text-blue-400">⏳ Meminta token upload...</span>';
 
             try {
-                // 1. Minta signed URL ke backend Flask
                 const tokenResponse = await fetch('/api/upload-token', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename: file.name })
+                    headers: { 'Content-Type': 'application/json' }
                 });
                 
-                if (!tokenResponse.ok) {
-                    const errData = await tokenResponse.json();
-                    throw new Error(errData.error || 'Gagal mendapatkan URL upload');
-                }
-                
-                const { url } = await tokenResponse.json();
+                if (!tokenResponse.ok) throw new Error('Gagal mendapatkan token');
+                const { token } = await tokenResponse.json();
 
                 statusDiv.innerHTML = '<span class="text-blue-400">📤 Mengunggah video... (jangan tutup halaman)</span>';
 
-                // 2. Upload langsung ke Vercel Blob menggunakan signed URL
-                const blobResponse = await fetch(url, {
+                const blobResponse = await fetch(`https://blob.vercel-storage.com/${file.name}`, {
                     method: 'PUT',
                     headers: {
+                        'Authorization': `Bearer ${token}`,
                         'Content-Type': file.type,
                     },
                     body: file
                 });
 
-                if (!blobResponse.ok) throw new Error('Gagal mengunggah ke Vercel Blob');
+                if (!blobResponse.ok) throw new Error('Gagal mengunggah ke Blob');
                 
-                // 3. Dapatkan respons (Vercel Blob biasanya mengembalikan JSON dengan URL file)
                 const blobData = await blobResponse.json();
-                const fileUrl = blobData.url || url.split('?')[0]; // Fallback jika tidak ada url di response
                 
                 statusDiv.innerHTML = `
                     <span class="text-green-400 block mb-2">✅ Berhasil diunggah!</span>
-                    <a href="${fileUrl}" target="_blank" class="text-blue-300 underline break-all text-xs">${fileUrl}</a>
-                    <p class="text-gray-400 text-xs mt-2">URL ini akan digunakan untuk proses AI selanjutnya.</p>
+                    <a href="${blobData.url}" target="_blank" class="text-blue-300 underline break-all text-xs">${blobData.url}</a>
                 `;
-                
-                // Simpan URL ke variabel global atau kirim ke backend untuk diproses AI
-                console.log('Video URL:', fileUrl);
 
             } catch (error) {
                 console.error(error);
