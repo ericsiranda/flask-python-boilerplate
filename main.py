@@ -1,6 +1,6 @@
 import os
 from flask import Flask, render_template, jsonify, request
-from vercel.blob import presign_url
+from vercel.blob import put
 import vercel_blob
 
 app = Flask(__name__)
@@ -9,31 +9,43 @@ app = Flask(__name__)
 def index():
     return render_template('index.html')
 
-# ==================== TOKEN UPLOAD (SIGNED URL) ====================
-@app.route('/api/upload-token', methods=['POST'])
-def handle_upload_token():
-    """
-    Endpoint ini dipanggil browser SEBELUM upload dimulai.
-    Tugasnya: membuat Signed URL yang memungkinkan browser
-    upload langsung ke Vercel Blob tanpa melewati server Flask.
-    """
+# ==================== UPLOAD ====================
+@app.route('/api/upload', methods=['POST'])
+def upload_video():
     try:
-        body = request.json
-        filename = body.get('filename', 'video.mp4')
+        if 'video' not in request.files:
+            return jsonify({'error': 'Tidak ada file video'}), 400
         
-        # Buat signed URL untuk operasi PUT (upload)
-        # URL ini berlaku 1 jam untuk satu file tertentu
-        url = presign_url(
-            pathname=filename,
-            operation='put',
-            valid_until=3600
+        file = request.files['video']
+        if file.filename == '':
+            return jsonify({'error': 'Nama file kosong'}), 400
+        
+        file_content = file.read()
+        file_size_mb = len(file_content) / 1024 / 1024
+        
+        # Cek batas 4.5 MB (batas Vercel Function)
+        if file_size_mb > 4.5:
+            return jsonify({
+                'error': f'File terlalu besar ({file_size_mb:.2f} MB). Maksimal 4.5 MB untuk upload via server. Untuk file lebih besar, kompres dulu atau gunakan layanan lain.'
+            }), 413
+        
+        # PUBLIC STORE
+        result = put(
+            file.filename,
+            file_content,
+            access='public',
+            multipart=True
         )
         
-        return jsonify({'url': url})
+        return jsonify({
+            'success': True,
+            'url': result.url,
+            'pathname': result.pathname,
+            'filename': file.filename,
+            'size': len(file_content)
+        })
     
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # ==================== LIST FILES ====================
@@ -84,8 +96,6 @@ def debug_info():
     return jsonify({
         'token_available': token is not None,
         'store_id_available': store_id is not None,
-        'token_preview': token[:20] + '...' if token else None,
-        'store_id': store_id,
     })
 
 if __name__ == '__main__':
