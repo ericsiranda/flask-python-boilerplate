@@ -22,7 +22,7 @@ def upload_video():
         
         file_content = file.read()
         
-        # PUBLIC STORE - tidak perlu access='private'
+        # PUBLIC STORE
         result = put(
             file.filename,
             file_content,
@@ -85,9 +85,14 @@ def delete_file():
 @app.route('/api/debug', methods=['GET'])
 def debug_info():
     token = os.environ.get('BLOB_READ_WRITE_TOKEN')
+    store_id = os.environ.get('BLOB_STORE_ID')
+    all_env = [k for k in os.environ.keys() if 'BLOB' in k]
     return jsonify({
         'token_available': token is not None,
+        'store_id_available': store_id is not None,
         'token_preview': token[:20] + '...' if token else None,
+        'store_id': store_id,
+        'all_blob_env_keys': all_env,
     })
 
 if __name__ == '__main__':
