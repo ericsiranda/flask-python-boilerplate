@@ -81,14 +81,18 @@ def delete_file():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ==================== STREAM VIDEO (private) - ROUTE BARU ====================
+# ==================== STREAM VIDEO (TANPA EKSTENSI .mp4) ====================
 @app.route('/stream/<path:pathname>', methods=['GET'])
 def stream_video(pathname):
     """
     Stream video dari Vercel Blob private.
-    URL: /stream/namafile.mp4 (tanpa /api/)
+    URL: /stream/namafile (tanpa .mp4)
     """
     try:
+        # Tambahkan kembali ekstensi .mp4
+        if not pathname.endswith('.mp4'):
+            pathname = pathname + '.mp4'
+        
         token = os.environ.get('BLOB_READ_WRITE_TOKEN')
         
         if not token:

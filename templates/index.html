@@ -154,13 +154,14 @@
             }
         }
 
-        // ==================== PREVIEW VIDEO ====================
-        // Menggunakan route /stream/ (BUKAN /api/stream/)
+        // ==================== PREVIEW VIDEO (TANPA EKSTENSI) ====================
         function previewVideo(pathname) {
             const container = document.getElementById('rawVideoContainer');
             container.innerHTML = '<div class="text-center text-gray-400 text-xs p-4">Memuat video...</div>';
             
-            const streamUrl = `/stream/${pathname}?t=${Date.now()}`;
+            // Hilangkan ekstensi .mp4 dari URL
+            const pathWithoutExt = pathname.replace(/\.mp4$/, '');
+            const streamUrl = `/stream/${pathWithoutExt}?t=${Date.now()}`;
             
             container.innerHTML = `
                 <video 
