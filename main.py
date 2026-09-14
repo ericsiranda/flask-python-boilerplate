@@ -1,6 +1,7 @@
 import os
 from flask import Flask, render_template, jsonify, request
-import vercel_blob
+from vercel.blob import put  # SDK resmi untuk upload (bisa private)
+import vercel_blob  # Library lama untuk list files
 
 app = Flask(__name__)
 
@@ -10,6 +11,7 @@ def index():
 
 @app.route('/api/upload', methods=['POST'])
 def upload_video():
+    """Upload video menggunakan SDK resmi Vercel (mendukung private store)"""
     try:
         if 'video' not in request.files:
             return jsonify({'error': 'Tidak ada file video'}), 400
@@ -20,16 +22,18 @@ def upload_video():
         
         file_content = file.read()
         
-        result = vercel_blob.put(
+        # Gunakan SDK resmi dengan access='private'
+        result = put(
             file.filename,
             file_content,
+            access='private',
             multipart=True
         )
         
         return jsonify({
             'success': True,
-            'url': result.get('url'),
-            'pathname': result.get('pathname', file.filename),
+            'url': result.url,
+            'pathname': result.pathname,
             'filename': file.filename,
             'size': len(file_content)
         })
@@ -39,7 +43,7 @@ def upload_video():
 
 @app.route('/api/list-files', methods=['GET'])
 def list_files():
-    """Mengambil daftar semua file yang ada di Vercel Blob"""
+    """Mengambil daftar file menggunakan library vercel_blob"""
     try:
         files = vercel_blob.list()
         
