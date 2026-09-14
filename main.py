@@ -1,8 +1,6 @@
 import os
-from flask import Flask, render_template, jsonify, request, send_file, Response
-from vercel.blob import put
-from vercel.blob import get as blob_get
-from io import BytesIO
+from flask import Flask, render_template, jsonify, request, Response
+from vercel.blob import put, head
 
 app = Flask(__name__)
 
@@ -32,32 +30,22 @@ def upload_video():
         return jsonify({
             'success': True,
             'url': result.url,
-            'pathname': result.pathname
+            'pathname': result.pathname,
+            'filename': file.filename,
+            'size': len(file_content)
         })
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/file/<path:pathname>', methods=['GET'])
-def get_file(pathname):
-    """Mengambil file private dari Vercel Blob dan mengirimkannya ke browser."""
+# Route untuk mengecek apakah file ada
+@app.route('/api/check/<path:pathname>', methods=['GET'])
+def check_file(pathname):
     try:
-        blob_content = blob_get(pathname)
-        
-        if blob_content is None:
-            return jsonify({'error': 'File tidak ditemukan'}), 404
-        
-        # Kirim sebagai response streaming
-        return Response(
-            blob_content,
-            mimetype='video/mp4',
-            headers={
-                'Content-Disposition': 'inline',
-                'Accept-Ranges': 'bytes'
-            }
-        )
+        info = head(pathname)
+        return jsonify({'exists': True, 'info': str(info)})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'exists': False, 'error': str(e)}), 404
 
 if __name__ == '__main__':
     app.run(debug=True)

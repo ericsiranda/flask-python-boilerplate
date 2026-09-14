@@ -124,7 +124,6 @@
     </main>
 
     <script>
-        let currentVideoUrl = null;
         let currentVideoPathname = null;
 
         async function uploadVideo() {
@@ -154,18 +153,25 @@
                 
                 if (!response.ok) throw new Error(data.error || 'Gagal upload');
                 
-                currentVideoUrl = data.url;
                 currentVideoPathname = data.pathname;
 
+                // 1. UPDATE STATUS UPLOAD
                 statusDiv.innerHTML = `<span class="text-green-400">✅ Berhasil diunggah!</span>`;
 
-                // Tampilkan video di preview menggunakan route /api/file/
+                // 2. TAMPILKAN INFO DI PREVIEW (bukan video, tapi info file)
                 document.getElementById('rawVideoContainer').innerHTML = `
-                    <video src="/api/file/${data.pathname}" controls class="w-full h-full object-cover rounded-lg"></video>
+                    <div class="text-center p-4">
+                        <svg class="w-12 h-12 mx-auto text-green-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <p class="text-sm text-white font-semibold">${data.filename}</p>
+                        <p class="text-xs text-gray-400 mt-1">${(data.size / 1024 / 1024).toFixed(2)} MB</p>
+                        <p class="text-xs text-green-400 mt-2">Tersimpan di Vercel Blob</p>
+                    </div>
                 `;
 
-                // Tambahkan ke tabel report
-                addToReport(file.name, 'Menunggu Prompt', '-');
+                // 3. LANGSUNG TAMBAHKAN KE TABEL REPORT
+                addToReport(data.filename, 'Menunggu Prompt', '-', data.pathname);
 
             } catch (error) {
                 console.error(error);
@@ -187,29 +193,32 @@
                 return;
             }
 
-            alert(`Mengirim video ke AI...\n\nPrompt: ${prompt}\nJadwal: ${schedule || 'Belum dijadwalkan'}`);
-            
-            const tableBody = document.getElementById('reportTableBody');
-            tableBody.innerHTML = `
-                <tr class="border-b border-gray-700">
-                    <td class="px-4 py-3 font-medium text-white">video_mentah.mp4</td>
-                    <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-400">Diproses AI</span></td>
-                    <td class="px-4 py-3">${schedule || '-'}</td>
-                    <td class="px-4 py-3"><button class="text-blue-400 hover:underline">Lihat</button></td>
-                </tr>
-            `;
+            // Update status di tabel menjadi "Diproses AI"
+            const rows = document.querySelectorAll('#reportTableBody tr');
+            if (rows.length > 0) {
+                const statusCell = rows[0].querySelectorAll('td')[1];
+                statusCell.innerHTML = '<span class="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-400">Diproses AI</span>';
+                
+                const scheduleCell = rows[0].querySelectorAll('td')[2];
+                scheduleCell.textContent = schedule || '-';
+            }
 
+            // Tampilkan loading di preview hasil edit
             document.getElementById('editedVideoContainer').innerHTML = `
                 <div class="text-center">
                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto mb-2"></div>
                     <p class="text-xs text-green-400">Memproses dengan AI...</p>
+                    <p class="text-xs text-gray-500 mt-1">Prompt: "${prompt.substring(0, 30)}..."</p>
                 </div>
             `;
+
+            alert(`Mengirim ke AI...\n\nPrompt: ${prompt}\nJadwal: ${schedule || 'Belum dijadwalkan'}`);
         }
 
-        function addToReport(filename, status, schedule) {
+        function addToReport(filename, status, schedule, pathname) {
             const tableBody = document.getElementById('reportTableBody');
             
+            // Hapus pesan "Belum ada data" jika ada
             if (tableBody.querySelector('td[colspan="4"]')) {
                 tableBody.innerHTML = '';
             }
@@ -220,7 +229,9 @@
                 <td class="px-4 py-3 font-medium text-white">${filename}</td>
                 <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-400">${status}</span></td>
                 <td class="px-4 py-3">${schedule}</td>
-                <td class="px-4 py-3"><button class="text-blue-400 hover:underline">Lihat</button></td>
+                <td class="px-4 py-3">
+                    <button onclick="alert('File: ${filename}\\nPath: ${pathname}')" class="text-blue-400 hover:underline text-xs">Detail</button>
+                </td>
             `;
             tableBody.appendChild(row);
         }
