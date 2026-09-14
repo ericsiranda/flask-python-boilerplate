@@ -152,19 +152,23 @@
         // ==================== PREVIEW VIDEO ====================
         // PENTING: Menggunakan route /api/stream/ untuk private store
         function previewVideo(pathname) {
-            const container = document.getElementById('rawVideoContainer');
-            container.innerHTML = '<div class="text-center text-gray-400 text-xs p-4">Memuat video...</div>';
-            
-            const streamUrl = `/api/stream/${pathname}?t=${Date.now()}`;
-            
-            container.innerHTML = `
-                <video 
-                    src="${streamUrl}" 
-                    controls 
-                    preload="metadata"
-                    class="w-full h-full object-contain rounded-lg bg-black"
-                ></video>
-            `;
+    const container = document.getElementById('rawVideoContainer');
+    container.innerHTML = '<div class="text-center text-gray-400 text-xs p-4">Memuat video...</div>';
+    
+    // Gunakan query parameter, bukan path
+    const streamUrl = `/api/stream?file=${encodeURIComponent(pathname)}&t=${Date.now()}`;
+    
+    container.innerHTML = `
+        <video 
+            src="${streamUrl}" 
+            controls 
+            preload="metadata"
+            class="w-full h-full object-contain rounded-lg bg-black"
+        ></video>
+    `;
+    
+    container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
             
             container.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
