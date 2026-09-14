@@ -195,7 +195,6 @@ def submit_to_ai():
         
         print(f"[AI] Sesi: {session_id}, Prompt: {prompt}")
         
-        # SIMULASI: copy chunk pertama sebagai hasil AI
         import requests as req_lib
         
         if is_single:
@@ -225,13 +224,9 @@ def submit_to_ai():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-# ==================== RESET ALL AI STATUS (OPSIONAL) ====================
+# ==================== RESET ALL AI STATUS ====================
 @app.route('/api/reset-ai', methods=['POST'])
 def reset_ai():
-    """
-    Endpoint untuk reset status AI.
-    Menghapus semua file ai_edit_* agar user bisa mulai dari awal.
-    """
     try:
         files = vercel_blob.list()
         deleted = 0

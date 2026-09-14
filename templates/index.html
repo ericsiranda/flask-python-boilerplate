@@ -9,6 +9,15 @@
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+
+        /* Animasi fade-out untuk overlay loading */
+        .fade-out-overlay {
+            animation: fadeOutOverlay 0.5s ease-out forwards;
+        }
+        @keyframes fadeOutOverlay {
+            from { opacity: 1; }
+            to { opacity: 0; visibility: hidden; }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen font-sans">
@@ -67,7 +76,6 @@
                                class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm text-white outline-none"/>
                     </div>
                     
-                    <!-- Info video terpilih -->
                     <div id="selectedInfo" class="hidden text-xs p-3 rounded-lg bg-purple-500/20 border border-purple-500/40">
                         <div class="flex justify-between items-start mb-2">
                             <div class="flex-1 min-w-0">
@@ -87,7 +95,6 @@
                         🚀 Kirim ke AI untuk Edit
                     </button>
                     
-                    <!-- Tombol Reset -->
                     <button type="button" onclick="resetAllStatus()" 
                             class="w-full bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium py-2 px-4 rounded-lg text-xs">
                         🔄 Reset Semua Status
@@ -177,7 +184,6 @@
                     const row = document.createElement('tr');
                     row.className = 'border-b border-gray-700 hover:bg-gray-700/30';
                     
-                    // Highlight baris jika terpilih
                     if (selectedForAI && selectedForAI.session_id === file.session_id) {
                         row.classList.add('bg-purple-900/30');
                     }
@@ -237,7 +243,7 @@
             }
         }
 
-        // ==================== PREVIEW ====================
+        // ==================== PREVIEW SINGLE ====================
         function previewSingle(fileUrl, pathname) {
             const container = document.getElementById('rawVideoContainer');
             container.innerHTML = `
@@ -247,77 +253,129 @@
             container.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
+        // ==================== PREVIEW GROUPED (DENGAN OVERLAY LOADING) ====================
         function previewGrouped(chunks, sessionId) {
             const container = document.getElementById('rawVideoContainer');
             
+            // Buat elemen video + overlay
             container.innerHTML = `
-                <div class="w-full h-full flex flex-col">
-                    <div class="bg-yellow-500/20 border border-yellow-500/40 rounded-lg p-2 mb-2 flex items-center gap-2">
-                        <svg class="w-4 h-4 text-yellow-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                        </svg>
-                        <p class="text-xs text-yellow-200">
-                            <strong>Perhatian:</strong> Video terdiri dari ${chunks.length} file. Preview memuat berurutan, mungkin butuh waktu.
-                        </p>
-                    </div>
+                <div class="w-full h-full relative">
+                    <video id="groupedVideo" controls preload="auto" 
+                           class="w-full h-full object-contain rounded-lg bg-black"></video>
                     
-                    <video id="groupedVideo" controls preload="metadata" 
-                           class="w-full flex-1 object-contain rounded-lg bg-black"></video>
-                    
-                    <div class="mt-2 flex items-center gap-2">
-                        <div class="flex-1 bg-gray-700 rounded-full h-1.5">
-                            <div id="chunkProgress" class="bg-green-500 h-1.5 rounded-full transition-all" style="width: 0%"></div>
+                    <!-- Overlay loading, muncul di atas video -->
+                    <div id="loadingOverlay" 
+                         class="absolute inset-0 bg-gray-900/95 rounded-lg flex flex-col items-center justify-center p-4 z-10">
+                        
+                        <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500/30 border-t-blue-500 mb-4"></div>
+                        
+                        <div class="bg-yellow-500/20 border border-yellow-500/40 rounded-lg p-3 max-w-xs flex items-start gap-2 mb-4">
+                            <svg class="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                            </svg>
+                            <p class="text-xs text-yellow-200">
+                                <strong>Perhatian:</strong> Video ini terdiri dari ${chunks.length} file. Sedang memuat, mohon tunggu...
+                            </p>
                         </div>
-                        <p class="text-xs text-gray-400 whitespace-nowrap">
-                            Potongan <span id="chunkCounter" class="text-white font-bold">1</span> / ${chunks.length}
-                        </p>
-                    </div>
-                    
-                    <div id="chunkLoading" class="mt-1 text-center text-xs text-blue-400 hidden">
-                        ⏳ Memuat potongan berikutnya...
+                        
+                        <div class="w-full max-w-xs">
+                            <div class="bg-gray-700 rounded-full h-1.5">
+                                <div id="loadProgress" class="bg-blue-500 h-1.5 rounded-full transition-all" style="width: 0%"></div>
+                            </div>
+                            <p class="text-xs text-gray-400 text-center mt-2">
+                                <span id="loadCounter">0</span> / ${chunks.length} potongan
+                            </p>
+                        </div>
                     </div>
                 </div>
             `;
             
             const video = document.getElementById('groupedVideo');
-            const progressBar = document.getElementById('chunkProgress');
-            const counter = document.getElementById('chunkCounter');
-            const loading = document.getElementById('chunkLoading');
-            let currentIndex = 0;
+            const overlay = document.getElementById('loadingOverlay');
+            const loadProgress = document.getElementById('loadProgress');
+            const loadCounter = document.getElementById('loadCounter');
             
+            let loadedCount = 0;
+            let currentIndex = 0;
+            let allLoaded = false;
+            
+            // Fungsi untuk memutar chunk berurutan
             const playChunk = (index) => {
-                if (index >= chunks.length) {
-                    loading.classList.add('hidden');
-                    return;
-                }
+                if (index >= chunks.length) return;
                 
                 currentIndex = index;
-                counter.textContent = index + 1;
-                progressBar.style.width = ((index + 1) / chunks.length * 100) + '%';
-                
-                if (index > 0) loading.classList.remove('hidden');
-                
                 video.src = chunks[index].url;
                 video.load();
-                
-                video.onloadeddata = () => loading.classList.add('hidden');
-                video.play().catch(e => {
-                    loading.classList.add('hidden');
-                });
+                video.play().catch(e => console.warn('Autoplay diblokir:', e));
             };
             
+            // Fungsi menyembunyikan overlay setelah semua chunk siap
+            const hideOverlay = () => {
+                if (!allLoaded) return;
+                allLoaded = true;
+                
+                overlay.classList.add('fade-out-overlay');
+                setTimeout(() => {
+                    overlay.remove();
+                    // Mulai playback setelah overlay hilang
+                    playChunk(0);
+                }, 500);
+            };
+            
+            // Preload semua chunk di background
+            const preloadChunks = async () => {
+                const promises = chunks.map((chunk, index) => {
+                    return new Promise((resolve) => {
+                        const tempVideo = document.createElement('video');
+                        tempVideo.preload = 'auto';
+                        tempVideo.muted = true;
+                        tempVideo.src = chunk.url;
+                        
+                        const markLoaded = () => {
+                            loadedCount++;
+                            loadCounter.textContent = loadedCount;
+                            loadProgress.style.width = ((loadedCount / chunks.length) * 100) + '%';
+                            
+                            // Jika semua sudah loaded, sembunyikan overlay
+                            if (loadedCount >= chunks.length) {
+                                hideOverlay();
+                            }
+                            resolve();
+                        };
+                        
+                        // Timeout fallback jika terlalu lama
+                        const timeout = setTimeout(markLoaded, 8000);
+                        
+                        tempVideo.onloadeddata = () => {
+                            clearTimeout(timeout);
+                            markLoaded();
+                        };
+                        
+                        tempVideo.onerror = () => {
+                            clearTimeout(timeout);
+                            console.warn(`Chunk ${index} gagal preload`);
+                            markLoaded();
+                        };
+                    });
+                });
+                
+                await Promise.all(promises);
+            };
+            
+            // Event ketika satu chunk selesai diputar
             video.addEventListener('ended', () => {
                 if (currentIndex + 1 < chunks.length) {
                     playChunk(currentIndex + 1);
-                } else {
-                    loading.classList.add('hidden');
                 }
             });
             
-            playChunk(0);
+            // Mulai preload semua chunk
+            preloadChunks();
+            
             container.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
+        // ==================== PREVIEW AI RESULT ====================
         function previewAIResult(aiResult) {
             const container = document.getElementById('editedVideoContainer');
             const badge = document.getElementById('aiStatusBadge');
@@ -336,11 +394,9 @@
         // ==================== PILIH UNTUK AI ====================
         function selectForAI(data) {
             selectedForAI = data;
-            
             const sessionId = data.session_id;
             aiStatusMap[sessionId] = 'pending';
             
-            // Update info panel
             const infoDiv = document.getElementById('selectedInfo');
             const nameSpan = document.getElementById('selectedName');
             infoDiv.classList.remove('hidden');
@@ -358,48 +414,30 @@
 
         // ==================== BATALKAN PILIHAN ====================
         function cancelSelection() {
-            if (selectedForAI) {
-                const sessionId = selectedForAI.session_id;
-                // Hapus dari status map
-                if (aiStatusMap[sessionId] === 'pending') {
-                    delete aiStatusMap[sessionId];
-                }
+            if (selectedForAI && aiStatusMap[selectedForAI.session_id] === 'pending') {
+                delete aiStatusMap[selectedForAI.session_id];
             }
             
             selectedForAI = null;
-            
-            // Sembunyikan info panel
             document.getElementById('selectedInfo').classList.add('hidden');
-            
-            // Reset badge AI status
-            const badge = document.getElementById('aiStatusBadge');
-            badge.classList.add('hidden');
-            
-            // Reset preview hasil AI
+            document.getElementById('aiStatusBadge').classList.add('hidden');
             document.getElementById('editedVideoContainer').innerHTML = `
-                <div class="text-center text-gray-600 text-sm">
-                    Menunggu proses AI
-                </div>
+                <div class="text-center text-gray-600 text-sm">Menunggu proses AI</div>
             `;
             
-            // Notifikasi
             const statusDiv = document.getElementById('uploadStatus');
             statusDiv.classList.remove('hidden');
             statusDiv.innerHTML = `<span class="text-gray-400">✕ Pilihan dibatalkan</span>`;
             setTimeout(() => statusDiv.classList.add('hidden'), 2000);
             
-            // Reload tabel
             loadFiles();
         }
 
         // ==================== RESET SEMUA STATUS ====================
         async function resetAllStatus() {
-            if (!confirm('Reset semua status AI?\n\nIni akan:\n• Menghapus semua pilihan AI\n• Menghapus semua file hasil AI\n• Video mentah tetap aman\n\nLanjutkan?')) {
-                return;
-            }
+            if (!confirm('Reset semua status AI?\n\n• Menghapus semua file hasil AI\n• Video mentah tetap aman\n\nLanjutkan?')) return;
             
             try {
-                // Panggil API untuk hapus semua file ai_edit_*
                 const response = await fetch('/api/reset-ai', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
@@ -408,27 +446,21 @@
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
                 
-                // Reset state di frontend
                 selectedForAI = null;
                 aiStatusMap = {};
                 
-                // Reset UI
                 document.getElementById('selectedInfo').classList.add('hidden');
                 document.getElementById('aiStatusBadge').classList.add('hidden');
                 document.getElementById('editedVideoContainer').innerHTML = `
-                    <div class="text-center text-gray-600 text-sm">
-                        Menunggu proses AI
-                    </div>
+                    <div class="text-center text-gray-600 text-sm">Menunggu proses AI</div>
                 `;
                 
-                // Notifikasi
                 const statusDiv = document.getElementById('uploadStatus');
                 statusDiv.classList.remove('hidden');
                 statusDiv.innerHTML = `<span class="text-green-400">✅ Status di-reset. ${data.deleted} file hasil AI dihapus.</span>`;
                 setTimeout(() => statusDiv.classList.add('hidden'), 3000);
                 
                 loadFiles();
-                
             } catch (error) {
                 alert(`❌ Gagal reset: ${error.message}`);
             }
