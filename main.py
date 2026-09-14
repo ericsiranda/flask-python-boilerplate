@@ -81,13 +81,12 @@ def delete_file():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ==================== STREAM VIDEO (untuk private store) ====================
+# ==================== STREAM VIDEO (private) ====================
 @app.route('/api/stream/<path:pathname>', methods=['GET'])
 def stream_video(pathname):
     """
-    Stream video dari Vercel Blob private ke browser.
-    Browser tidak bisa akses URL Vercel Blob langsung karena private.
-    Backend Flask yang jadi perantara dengan token autentikasi.
+    Stream video dari Vercel Blob private.
+    Backend Flask yang jadi perantara dengan token.
     """
     try:
         token = os.environ.get('BLOB_READ_WRITE_TOKEN')
@@ -95,10 +94,8 @@ def stream_video(pathname):
         if not token:
             return jsonify({'error': 'Token tidak ditemukan'}), 500
         
-        # URL Vercel Blob
         blob_url = f"https://blob.vercel-storage.com/{pathname}"
         
-        # Request file dari Vercel dengan token
         headers = {
             'Authorization': f'Bearer {token}'
         }
@@ -107,11 +104,10 @@ def stream_video(pathname):
         
         if req.status_code != 200:
             return jsonify({
-                'error': f'Gagal mengambil file: {req.status_code}',
+                'error': f'Gagal: {req.status_code}',
                 'detail': req.text[:300]
             }), req.status_code
         
-        # Kirim file ke browser sebagai streaming response
         return Response(
             req.iter_content(chunk_size=8192),
             status=200,
@@ -129,7 +125,6 @@ def stream_video(pathname):
 @app.route('/api/debug', methods=['GET'])
 def debug_info():
     token = os.environ.get('BLOB_READ_WRITE_TOKEN')
-    
     return jsonify({
         'token_available': token is not None,
         'token_preview': token[:20] + '...' if token else None,
