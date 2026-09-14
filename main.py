@@ -25,6 +25,7 @@ def upload_video():
         response = vercel_blob.put(
             file.filename,
             file_content,
+            access='private',
             multipart=True
         )
         
