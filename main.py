@@ -1,4 +1,3 @@
-
 import os
 from flask import Flask, render_template, jsonify, request, Response
 from vercel.blob import put
@@ -82,19 +81,14 @@ def delete_file():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ==================== STREAM VIDEO (private) ====================
-@app.route('/api/stream', methods=['GET'])
-def stream_video():
+# ==================== STREAM VIDEO (private) - ROUTE BARU ====================
+@app.route('/stream/<path:pathname>', methods=['GET'])
+def stream_video(pathname):
     """
     Stream video dari Vercel Blob private.
-    Menggunakan query parameter: /api/stream?file=namafile.mp4
+    URL: /stream/namafile.mp4 (tanpa /api/)
     """
     try:
-        pathname = request.args.get('file')
-        
-        if not pathname:
-            return jsonify({'error': 'Parameter file tidak diberikan'}), 400
-        
         token = os.environ.get('BLOB_READ_WRITE_TOKEN')
         
         if not token:
