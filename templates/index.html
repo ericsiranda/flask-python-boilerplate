@@ -3,35 +3,144 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload Video Mentah</title>
+    <title>AI Video Editor Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar agar lebih rapi */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+    </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
+<body class="bg-gray-900 text-white min-h-screen font-sans">
 
-    <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700">
-        <h1 class="text-2xl font-bold mb-2 text-center text-blue-400">Upload Video Mentah</h1>
-        <p class="text-sm text-gray-400 text-center mb-6">Unggah video Anda untuk diproses AI</p>
-        
-        <form id="uploadForm" class="space-y-5">
-            <div>
-                <label class="block text-sm font-medium text-gray-300 mb-2">Pilih Video (Maks 500MB)</label>
-                <input type="file" id="videoInput" accept="video/*" 
-                       class="w-full text-sm text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer bg-gray-700 rounded-lg p-1"/>
+    <!-- Navbar -->
+    <nav class="bg-gray-800 border-b border-gray-700 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+        <div class="flex items-center gap-2">
+            <div class="bg-blue-600 p-2 rounded-lg">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
             </div>
-            
-            <button type="button" onclick="uploadVideo()" 
-                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 shadow-lg shadow-blue-500/30">
-                Upload ke Vercel Blob
+            <h1 class="text-xl font-bold tracking-tight">AI Video Editor</h1>
+        </div>
+        <div class="flex items-center gap-4">
+            <button onclick="alert('Fitur Login Instagram akan segera hadir!')" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition shadow-lg flex items-center gap-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                Login Instagram
             </button>
-        </form>
+        </div>
+    </nav>
 
-        <div id="status" class="mt-6 text-center text-sm p-3 rounded-lg bg-gray-700/50 hidden"></div>
-    </div>
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Kolom Kiri: Upload & Prompt -->
+        <div class="lg:col-span-1 space-y-6">
+            
+            <!-- Card Upload -->
+            <div class="bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-700">
+                <h2 class="text-lg font-bold mb-4 text-blue-400 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                    1. Upload Video Mentah
+                </h2>
+                <div class="space-y-4">
+                    <input type="file" id="videoInput" accept="video/*" 
+                           class="w-full text-sm text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer bg-gray-700 rounded-lg p-1"/>
+                    <button type="button" onclick="uploadVideo()" 
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-300 shadow-lg shadow-blue-500/30 text-sm">
+                        Upload ke Vercel Blob
+                    </button>
+                    <div id="uploadStatus" class="text-center text-xs p-2 rounded-lg bg-gray-700/50 hidden"></div>
+                </div>
+            </div>
+
+            <!-- Card Prompt & Schedule -->
+            <div class="bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-700">
+                <h2 class="text-lg font-bold mb-4 text-purple-400 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    2. Instruksi & Jadwal
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Prompt Edit Video</label>
+                        <textarea id="promptInput" rows="3" placeholder="Contoh: Buat video ini cinematic dengan musik sedih, potong jadi 60 detik..." 
+                                  class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none resize-none"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Jadwal Upload ke Instagram</label>
+                        <input type="datetime-local" id="scheduleInput" 
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"/>
+                    </div>
+                    <button type="button" onclick="submitToAI()" 
+                            class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-300 shadow-lg shadow-purple-500/30 text-sm">
+                        Kirim ke AI untuk Edit
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kolom Kanan: Preview & Report -->
+        <div class="lg:col-span-2 space-y-6">
+            
+            <!-- Card Preview -->
+            <div class="bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-700">
+                <h2 class="text-lg font-bold mb-4 text-green-400 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                    3. Preview Video
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Video Mentah -->
+                    <div class="bg-gray-900 rounded-xl p-3 border border-gray-700">
+                        <p class="text-xs text-gray-400 mb-2 font-semibold uppercase tracking-wider">Video Mentah</p>
+                        <div id="rawVideoContainer" class="aspect-video bg-gray-800 rounded-lg flex items-center justify-center text-gray-600 text-sm">
+                            Belum ada video
+                        </div>
+                    </div>
+                    <!-- Video Hasil Edit -->
+                    <div class="bg-gray-900 rounded-xl p-3 border border-gray-700">
+                        <p class="text-xs text-gray-400 mb-2 font-semibold uppercase tracking-wider">Hasil Edit AI (60 Detik)</p>
+                        <div id="editedVideoContainer" class="aspect-video bg-gray-800 rounded-lg flex items-center justify-center text-gray-600 text-sm">
+                            Menunggu proses AI
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card Report / Status -->
+            <div class="bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-700">
+                <h2 class="text-lg font-bold mb-4 text-yellow-400 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    4. Report & Review
+                </h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-gray-400">
+                        <thead class="text-xs text-gray-500 uppercase bg-gray-700/50">
+                            <tr>
+                                <th class="px-4 py-3 rounded-l-lg">Nama File</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Jadwal</th>
+                                <th class="px-4 py-3 rounded-r-lg">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportTableBody">
+                            <tr class="border-b border-gray-700">
+                                <td class="px-4 py-3 text-gray-500 italic" colspan="4">Belum ada data upload.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
 
     <script>
+        // Variabel global untuk menyimpan URL video
+        let currentVideoUrl = null;
+
         async function uploadVideo() {
             const fileInput = document.getElementById('videoInput');
-            const statusDiv = document.getElementById('status');
+            const statusDiv = document.getElementById('uploadStatus');
             const file = fileInput.files[0];
 
             statusDiv.classList.remove('hidden');
@@ -56,14 +165,78 @@
                 
                 if (!response.ok) throw new Error(data.error || 'Gagal upload');
                 
-                statusDiv.innerHTML = `
-                    <span class="text-green-400 block mb-2">✅ Berhasil diunggah!</span>
-                    <a href="${data.url}" target="_blank" class="text-blue-300 underline break-all text-xs">${data.url}</a>
+                currentVideoUrl = data.url;
+
+                // Update status
+                statusDiv.innerHTML = `<span class="text-green-400">✅ Berhasil diunggah!</span>`;
+
+                // Tampilkan video di preview
+                document.getElementById('rawVideoContainer').innerHTML = `
+                    <video src="${data.url}" controls class="w-full h-full object-cover rounded-lg"></video>
                 `;
+
+                // Tambahkan ke tabel report
+                addToReport(file.name, 'Menunggu Prompt', '-');
 
             } catch (error) {
                 statusDiv.innerHTML = `<span class="text-red-400">❌ Error: ${error.message}</span>`;
             }
+        }
+
+        function submitToAI() {
+            const prompt = document.getElementById('promptInput').value;
+            const schedule = document.getElementById('scheduleInput').value;
+
+            if (!currentVideoUrl) {
+                alert('Silakan upload video terlebih dahulu!');
+                return;
+            }
+
+            if (!prompt) {
+                alert('Silakan isi prompt edit video!');
+                return;
+            }
+
+            // Simulasi proses AI (nanti akan diganti dengan API call sebenarnya)
+            alert(`Mengirim video ke AI...\n\nPrompt: ${prompt}\nJadwal: ${schedule || 'Belum dijadwalkan'}`);
+            
+            // Update status di tabel
+            const tableBody = document.getElementById('reportTableBody');
+            tableBody.innerHTML = `
+                <tr class="border-b border-gray-700">
+                    <td class="px-4 py-3 font-medium text-white">video_mentah.mp4</td>
+                    <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-400">Diproses AI</span></td>
+                    <td class="px-4 py-3">${schedule || '-'}</td>
+                    <td class="px-4 py-3"><button class="text-blue-400 hover:underline">Lihat</button></td>
+                </tr>
+            `;
+
+            // Tampilkan placeholder di preview hasil edit
+            document.getElementById('editedVideoContainer').innerHTML = `
+                <div class="text-center">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto mb-2"></div>
+                    <p class="text-xs text-green-400">Memproses dengan AI...</p>
+                </div>
+            `;
+        }
+
+        function addToReport(filename, status, schedule) {
+            const tableBody = document.getElementById('reportTableBody');
+            
+            // Hapus pesan "Belum ada data" jika ada
+            if (tableBody.querySelector('td[colspan="4"]')) {
+                tableBody.innerHTML = '';
+            }
+
+            const row = document.createElement('tr');
+            row.className = 'border-b border-gray-700 hover:bg-gray-700/30 transition';
+            row.innerHTML = `
+                <td class="px-4 py-3 font-medium text-white">${filename}</td>
+                <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-400">${status}</span></td>
+                <td class="px-4 py-3">${schedule}</td>
+                <td class="px-4 py-3"><button class="text-blue-400 hover:underline">Lihat</button></td>
+            `;
+            tableBody.appendChild(row);
         }
     </script>
 </body>
