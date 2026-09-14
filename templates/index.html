@@ -188,13 +188,13 @@
             }
         }
 
-        // ==================== KOMPRESI VIDEO DENGAN MEDIARECORDER ====================
-        async function compressVideo(file) {
+        // ==================== KOMPRESI VIDEO ====================
+        async function compressVideo(file, onProgress) {
             return new Promise(async (resolve, reject) => {
                 try {
                     const video = document.createElement('video');
                     video.src = URL.createObjectURL(file);
-                    video.muted = false; // biarkan audio ikut
+                    video.muted = false;
                     video.playsInline = true;
                     
                     await new Promise((res, rej) => {
@@ -202,24 +202,22 @@
                         video.onerror = () => rej(new Error('Gagal memuat video'));
                     });
 
-                    // Buat canvas untuk downscale ke 720p
                     const canvas = document.createElement('canvas');
-                    const targetWidth = 720;
-                    const scale = targetWidth / video.videoWidth;
-                    canvas.width = targetWidth;
+                    const targetWidth = 480;
+                    const scale = Math.min(1, targetWidth / video.videoWidth);
+                    canvas.width = Math.round(video.videoWidth * scale);
                     canvas.height = Math.round(video.videoHeight * scale);
                     const ctx = canvas.getContext('2d');
 
-                    // Capture stream dari canvas
-                    const canvasStream = canvas.captureStream(25); // 25 fps
+                    const canvasStream = canvas.captureStream(20);
 
-                    // Ambil audio dari video
                     let audioTrack = null;
                     try {
                         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                         const source = audioCtx.createMediaElementSource(video);
                         const dest = audioCtx.createMediaStreamDestination();
                         source.connect(dest);
+                        source.connect(audioCtx.destination);
                         audioTrack = dest.stream.getAudioTracks()[0];
                     } catch(e) {
                         console.warn('Audio tidak tersedia:', e);
@@ -230,7 +228,6 @@
                     
                     const outputStream = new MediaStream(tracks);
                     
-                    // Pilih mimeType yang didukung browser
                     let mimeType = 'video/webm;codecs=vp8,opus';
                     if (!MediaRecorder.isTypeSupported(mimeType)) {
                         mimeType = 'video/webm';
@@ -238,7 +235,8 @@
 
                     const recorder = new MediaRecorder(outputStream, {
                         mimeType: mimeType,
-                        videoBitsPerSecond: 1000000, // 1 Mbps
+                        videoBitsPerSecond: 400000,
+                        audioBitsPerSecond: 64000,
                     });
 
                     const chunks = [];
@@ -253,20 +251,26 @@
                     };
 
                     recorder.onerror = (e) => {
-                        reject(new Error('MediaRecorder error: ' + e.error));
+                        reject(new Error('MediaRecorder error'));
                     };
 
-                    // Mulai playback video dan rekam
                     video.play();
-                    recorder.start();
+                    recorder.start(1000);
 
-                    // Gambar setiap frame ke canvas
                     const drawFrame = () => {
                         if (video.paused || video.ended) {
-                            setTimeout(() => recorder.stop(), 500);
+                            setTimeout(() => {
+                                if (recorder.state !== 'inactive') recorder.stop();
+                            }, 500);
                             return;
                         }
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        
+                        if (onProgress && video.duration) {
+                            const percent = (video.currentTime / video.duration) * 100;
+                            onProgress(percent);
+                        }
+                        
                         requestAnimationFrame(drawFrame);
                     };
                     drawFrame();
@@ -295,21 +299,30 @@
             const originalSizeMB = file.size / 1024 / 1024;
             let fileToUpload = file;
 
-            // Jika file > 4 MB, kompres dulu
-            if (originalSizeMB > 4) {
-                statusDiv.innerHTML = `<span class="text-blue-400">🔄 Mengompres video (${originalSizeMB.toFixed(2)} MB) di browser... Mohon tunggu.</span>`;
+            if (originalSizeMB > 3) {
+                statusDiv.innerHTML = `<span class="text-blue-400">🔄 Mengompres video (${originalSizeMB.toFixed(2)} MB)... Jangan tutup halaman.</span>`;
                 progressContainer.classList.remove('hidden');
-                progressBar.style.width = '30%';
+                progressBar.style.width = '0%';
                 progressBar.style.background = '#f59e0b';
 
                 try {
-                    const compressedBlob = await compressVideo(file);
+                    const compressedBlob = await compressVideo(file, (percent) => {
+                        progressBar.style.width = percent.toFixed(0) + '%';
+                        statusDiv.innerHTML = `<span class="text-blue-400">🔄 Mengompres... ${percent.toFixed(0)}%</span>`;
+                    });
+                    
                     const compressedSizeMB = compressedBlob.size / 1024 / 1024;
                     
                     statusDiv.innerHTML = `<span class="text-green-400">✅ Kompresi selesai: ${originalSizeMB.toFixed(2)} MB → ${compressedSizeMB.toFixed(2)} MB</span>`;
                     
+                    if (compressedSizeMB > 4) {
+                        statusDiv.innerHTML = `<span class="text-red-400">❌ Hasil kompresi masih ${compressedSizeMB.toFixed(2)} MB. Video terlalu panjang. Potong dulu jadi 30-60 detik.</span>`;
+                        progressContainer.classList.add('hidden');
+                        return;
+                    }
+                    
                     fileToUpload = new File([compressedBlob], file.name.replace(/\.[^.]+$/, '.webm'), { type: 'video/webm' });
-                    progressBar.style.width = '60%';
+                    progressBar.style.width = '80%';
                     
                 } catch (err) {
                     console.error('Kompresi gagal:', err);
@@ -321,7 +334,7 @@
 
             const uploadSizeMB = fileToUpload.size / 1024 / 1024;
             statusDiv.innerHTML = `<span class="text-blue-400">📤 Mengunggah ${uploadSizeMB.toFixed(2)} MB...</span>`;
-            progressBar.style.width = '80%';
+            progressBar.style.width = '90%';
 
             try {
                 const formData = new FormData();
@@ -334,7 +347,7 @@
 
                 const contentType = response.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
-                    throw new Error(`Server error ${response.status}`);
+                    throw new Error(`Server error ${response.status}. Coba video yang lebih pendek.`);
                 }
 
                 const data = await response.json();

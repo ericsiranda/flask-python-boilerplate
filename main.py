@@ -22,7 +22,6 @@ def upload_video():
         
         file_content = file.read()
         
-        # PUBLIC STORE
         result = put(
             file.filename,
             file_content,
