@@ -8,6 +8,7 @@
 </head>
 <body class="bg-gray-900 text-white min-h-screen font-sans">
 
+    <!-- Navbar -->
     <nav class="bg-gray-800 border-b border-gray-700 px-6 py-4 flex justify-between items-center">
         <div class="flex items-center gap-2">
             <div class="bg-blue-600 p-2 rounded-lg">
@@ -34,18 +35,24 @@
 
         <!-- Report Table -->
         <div class="bg-gray-800 p-6 rounded-2xl border border-gray-700">
-            <h2 class="text-lg font-bold mb-4 text-yellow-400">4. Report & Review</h2>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-yellow-400">4. Report & Review</h2>
+                <button onclick="loadFiles()" class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg">
+                    🔄 Refresh
+                </button>
+            </div>
             <table class="w-full text-sm text-left text-gray-400">
                 <thead class="text-xs uppercase bg-gray-700/50">
                     <tr>
                         <th class="px-4 py-3 rounded-l-lg">Nama File</th>
                         <th class="px-4 py-3">Status</th>
-                        <th class="px-4 py-3 rounded-r-lg">Ukuran</th>
+                        <th class="px-4 py-3">Ukuran</th>
+                        <th class="px-4 py-3 rounded-r-lg">Aksi</th>
                     </tr>
                 </thead>
                 <tbody id="reportTableBody">
                     <tr>
-                        <td class="px-4 py-3 text-gray-500 italic" colspan="3">Belum ada data upload.</td>
+                        <td class="px-4 py-3 text-gray-500 italic" colspan="4">Memuat data...</td>
                     </tr>
                 </tbody>
             </table>
@@ -54,9 +61,56 @@
     </main>
 
     <script>
-        async function uploadVideo() {
-            console.log("=== TOMBOL UPLOAD DIKLIK ===");
+        // ==================== LOAD FILES SAAT HALAMAN DIBUKA ====================
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log("Halaman dimuat, memuat daftar file...");
+            loadFiles();
+        });
+
+        async function loadFiles() {
+            const tableBody = document.getElementById('reportTableBody');
+            tableBody.innerHTML = '<tr><td class="px-4 py-3 text-gray-500 italic" colspan="4">Memuat data...</td></tr>';
             
+            try {
+                console.log("Mengambil data dari /api/list-files...");
+                const response = await fetch('/api/list-files');
+                const data = await response.json();
+                
+                console.log("Data diterima:", data);
+                
+                if (!response.ok) throw new Error(data.error || 'Gagal mengambil data');
+                
+                tableBody.innerHTML = '';
+                
+                if (!data.files || data.files.length === 0) {
+                    tableBody.innerHTML = '<tr><td class="px-4 py-3 text-gray-500 italic" colspan="4">Belum ada data upload.</td></tr>';
+                    return;
+                }
+                
+                data.files.forEach(function(file) {
+                    const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+                    
+                    const row = document.createElement('tr');
+                    row.className = 'border-b border-gray-700 hover:bg-gray-700/30 transition';
+                    row.innerHTML = `
+                        <td class="px-4 py-3 text-white">${file.pathname}</td>
+                        <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-400">Tersimpan</span></td>
+                        <td class="px-4 py-3">${sizeMB} MB</td>
+                        <td class="px-4 py-3"><a href="${file.url}" target="_blank" class="text-blue-400 hover:underline text-xs">Buka</a></td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+                
+                console.log("Tabel berhasil diisi dengan " + data.files.length + " file.");
+                
+            } catch (error) {
+                console.error("ERROR saat memuat file:", error);
+                tableBody.innerHTML = `<tr><td class="px-4 py-3 text-red-400 italic" colspan="4">Gagal memuat data: ${error.message}</td></tr>`;
+            }
+        }
+
+        // ==================== UPLOAD VIDEO ====================
+        async function uploadVideo() {
             const fileInput = document.getElementById('videoInput');
             const statusDiv = document.getElementById('uploadStatus');
             const file = fileInput.files[0];
@@ -68,43 +122,30 @@
                 return;
             }
 
-            console.log("File dipilih:", file.name, "Ukuran:", file.size);
-
             statusDiv.innerHTML = '<span class="text-blue-400">📤 Mengunggah video... (mohon tunggu)</span>';
 
             try {
                 const formData = new FormData();
                 formData.append('video', file);
 
-                console.log("Mengirim request ke /api/upload...");
                 const response = await fetch('/api/upload', {
                     method: 'POST',
                     body: formData
                 });
 
-                console.log("Response status:", response.status);
                 const data = await response.json();
-                console.log("Response data:", data);
                 
                 if (!response.ok) throw new Error(data.error || 'Gagal upload');
                 
-                // Update status
-                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil diunggah!</span>';
+                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil diunggah! Data akan dimuat ulang...</span>';
 
-                // Isi tabel report
-                const tableBody = document.getElementById('reportTableBody');
-                tableBody.innerHTML = `
-                    <tr class="border-b border-gray-700">
-                        <td class="px-4 py-3 text-white">${data.filename}</td>
-                        <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-400">Menunggu Prompt</span></td>
-                        <td class="px-4 py-3">${(data.size / 1024 / 1024).toFixed(2)} MB</td>
-                    </tr>
-                `;
-
-                console.log("=== SELESAI ===");
+                // Setelah upload berhasil, panggil loadFiles() untuk refresh tabel
+                setTimeout(function() {
+                    loadFiles();
+                }, 1000);
 
             } catch (error) {
-                console.error("ERROR:", error);
+                console.error("ERROR upload:", error);
                 statusDiv.innerHTML = `<span class="text-red-400">❌ Error: ${error.message}</span>`;
             }
         }

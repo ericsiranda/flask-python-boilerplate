@@ -1,6 +1,6 @@
 import os
-from flask import Flask, render_template, jsonify, request, Response
-from vercel.blob import put, head
+from flask import Flask, render_template, jsonify, request
+import vercel_blob
 
 app = Flask(__name__)
 
@@ -20,17 +20,16 @@ def upload_video():
         
         file_content = file.read()
         
-        result = put(
+        result = vercel_blob.put(
             file.filename,
             file_content,
-            access='private',
             multipart=True
         )
         
         return jsonify({
             'success': True,
-            'url': result.url,
-            'pathname': result.pathname,
+            'url': result.get('url'),
+            'pathname': result.get('pathname', file.filename),
             'filename': file.filename,
             'size': len(file_content)
         })
@@ -38,14 +37,28 @@ def upload_video():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Route untuk mengecek apakah file ada
-@app.route('/api/check/<path:pathname>', methods=['GET'])
-def check_file(pathname):
+@app.route('/api/list-files', methods=['GET'])
+def list_files():
+    """Mengambil daftar semua file yang ada di Vercel Blob"""
     try:
-        info = head(pathname)
-        return jsonify({'exists': True, 'info': str(info)})
+        files = vercel_blob.list()
+        
+        file_list = []
+        for item in files.get('blobs', []):
+            file_list.append({
+                'pathname': item.get('pathname'),
+                'url': item.get('url'),
+                'size': item.get('size', 0),
+                'uploadedAt': item.get('uploadedAt'),
+            })
+        
+        return jsonify({
+            'success': True,
+            'files': file_list
+        })
+    
     except Exception as e:
-        return jsonify({'exists': False, 'error': str(e)}), 404
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
