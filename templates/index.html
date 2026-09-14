@@ -22,15 +22,11 @@
             </div>
             <h1 class="text-xl font-bold tracking-tight">AI Video Editor</h1>
         </div>
-        <div class="flex items-center gap-4">
-            <button onclick="alert('Fitur Login Instagram akan segera hadir!')" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition shadow-lg flex items-center gap-2">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-                Login Instagram
-            </button>
-        </div>
+        <button onclick="alert('Fitur Login Instagram akan segera hadir!')" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition shadow-lg">
+            Login Instagram
+        </button>
     </nav>
 
-    <!-- Main Content -->
     <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         <!-- Kolom Kiri -->
@@ -62,16 +58,16 @@
                 <div class="space-y-4">
                     <div>
                         <label class="block text-xs font-medium text-gray-400 mb-1">Prompt Edit Video</label>
-                        <textarea id="promptInput" rows="3" placeholder="Contoh: Buat video ini cinematic dengan musik sedih, potong jadi 60 detik..." 
-                                  class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none resize-none"></textarea>
+                        <textarea id="promptInput" rows="3" placeholder="Contoh: Buat video ini cinematic..." 
+                                  class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-purple-500 outline-none resize-none"></textarea>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-400 mb-1">Jadwal Upload ke Instagram</label>
                         <input type="datetime-local" id="scheduleInput" 
-                               class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"/>
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-purple-500 outline-none"/>
                     </div>
                     <button type="button" onclick="submitToAI()" 
-                            class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-300 shadow-lg shadow-purple-500/30 text-sm">
+                            class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg transition text-sm">
                         Kirim ke AI untuk Edit
                     </button>
                 </div>
@@ -90,13 +86,13 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="bg-gray-900 rounded-xl p-3 border border-gray-700">
                         <p class="text-xs text-gray-400 mb-2 font-semibold uppercase tracking-wider">Video Mentah</p>
-                        <div id="rawVideoContainer" class="aspect-video bg-gray-800 rounded-lg flex items-center justify-center text-gray-600 text-sm">
-                            Belum ada video
+                        <div id="rawVideoContainer" class="aspect-video bg-gray-800 rounded-lg flex items-center justify-center text-gray-600 text-sm overflow-hidden">
+                            Pilih video dari tabel
                         </div>
                     </div>
                     <div class="bg-gray-900 rounded-xl p-3 border border-gray-700">
                         <p class="text-xs text-gray-400 mb-2 font-semibold uppercase tracking-wider">Hasil Edit AI (60 Detik)</p>
-                        <div id="editedVideoContainer" class="aspect-video bg-gray-800 rounded-lg flex items-center justify-center text-gray-600 text-sm">
+                        <div id="editedVideoContainer" class="aspect-video bg-gray-800 rounded-lg flex items-center justify-center text-gray-600 text-sm overflow-hidden">
                             Menunggu proses AI
                         </div>
                     </div>
@@ -137,9 +133,8 @@
     </main>
 
     <script>
-        // ==================== LOAD FILES SAAT HALAMAN DIBUKA ====================
+        // ==================== LOAD FILES ====================
         window.addEventListener('DOMContentLoaded', function() {
-            console.log("Halaman dimuat, memuat daftar file...");
             loadFiles();
         });
 
@@ -169,16 +164,55 @@
                         <td class="px-4 py-3 text-white">${file.pathname}</td>
                         <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-400">Tersimpan</span></td>
                         <td class="px-4 py-3">${sizeMB} MB</td>
-                        <td class="px-4 py-3"><a href="${file.url}" target="_blank" class="text-blue-400 hover:underline text-xs">Buka</a></td>
+                        <td class="px-4 py-3 flex gap-2">
+                            <button onclick="previewVideo('${file.pathname}', '${file.url}')" class="text-green-400 hover:underline text-xs">Preview</button>
+                            <button onclick="deleteVideo('${file.url}', '${file.pathname}')" class="text-red-400 hover:underline text-xs">Hapus</button>
+                        </td>
                     `;
                     tableBody.appendChild(row);
                 });
                 
-                console.log("Tabel berhasil diisi dengan " + data.files.length + " file.");
-                
             } catch (error) {
-                console.error("ERROR saat memuat file:", error);
+                console.error("ERROR:", error);
                 tableBody.innerHTML = `<tr><td class="px-4 py-3 text-red-400 italic" colspan="4">Gagal memuat data: ${error.message}</td></tr>`;
+            }
+        }
+
+        // ==================== PREVIEW VIDEO ====================
+        function previewVideo(pathname, url) {
+            // Gunakan route stream di backend untuk store private
+            const streamUrl = `/api/stream/${pathname}`;
+            
+            document.getElementById('rawVideoContainer').innerHTML = `
+                <video src="${streamUrl}" controls class="w-full h-full object-contain rounded-lg bg-black"></video>
+            `;
+            
+            // Scroll ke preview
+            document.getElementById('rawVideoContainer').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // ==================== DELETE VIDEO ====================
+        async function deleteVideo(url, pathname) {
+            if (!confirm(`Yakin ingin menghapus "${pathname}"?\n\nTindakan ini tidak bisa dibatalkan.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/delete-file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) throw new Error(data.error || 'Gagal menghapus');
+
+                alert('✅ File berhasil dihapus!');
+                loadFiles();
+
+            } catch (error) {
+                alert(`❌ Gagal menghapus file: ${error.message}`);
             }
         }
 
@@ -210,9 +244,8 @@
                 
                 if (!response.ok) throw new Error(data.error || 'Gagal upload');
                 
-                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil diunggah! Tabel akan di-refresh...</span>';
+                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil diunggah!</span>';
 
-                // Setelah upload berhasil, refresh tabel
                 setTimeout(function() {
                     loadFiles();
                     statusDiv.classList.add('hidden');
@@ -234,7 +267,6 @@
                 return;
             }
 
-            // Tampilkan loading di preview hasil edit
             document.getElementById('editedVideoContainer').innerHTML = `
                 <div class="text-center">
                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto mb-2"></div>

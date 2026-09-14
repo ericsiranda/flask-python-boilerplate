@@ -1,7 +1,8 @@
 import os
-from flask import Flask, render_template, jsonify, request
-from vercel.blob import put  # SDK resmi untuk upload (bisa private)
-import vercel_blob  # Library lama untuk list files
+from flask import Flask, render_template, jsonify, request, Response
+from vercel.blob import put  # SDK resmi untuk upload (private)
+import vercel_blob  # Library lama untuk list & delete
+import requests
 
 app = Flask(__name__)
 
@@ -9,9 +10,9 @@ app = Flask(__name__)
 def index():
     return render_template('index.html')
 
+# ==================== UPLOAD ====================
 @app.route('/api/upload', methods=['POST'])
 def upload_video():
-    """Upload video menggunakan SDK resmi Vercel (mendukung private store)"""
     try:
         if 'video' not in request.files:
             return jsonify({'error': 'Tidak ada file video'}), 400
@@ -22,7 +23,6 @@ def upload_video():
         
         file_content = file.read()
         
-        # Gunakan SDK resmi dengan access='private'
         result = put(
             file.filename,
             file_content,
@@ -41,9 +41,9 @@ def upload_video():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# ==================== LIST FILES ====================
 @app.route('/api/list-files', methods=['GET'])
 def list_files():
-    """Mengambil daftar file menggunakan library vercel_blob"""
     try:
         files = vercel_blob.list()
         
@@ -60,6 +60,62 @@ def list_files():
             'success': True,
             'files': file_list
         })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ==================== DELETE FILE ====================
+@app.route('/api/delete-file', methods=['POST'])
+def delete_file():
+    try:
+        data = request.json
+        url = data.get('url')
+        
+        if not url:
+            return jsonify({'error': 'URL file tidak diberikan'}), 400
+        
+        # Hapus file dari Vercel Blob
+        vercel_blob.delete(url)
+        
+        return jsonify({'success': True, 'message': 'File berhasil dihapus'})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ==================== STREAM VIDEO (untuk preview private) ====================
+@app.route('/api/stream/<path:pathname>', methods=['GET'])
+def stream_video(pathname):
+    """Stream video dari Vercel Blob (untuk store private)"""
+    try:
+        # Dapatkan token dari environment
+        token = os.environ.get('BLOB_READ_WRITE_TOKEN')
+        
+        if not token:
+            return jsonify({'error': 'Token tidak ditemukan'}), 500
+        
+        # URL Vercel Blob untuk file private
+        blob_url = f"https://blob.vercel-storage.com/{pathname}"
+        
+        # Request file dari Vercel dengan token autentikasi
+        headers = {
+            'Authorization': f'Bearer {token}'
+        }
+        
+        # Stream response
+        req = requests.get(blob_url, headers=headers, stream=True)
+        
+        if req.status_code != 200:
+            return jsonify({'error': f'Gagal mengambil file: {req.status_code}'}), req.status_code
+        
+        # Return sebagai streaming response
+        return Response(
+            req.iter_content(chunk_size=8192),
+            content_type=req.headers.get('Content-Type', 'video/mp4'),
+            headers={
+                'Accept-Ranges': 'bytes',
+                'Cache-Control': 'public, max-age=3600'
+            }
+        )
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
