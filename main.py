@@ -1,6 +1,6 @@
 import os
 from flask import Flask, render_template, jsonify, request
-from vercel.blob import presign_url
+import vercel_blob
 
 app = Flask(__name__)
 
@@ -8,19 +8,29 @@ app = Flask(__name__)
 def index():
     return render_template('index.html')
 
-@app.route('/api/upload-token', methods=['POST'])
-def upload_token():
+@app.route('/api/upload', methods=['POST'])
+def upload_video():
     try:
-        data = request.json
-        filename = data.get('filename', 'video.mp4')
+        if 'video' not in request.files:
+            return jsonify({'error': 'Tidak ada file video'}), 400
         
-        signed_url = presign_url(
-            pathname=f"uploads/{filename}",
-            operation="put",
-            valid_until=300
+        file = request.files['video']
+        if file.filename == '':
+            return jsonify({'error': 'Nama file kosong'}), 400
+        
+        # Simpan file ke Vercel Blob (untuk video, gunakan multipart)
+        response = vercel_blob.put(
+            file.filename,
+            file.read(),
+            multipart=True  # Direkomendasikan untuk file > 100MB [citation:7]
         )
         
-        return jsonify({'url': signed_url})
+        return jsonify({
+            'success': True,
+            'url': response['url'],
+            'downloadUrl': response['downloadUrl']
+        })
+    
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
