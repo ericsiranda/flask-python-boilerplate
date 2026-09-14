@@ -81,22 +81,22 @@ def delete_file():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ==================== STREAM VIDEO (untuk preview private) ====================
+# ==================== STREAM VIDEO (untuk private store) ====================
 @app.route('/api/stream/<path:pathname>', methods=['GET'])
 def stream_video(pathname):
-    """Stream video dari Vercel Blob dengan token autentikasi"""
+    """
+    Stream video dari Vercel Blob private ke browser.
+    Browser tidak bisa akses URL Vercel Blob langsung karena private.
+    Backend Flask yang jadi perantara dengan token autentikasi.
+    """
     try:
         token = os.environ.get('BLOB_READ_WRITE_TOKEN')
         
         if not token:
-            print("ERROR: BLOB_READ_WRITE_TOKEN tidak ditemukan di environment")
             return jsonify({'error': 'Token tidak ditemukan'}), 500
         
-        # Format URL Vercel Blob
+        # URL Vercel Blob
         blob_url = f"https://blob.vercel-storage.com/{pathname}"
-        
-        print(f"Streaming dari: {blob_url}")
-        print(f"Token ada: {token[:10]}...")
         
         # Request file dari Vercel dengan token
         headers = {
@@ -105,36 +105,34 @@ def stream_video(pathname):
         
         req = requests.get(blob_url, headers=headers, stream=True)
         
-        print(f"Response status: {req.status_code}")
-        print(f"Content-Type: {req.headers.get('Content-Type')}")
-        
         if req.status_code != 200:
-            return jsonify({'error': f'Gagal: {req.status_code}', 'detail': req.text[:200]}), req.status_code
+            return jsonify({
+                'error': f'Gagal mengambil file: {req.status_code}',
+                'detail': req.text[:300]
+            }), req.status_code
         
-        # Return sebagai streaming response
+        # Kirim file ke browser sebagai streaming response
         return Response(
             req.iter_content(chunk_size=8192),
+            status=200,
             content_type=req.headers.get('Content-Type', 'video/mp4'),
             headers={
                 'Accept-Ranges': 'bytes',
-                'Cache-Control': 'public, max-age=3600'
+                'Cache-Control': 'private, max-age=3600',
             }
         )
     
     except Exception as e:
-        print(f"ERROR stream: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# ==================== DEBUG: CEK TOKEN ====================
+# ==================== DEBUG ====================
 @app.route('/api/debug', methods=['GET'])
 def debug_info():
-    """Route untuk mengecek apakah token tersedia"""
     token = os.environ.get('BLOB_READ_WRITE_TOKEN')
     
     return jsonify({
         'token_available': token is not None,
         'token_preview': token[:20] + '...' if token else None,
-        'all_env_keys': list(os.environ.keys())
     })
 
 if __name__ == '__main__':
