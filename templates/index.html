@@ -7,25 +7,27 @@
     <!-- Menggunakan Tailwind CSS agar tampilan modern -->
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
 
-    <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-md">
-        <h1 class="text-2xl font-bold mb-6 text-center text-blue-400">Upload Video Mentah</h1>
+    <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700">
+        <h1 class="text-2xl font-bold mb-2 text-center text-blue-400">Upload Video Mentah</h1>
+        <p class="text-sm text-gray-400 text-center mb-6">Unggah video Anda untuk diproses AI</p>
         
-        <form id="uploadForm" class="space-y-4">
+        <form id="uploadForm" class="space-y-5">
             <div>
                 <label class="block text-sm font-medium text-gray-300 mb-2">Pilih Video (Maks 500MB)</label>
                 <input type="file" id="videoInput" accept="video/*" 
-                       class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"/>
+                       class="w-full text-sm text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer bg-gray-700 rounded-lg p-1"/>
             </div>
             
             <button type="button" onclick="uploadVideo()" 
-                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300">
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 shadow-lg shadow-blue-500/30">
                 Upload ke Vercel Blob
             </button>
         </form>
 
-        <div id="status" class="mt-4 text-center text-sm"></div>
+        <!-- Area Status -->
+        <div id="status" class="mt-6 text-center text-sm p-3 rounded-lg bg-gray-700/50 hidden"></div>
     </div>
 
     <script>
@@ -34,44 +36,60 @@
             const statusDiv = document.getElementById('status');
             const file = fileInput.files[0];
 
+            // Tampilkan area status
+            statusDiv.classList.remove('hidden');
+
             if (!file) {
-                statusDiv.innerHTML = '<span class="text-yellow-400">Silakan pilih video terlebih dahulu.</span>';
+                statusDiv.innerHTML = '<span class="text-yellow-400">⚠️ Silakan pilih video terlebih dahulu.</span>';
                 return;
             }
 
-            statusDiv.innerHTML = '<span class="text-blue-400">Meminta token upload...</span>';
+            statusDiv.innerHTML = '<span class="text-blue-400">⏳ Meminta URL upload aman...</span>';
 
             try {
-                // 1. Minta token ke backend Flask
+                // 1. Minta signed URL ke backend Flask
                 const tokenResponse = await fetch('/api/upload-token', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: file.name })
                 });
                 
-                if (!tokenResponse.ok) throw new Error('Gagal mendapatkan token');
-                const { token } = await tokenResponse.json();
+                if (!tokenResponse.ok) {
+                    const errData = await tokenResponse.json();
+                    throw new Error(errData.error || 'Gagal mendapatkan URL upload');
+                }
+                
+                const { url } = await tokenResponse.json();
 
-                statusDiv.innerHTML = '<span class="text-blue-400">Mengunggah video... (jangan tutup halaman)</span>';
+                statusDiv.innerHTML = '<span class="text-blue-400">📤 Mengunggah video... (jangan tutup halaman)</span>';
 
-                // 2. Upload langsung ke Vercel Blob
-                const blobResponse = await fetch(`https://blob.vercel-storage.com/${file.name}`, {
+                // 2. Upload langsung ke Vercel Blob menggunakan signed URL
+                const blobResponse = await fetch(url, {
                     method: 'PUT',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
                         'Content-Type': file.type,
                     },
                     body: file
                 });
 
-                if (!blobResponse.ok) throw new Error('Gagal mengunggah ke Blob');
+                if (!blobResponse.ok) throw new Error('Gagal mengunggah ke Vercel Blob');
                 
+                // 3. Dapatkan respons (Vercel Blob biasanya mengembalikan JSON dengan URL file)
                 const blobData = await blobResponse.json();
+                const fileUrl = blobData.url || url.split('?')[0]; // Fallback jika tidak ada url di response
                 
-                statusDiv.innerHTML = `<span class="text-green-400">Berhasil! URL Video: <br> <a href="${blobData.url}" target="_blank" class="underline break-all">${blobData.url}</a></span>`;
+                statusDiv.innerHTML = `
+                    <span class="text-green-400 block mb-2">✅ Berhasil diunggah!</span>
+                    <a href="${fileUrl}" target="_blank" class="text-blue-300 underline break-all text-xs">${fileUrl}</a>
+                    <p class="text-gray-400 text-xs mt-2">URL ini akan digunakan untuk proses AI selanjutnya.</p>
+                `;
                 
+                // Simpan URL ke variabel global atau kirim ke backend untuk diproses AI
+                console.log('Video URL:', fileUrl);
+
             } catch (error) {
                 console.error(error);
-                statusDiv.innerHTML = `<span class="text-red-400">Error: ${error.message}</span>`;
+                statusDiv.innerHTML = `<span class="text-red-400">❌ Error: ${error.message}</span>`;
             }
         }
     </script>
