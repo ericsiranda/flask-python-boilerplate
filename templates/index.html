@@ -188,39 +188,83 @@
             }
         }
 
-        // ==================== KOMPRESI VIDEO DENGAN FFMPEG.WASM ====================
-        // Fungsi untuk mengompres video di browser sebelum upload
-        async function compressVideo(file, maxSizeMB = 4) {
+        // ==================== KOMPRESI VIDEO SEDERHANA ====================
+        // Menggunakan MediaRecorder API bawaan browser (tanpa ffmpeg.wasm)
+        // Kualitas lebih rendah, tapi tidak butuh SharedArrayBuffer
+        async function compressVideoWithMediaRecorder(file) {
             return new Promise(async (resolve, reject) => {
                 try {
-                    // Load FFmpeg dari CDN
-                    const { createFFmpeg, fetchFile } = window.FFmpeg;
-                    const ffmpeg = createFFmpeg({
-                        log: false,
-                        corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+                    // Buat elemen video untuk memuat file
+                    const video = document.createElement('video');
+                    video.src = URL.createObjectURL(file);
+                    video.muted = true;
+                    video.playsInline = true;
+                    
+                    await new Promise((res, rej) => {
+                        video.onloadedmetadata = res;
+                        video.onerror = rej;
                     });
+
+                    // Buat canvas untuk downscale
+                    const canvas = document.createElement('canvas');
+                    const targetWidth = 720;
+                    const scale = targetWidth / video.videoWidth;
+                    canvas.width = targetWidth;
+                    canvas.height = Math.round(video.videoHeight * scale);
+                    const ctx = canvas.getContext('2d');
+
+                    // Capture stream dari canvas
+                    const canvasStream = canvas.captureStream(25); // 25 fps
+
+                    // Coba ambil audio dari video
+                    let audioTrack = null;
+                    try {
+                        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        const source = audioCtx.createMediaElementSource(video);
+                        const dest = audioCtx.createMediaStreamDestination();
+                        source.connect(dest);
+                        audioTrack = dest.stream.getAudioTracks()[0];
+                    } catch(e) {
+                        console.warn('Audio tidak tersedia:', e);
+                    }
+
+                    const tracks = [...canvasStream.getVideoTracks()];
+                    if (audioTrack) tracks.push(audioTrack);
                     
-                    await ffmpeg.load();
+                    const outputStream = new MediaStream(tracks);
                     
-                    ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
+                    // MediaRecorder untuk output
+                    const recorder = new MediaRecorder(outputStream, {
+                        mimeType: 'video/webm;codecs=vp8,opus',
+                        videoBitsPerSecond: 1000000, // 1 Mbps
+                    });
+
+                    const chunks = [];
+                    recorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) chunks.push(e.data);
+                    };
                     
-                    // Kompres dengan kualitas yang disesuaikan
-                    // CRF 28 = kualitas sedang, resolusi 720p
-                    await ffmpeg.run(
-                        '-i', 'input.mp4',
-                        '-vcodec', 'libx264',
-                        '-crf', '28',
-                        '-preset', 'fast',
-                        '-vf', 'scale=-2:720',
-                        '-acodec', 'aac',
-                        '-b:a', '128k',
-                        'output.mp4'
-                    );
-                    
-                    const data = ffmpeg.FS('readFile', 'output.mp4');
-                    const blob = new Blob([data.buffer], { type: 'video/mp4' });
-                    
-                    resolve(blob);
+                    recorder.onstop = () => {
+                        const blob = new Blob(chunks, { type: 'video/webm' });
+                        URL.revokeObjectURL(video.src);
+                        resolve(blob);
+                    };
+
+                    // Mulai playback video dan rekam
+                    video.play();
+                    recorder.start();
+
+                    // Setiap frame, gambar ke canvas
+                    const drawFrame = () => {
+                        if (video.paused || video.ended) {
+                            recorder.stop();
+                            return;
+                        }
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        requestAnimationFrame(drawFrame);
+                    };
+                    drawFrame();
+
                 } catch (err) {
                     reject(err);
                 }
@@ -250,16 +294,15 @@
                 statusDiv.innerHTML = `<span class="text-blue-400">🔄 Mengompres video (${originalSizeMB.toFixed(2)} MB) di browser...</span>`;
                 progressContainer.classList.remove('hidden');
                 progressBar.style.width = '30%';
-                progressBar.style.background = '#f59e0b'; // orange
+                progressBar.style.background = '#f59e0b';
 
                 try {
-                    const compressedBlob = await compressVideo(file);
+                    const compressedBlob = await compressVideoWithMediaRecorder(file);
                     const compressedSizeMB = compressedBlob.size / 1024 / 1024;
                     
                     statusDiv.innerHTML = `<span class="text-green-400">✅ Kompresi selesai: ${originalSizeMB.toFixed(2)} MB → ${compressedSizeMB.toFixed(2)} MB</span>`;
                     
-                    // Buat File object dari blob
-                    fileToUpload = new File([compressedBlob], file.name, { type: 'video/mp4' });
+                    fileToUpload = new File([compressedBlob], file.name.replace(/\.[^.]+$/, '.webm'), { type: 'video/webm' });
                     progressBar.style.width = '60%';
                     
                 } catch (err) {
@@ -292,7 +335,7 @@
                 if (!response.ok) throw new Error(data.error);
                 
                 progressBar.style.width = '100%';
-                progressBar.style.background = '#10b981'; // green
+                progressBar.style.background = '#10b981';
                 statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil diunggah!</span>';
 
                 setTimeout(function() {
@@ -320,8 +363,5 @@
             alert(`Prompt: ${prompt}`);
         }
     </script>
-
-    <!-- FFmpeg.wasm dari CDN -->
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 </body>
 </html>

@@ -1,9 +1,17 @@
 import os
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, make_response
 from vercel.blob import put
 import vercel_blob
 
 app = Flask(__name__)
+
+# ==================== HEADER KEAMANAN UNTUK SharedArrayBuffer ====================
+@app.after_request
+def add_security_headers(response):
+    """Menambahkan header agar ffmpeg.wasm bisa berjalan di browser."""
+    response.headers['Cross-Origin-Embedder-Policy'] = 'require-corp'
+    response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
+    return response
 
 @app.route('/')
 def index():
@@ -22,7 +30,6 @@ def upload_video():
         
         file_content = file.read()
         
-        # PUBLIC STORE
         result = put(
             file.filename,
             file_content,
