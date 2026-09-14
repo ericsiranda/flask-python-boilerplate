@@ -1,5 +1,4 @@
 import os
-import json
 import time
 from flask import Flask, render_template, jsonify, request
 from vercel.blob import put
@@ -95,12 +94,11 @@ def list_files_grouped():
         
         sessions = {}
         singles = []
-        ai_edits = []  # File hasil edit AI
+        ai_edits = []
         
         for item in files.get('blobs', []):
             pathname = item.get('pathname', '')
             
-            # File hasil AI: ai_edit_<session>.webm
             if pathname.startswith('ai_edit_'):
                 ai_edits.append({
                     'pathname': pathname,
@@ -110,7 +108,6 @@ def list_files_grouped():
                 })
                 continue
             
-            # File potongan: cut_<session>_<index>.webm
             if pathname.startswith('cut_') and pathname.endswith('.webm'):
                 parts = pathname.replace('.webm', '').split('_')
                 if len(parts) >= 3:
@@ -144,11 +141,9 @@ def list_files_grouped():
                     'is_single': True,
                 })
         
-        # Urutkan chunks
         for sid in sessions:
             sessions[sid]['chunks'].sort(key=lambda x: x['index'])
         
-        # Cek apakah session sudah punya hasil AI
         ai_edit_map = {edit['session_id']: edit for edit in ai_edits}
         
         result = []
@@ -190,15 +185,6 @@ def delete_file():
 # ==================== SUBMIT TO AI (SIMULASI) ====================
 @app.route('/api/submit-to-ai', methods=['POST'])
 def submit_to_ai():
-    """
-    Menerima video untuk diproses AI.
-    
-    DI SINI NANTI: Integrasikan dengan API AI sesungguhnya (OpenAI, Replicate, dll).
-    
-    Untuk sementara, kita SIMULASIKAN:
-    1. Gabungkan chunks menjadi 1 video utuh (placeholder URL).
-    2. Buat file 'ai_edit_<session>.webm' sebagai hasil.
-    """
     try:
         data = request.json
         session_id = data.get('session_id', '')
@@ -206,58 +192,63 @@ def submit_to_ai():
         prompt = data.get('prompt', '')
         is_single = data.get('is_single', False)
         single_url = data.get('single_url', '')
-        single_pathname = data.get('pathname', '')
         
-        print(f"[AI] Memproses sesi: {session_id}")
-        print(f"[AI] Prompt: {prompt}")
-        print(f"[AI] Chunks: {len(chunks) if not is_single else 1}")
+        print(f"[AI] Sesi: {session_id}, Prompt: {prompt}")
         
-        # ============================================================
-        # SIMULASI AI: Untuk sekarang, kita hanya BUKTI bahwa alur
-        # sudah bekerja. Hasil AI = file tiruan dari chunk pertama.
-        #
-        # DI MASA DEPAN, di sini akan:
-        # 1. Download semua chunks.
-        # 2. Gabungkan jadi 1 video (ffmpeg di cloud function).
-        # 3. Kirim ke AI (OpenAI/Replicate) dengan prompt.
-        # 4. Simpan hasil sebagai file baru.
-        # ============================================================
+        # SIMULASI: copy chunk pertama sebagai hasil AI
+        import requests as req_lib
         
-        # Simulasi: Buat file hasil AI dengan nama khusus
-        # Kita ambil chunk pertama sebagai "placeholder hasil AI"
         if is_single:
-            # File tunggal
             ai_filename = f"ai_edit_single_{int(time.time())}.webm"
-            # Download dari URL single dan upload ulang dengan nama baru
-            import requests as req_lib
             file_data = req_lib.get(single_url).content
             result = put(ai_filename, file_data, access='public', multipart=True)
-            new_session_id = ai_filename.replace('ai_edit_single_', '').replace('.webm', '')
         else:
-            # File potongan
             ai_filename = f"ai_edit_{session_id}.webm"
-            # Ambil chunk pertama sebagai placeholder
             if chunks:
-                import requests as req_lib
                 file_data = req_lib.get(chunks[0]['url']).content
                 result = put(ai_filename, file_data, access='public', multipart=True)
             else:
                 return jsonify({'error': 'Tidak ada chunk'}), 400
-            new_session_id = session_id
         
         return jsonify({
             'success': True,
-            'message': 'Video berhasil dikirim ke AI (simulasi). Hasil edit telah dibuat.',
+            'message': 'Video berhasil diproses AI (simulasi).',
             'ai_result': {
                 'pathname': result.pathname,
                 'url': result.url,
-                'session_id': new_session_id,
+                'session_id': session_id,
             }
         })
     
     except Exception as e:
         import traceback
         traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+# ==================== RESET ALL AI STATUS (OPSIONAL) ====================
+@app.route('/api/reset-ai', methods=['POST'])
+def reset_ai():
+    """
+    Endpoint untuk reset status AI.
+    Menghapus semua file ai_edit_* agar user bisa mulai dari awal.
+    """
+    try:
+        files = vercel_blob.list()
+        deleted = 0
+        
+        for item in files.get('blobs', []):
+            pathname = item.get('pathname', '')
+            if pathname.startswith('ai_edit_'):
+                vercel_blob.delete(item.get('url'))
+                deleted += 1
+        
+        return jsonify({
+            'success': True,
+            'message': f'{deleted} file hasil AI dihapus.',
+            'deleted': deleted
+        })
+    
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

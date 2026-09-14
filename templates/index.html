@@ -68,15 +68,29 @@
                     </div>
                     
                     <!-- Info video terpilih -->
-                    <div id="selectedInfo" class="hidden text-xs p-2 rounded-lg bg-purple-500/20 border border-purple-500/40">
-                        <p class="text-purple-300">
-                            📌 Terpilih: <span id="selectedName" class="font-bold">-</span>
-                        </p>
+                    <div id="selectedInfo" class="hidden text-xs p-3 rounded-lg bg-purple-500/20 border border-purple-500/40">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-purple-300 font-medium">📌 Terpilih untuk AI:</p>
+                                <p id="selectedName" class="font-bold text-white break-words mt-1">-</p>
+                            </div>
+                            <button onclick="cancelSelection()" 
+                                    class="ml-2 bg-red-500/30 hover:bg-red-500/50 text-red-200 text-xs px-2 py-1 rounded-lg flex-shrink-0"
+                                    title="Batalkan pilihan">
+                                ✕ Batal
+                            </button>
+                        </div>
                     </div>
                     
                     <button type="button" onclick="submitToAI()" 
                             class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm">
                         🚀 Kirim ke AI untuk Edit
+                    </button>
+                    
+                    <!-- Tombol Reset -->
+                    <button type="button" onclick="resetAllStatus()" 
+                            class="w-full bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium py-2 px-4 rounded-lg text-xs">
+                        🔄 Reset Semua Status
                     </button>
                 </div>
             </div>
@@ -134,7 +148,6 @@
 
     <script>
         let selectedForAI = null;
-        // Menyimpan status AI per session: { session_id: 'idle' | 'pending' | 'processing' | 'done' }
         let aiStatusMap = {};
 
         window.addEventListener('DOMContentLoaded', function() {
@@ -164,11 +177,13 @@
                     const row = document.createElement('tr');
                     row.className = 'border-b border-gray-700 hover:bg-gray-700/30';
                     
-                    // Tentukan status AI
-                    let aiStatus = aiStatusMap[file.session_id] || file.ai_status || 'idle';
-                    if (file.ai_result && file.ai_status === 'done') {
-                        aiStatus = 'done';
+                    // Highlight baris jika terpilih
+                    if (selectedForAI && selectedForAI.session_id === file.session_id) {
+                        row.classList.add('bg-purple-900/30');
                     }
+                    
+                    let aiStatus = aiStatusMap[file.session_id] || file.ai_status || 'idle';
+                    if (file.ai_result && file.ai_status === 'done') aiStatus = 'done';
                     
                     const statusBadge = renderAIStatusBadge(aiStatus);
                     
@@ -209,17 +224,16 @@
             }
         }
 
-        // Render badge status AI
         function renderAIStatusBadge(status) {
             switch(status) {
                 case 'pending':
                     return '<span class="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-400">📋 Terpilih</span>';
                 case 'processing':
-                    return '<span class="px-2 py-1 text-xs rounded-full bg-orange-500/20 text-orange-400">⏳ Diproses AI</span>';
+                    return '<span class="px-2 py-1 text-xs rounded-full bg-orange-500/20 text-orange-400">⏳ Diproses</span>';
                 case 'done':
                     return '<span class="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-400">✅ Selesai</span>';
                 default:
-                    return '<span class="px-2 py-1 text-xs rounded-full bg-gray-500/20 text-gray-400">- Belum dipilih</span>';
+                    return '<span class="px-2 py-1 text-xs rounded-full bg-gray-500/20 text-gray-400">- Belum</span>';
             }
         }
 
@@ -243,7 +257,7 @@
                             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
                         </svg>
                         <p class="text-xs text-yellow-200">
-                            <strong>Perhatian:</strong> Video ini terdiri dari ${chunks.length} file. Preview memuat berurutan dan mungkin butuh waktu.
+                            <strong>Perhatian:</strong> Video terdiri dari ${chunks.length} file. Preview memuat berurutan, mungkin butuh waktu.
                         </p>
                     </div>
                     
@@ -288,7 +302,6 @@
                 
                 video.onloadeddata = () => loading.classList.add('hidden');
                 video.play().catch(e => {
-                    console.warn('Autoplay diblokir', e);
                     loading.classList.add('hidden');
                 });
             };
@@ -324,11 +337,10 @@
         function selectForAI(data) {
             selectedForAI = data;
             
-            // Set status ke 'pending' (di tabel)
             const sessionId = data.session_id;
             aiStatusMap[sessionId] = 'pending';
             
-            // Update info
+            // Update info panel
             const infoDiv = document.getElementById('selectedInfo');
             const nameSpan = document.getElementById('selectedName');
             infoDiv.classList.remove('hidden');
@@ -336,14 +348,90 @@
                 ? data.pathname 
                 : `${data.pathname} (${data.chunks.length} potongan)`;
             
-            // Reload tabel untuk update badge
             loadFiles();
             
-            // Notifikasi
             const statusDiv = document.getElementById('uploadStatus');
             statusDiv.classList.remove('hidden');
             statusDiv.innerHTML = `<span class="text-yellow-400">📋 Video dipilih untuk AI</span>`;
             setTimeout(() => statusDiv.classList.add('hidden'), 2000);
+        }
+
+        // ==================== BATALKAN PILIHAN ====================
+        function cancelSelection() {
+            if (selectedForAI) {
+                const sessionId = selectedForAI.session_id;
+                // Hapus dari status map
+                if (aiStatusMap[sessionId] === 'pending') {
+                    delete aiStatusMap[sessionId];
+                }
+            }
+            
+            selectedForAI = null;
+            
+            // Sembunyikan info panel
+            document.getElementById('selectedInfo').classList.add('hidden');
+            
+            // Reset badge AI status
+            const badge = document.getElementById('aiStatusBadge');
+            badge.classList.add('hidden');
+            
+            // Reset preview hasil AI
+            document.getElementById('editedVideoContainer').innerHTML = `
+                <div class="text-center text-gray-600 text-sm">
+                    Menunggu proses AI
+                </div>
+            `;
+            
+            // Notifikasi
+            const statusDiv = document.getElementById('uploadStatus');
+            statusDiv.classList.remove('hidden');
+            statusDiv.innerHTML = `<span class="text-gray-400">✕ Pilihan dibatalkan</span>`;
+            setTimeout(() => statusDiv.classList.add('hidden'), 2000);
+            
+            // Reload tabel
+            loadFiles();
+        }
+
+        // ==================== RESET SEMUA STATUS ====================
+        async function resetAllStatus() {
+            if (!confirm('Reset semua status AI?\n\nIni akan:\n• Menghapus semua pilihan AI\n• Menghapus semua file hasil AI\n• Video mentah tetap aman\n\nLanjutkan?')) {
+                return;
+            }
+            
+            try {
+                // Panggil API untuk hapus semua file ai_edit_*
+                const response = await fetch('/api/reset-ai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                
+                // Reset state di frontend
+                selectedForAI = null;
+                aiStatusMap = {};
+                
+                // Reset UI
+                document.getElementById('selectedInfo').classList.add('hidden');
+                document.getElementById('aiStatusBadge').classList.add('hidden');
+                document.getElementById('editedVideoContainer').innerHTML = `
+                    <div class="text-center text-gray-600 text-sm">
+                        Menunggu proses AI
+                    </div>
+                `;
+                
+                // Notifikasi
+                const statusDiv = document.getElementById('uploadStatus');
+                statusDiv.classList.remove('hidden');
+                statusDiv.innerHTML = `<span class="text-green-400">✅ Status di-reset. ${data.deleted} file hasil AI dihapus.</span>`;
+                setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+                
+                loadFiles();
+                
+            } catch (error) {
+                alert(`❌ Gagal reset: ${error.message}`);
+            }
         }
 
         // ==================== DELETE ====================
@@ -374,6 +462,10 @@
                     });
                 }
                 delete aiStatusMap[sessionId];
+                if (selectedForAI && selectedForAI.session_id === sessionId) {
+                    selectedForAI = null;
+                    document.getElementById('selectedInfo').classList.add('hidden');
+                }
                 alert(`✅ ${chunks.length} potongan berhasil dihapus!`);
                 loadFiles();
             } catch (error) {
@@ -664,17 +756,13 @@
             if (!selectedForAI) { alert('Pilih video dulu (klik "Pilih AI" di tabel)!'); return; }
 
             const sessionId = selectedForAI.session_id;
-            
-            // Set status ke processing
             aiStatusMap[sessionId] = 'processing';
             
-            // Update badge hasil AI
             const badge = document.getElementById('aiStatusBadge');
             badge.className = 'text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400';
             badge.textContent = '⏳ Memproses...';
             badge.classList.remove('hidden');
             
-            // Loading di preview
             document.getElementById('editedVideoContainer').innerHTML = `
                 <div class="text-center">
                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-400 mx-auto mb-2"></div>
@@ -682,7 +770,6 @@
                 </div>
             `;
             
-            // Reload tabel untuk update badge
             loadFiles();
 
             try {
@@ -705,10 +792,8 @@
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
 
-                // Set status done
                 aiStatusMap[sessionId] = 'done';
                 
-                // Tampilkan hasil AI
                 badge.className = 'text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400';
                 badge.textContent = '✅ Selesai';
                 
@@ -717,11 +802,9 @@
                            class="w-full h-full object-contain rounded-lg bg-black"></video>
                 `;
                 
-                // Reload tabel untuk tampilkan hasil
                 loadFiles();
                 
             } catch (error) {
-                // Set status kembali ke pending
                 aiStatusMap[sessionId] = 'pending';
                 badge.className = 'text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400';
                 badge.textContent = '❌ Gagal';
