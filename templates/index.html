@@ -1,34 +1,70 @@
-async function uploadVideo() {
-    const fileInput = document.getElementById('videoInput');
-    const statusDiv = document.getElementById('status');
-    const file = fileInput.files[0];
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Video Mentah</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
 
-    if (!file) {
-        statusDiv.innerHTML = '<span class="text-yellow-400">⚠️ Silakan pilih video terlebih dahulu.</span>';
-        return;
-    }
-
-    statusDiv.innerHTML = '<span class="text-blue-400">📤 Mengunggah video... (mohon tunggu)</span>';
-
-    try {
-        const formData = new FormData();
-        formData.append('video', file);
-
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData
-        });
-
-        const data = await response.json();
+    <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700">
+        <h1 class="text-2xl font-bold mb-2 text-center text-blue-400">Upload Video Mentah</h1>
+        <p class="text-sm text-gray-400 text-center mb-6">Unggah video Anda untuk diproses AI</p>
         
-        if (!response.ok) throw new Error(data.error || 'Gagal upload');
-        
-        statusDiv.innerHTML = `
-            <span class="text-green-400 block mb-2">✅ Berhasil diunggah!</span>
-            <a href="${data.url}" target="_blank" class="text-blue-300 underline break-all text-xs">${data.url}</a>
-        `;
+        <form id="uploadForm" class="space-y-5">
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">Pilih Video (Maks 500MB)</label>
+                <input type="file" id="videoInput" accept="video/*" 
+                       class="w-full text-sm text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer bg-gray-700 rounded-lg p-1"/>
+            </div>
+            
+            <button type="button" onclick="uploadVideo()" 
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 shadow-lg shadow-blue-500/30">
+                Upload ke Vercel Blob
+            </button>
+        </form>
 
-    } catch (error) {
-        statusDiv.innerHTML = `<span class="text-red-400">❌ Error: ${error.message}</span>`;
-    }
-}
+        <div id="status" class="mt-6 text-center text-sm p-3 rounded-lg bg-gray-700/50 hidden"></div>
+    </div>
+
+    <script>
+        async function uploadVideo() {
+            const fileInput = document.getElementById('videoInput');
+            const statusDiv = document.getElementById('status');
+            const file = fileInput.files[0];
+
+            statusDiv.classList.remove('hidden');
+
+            if (!file) {
+                statusDiv.innerHTML = '<span class="text-yellow-400">⚠️ Silakan pilih video terlebih dahulu.</span>';
+                return;
+            }
+
+            statusDiv.innerHTML = '<span class="text-blue-400">📤 Mengunggah video... (mohon tunggu)</span>';
+
+            try {
+                const formData = new FormData();
+                formData.append('video', file);
+
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) throw new Error(data.error || 'Gagal upload');
+                
+                statusDiv.innerHTML = `
+                    <span class="text-green-400 block mb-2">✅ Berhasil diunggah!</span>
+                    <a href="${data.url}" target="_blank" class="text-blue-300 underline break-all text-xs">${data.url}</a>
+                `;
+
+            } catch (error) {
+                statusDiv.innerHTML = `<span class="text-red-400">❌ Error: ${error.message}</span>`;
+            }
+        }
+    </script>
+</body>
+</html>
