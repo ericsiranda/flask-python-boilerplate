@@ -1,15 +1,20 @@
 import os
+import time
 from flask import Flask, render_template, jsonify, request
 from vercel.blob import put
 import vercel_blob
 
 app = Flask(__name__)
 
+# Penyimpanan sementara untuk sesi potong (in-memory)
+# Catatan: Vercel Functions bersifat stateless, ini hanya untuk demo
+CUT_SESSIONS = {}
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# ==================== UPLOAD ====================
+# ==================== UPLOAD (KOMPRES) ====================
 @app.route('/api/upload', methods=['POST'])
 def upload_video():
     try:
@@ -35,6 +40,67 @@ def upload_video():
             'pathname': result.pathname,
             'filename': file.filename,
             'size': len(file_content)
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ==================== UPLOAD CHUNK (POTONG) ====================
+@app.route('/api/upload-chunk', methods=['POST'])
+def upload_chunk():
+    """
+    Menerima setiap potongan video, lalu upload ke Vercel Blob.
+    Setiap potongan menjadi file terpisah (chunk_001.webm, chunk_002.webm, dst.)
+    """
+    try:
+        if 'video' not in request.files:
+            return jsonify({'error': 'Tidak ada file video'}), 400
+        
+        file = request.files['video']
+        session_id = request.form.get('session_id', 'default')
+        chunk_index = int(request.form.get('chunk_index', 0))
+        
+        file_content = file.read()
+        
+        # Nama file chunk: cut_<session>_<index>.webm
+        chunk_filename = f"cut_{session_id}_{chunk_index:03d}.webm"
+        
+        result = put(
+            chunk_filename,
+            file_content,
+            access='public',
+            multipart=True
+        )
+        
+        return jsonify({
+            'success': True,
+            'url': result.url,
+            'pathname': result.pathname,
+            'chunk_index': chunk_index,
+            'size': len(file_content)
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ==================== FINALIZE CUT (OPSIONAL) ====================
+@app.route('/api/finalize-cut', methods=['POST'])
+def finalize_cut():
+    """
+    Dipanggil setelah semua chunk selesai di-upload.
+    Bisa digunakan untuk mencatat metadata sesi.
+    """
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+        total_chunks = data.get('total_chunks')
+        original_name = data.get('original_name', 'video.mp4')
+        
+        return jsonify({
+            'success': True,
+            'message': f'Sesi {session_id} selesai dengan {total_chunks} potongan.',
+            'session_id': session_id,
+            'original_name': original_name
         })
     
     except Exception as e:
