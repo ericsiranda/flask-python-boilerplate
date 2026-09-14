@@ -6,7 +6,6 @@
     <title>AI Video Editor Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Custom scrollbar agar lebih rapi */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
@@ -135,8 +134,8 @@
     </main>
 
     <script>
-        // Variabel global untuk menyimpan URL video
         let currentVideoUrl = null;
+        let currentVideoPathname = null;
 
         async function uploadVideo() {
             const fileInput = document.getElementById('videoInput');
@@ -166,16 +165,17 @@
                 if (!response.ok) throw new Error(data.error || 'Gagal upload');
                 
                 currentVideoUrl = data.url;
+                currentVideoPathname = data.pathname;
 
-                // Update status
                 statusDiv.innerHTML = `<span class="text-green-400">✅ Berhasil diunggah!</span>`;
 
-                // Tampilkan video di preview
+                // Untuk video private, kita akses melalui route backend
+                // Tapi karena ini masih private, kita gunakan URL dari response untuk preview sementara
+                // (Jika tidak bisa diakses, kita perlu menggunakan route /api/file/)
                 document.getElementById('rawVideoContainer').innerHTML = `
-                    <video src="${data.url}" controls class="w-full h-full object-cover rounded-lg"></video>
+                    <video src="/api/file/${data.pathname}" controls class="w-full h-full object-cover rounded-lg"></video>
                 `;
 
-                // Tambahkan ke tabel report
                 addToReport(file.name, 'Menunggu Prompt', '-');
 
             } catch (error) {
@@ -197,10 +197,8 @@
                 return;
             }
 
-            // Simulasi proses AI (nanti akan diganti dengan API call sebenarnya)
             alert(`Mengirim video ke AI...\n\nPrompt: ${prompt}\nJadwal: ${schedule || 'Belum dijadwalkan'}`);
             
-            // Update status di tabel
             const tableBody = document.getElementById('reportTableBody');
             tableBody.innerHTML = `
                 <tr class="border-b border-gray-700">
@@ -211,7 +209,6 @@
                 </tr>
             `;
 
-            // Tampilkan placeholder di preview hasil edit
             document.getElementById('editedVideoContainer').innerHTML = `
                 <div class="text-center">
                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto mb-2"></div>
@@ -223,7 +220,6 @@
         function addToReport(filename, status, schedule) {
             const tableBody = document.getElementById('reportTableBody');
             
-            // Hapus pesan "Belum ada data" jika ada
             if (tableBody.querySelector('td[colspan="4"]')) {
                 tableBody.innerHTML = '';
             }
