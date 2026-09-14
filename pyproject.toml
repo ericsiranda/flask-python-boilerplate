@@ -1,9 +1,11 @@
 [project]
-name = "vercel-flask-starter"
+name = "flask-python-boilerplate"
 version = "0.1.0"
-requires-python = ">=3.9"
+description = "Flask + Vercel"
 dependencies = [
-  "flask>=3.1,<4.0",
-  "gunicorn~=23.0.0",
-  "vercel-blob"
+    "Flask",
+    "gunicorn~=23.0.0",
+    "vercel-blob",
 ]
+
+[tool.vercel]
