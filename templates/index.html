@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Video Mentah</title>
+    <!-- Menggunakan Tailwind CSS agar tampilan modern -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
+
+    <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-md">
+        <h1 class="text-2xl font-bold mb-6 text-center text-blue-400">Upload Video Mentah</h1>
+        
+        <form id="uploadForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">Pilih Video (Maks 500MB)</label>
+                <input type="file" id="videoInput" accept="video/*" 
+                       class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"/>
+            </div>
+            
+            <button type="button" onclick="uploadVideo()" 
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300">
+                Upload ke Vercel Blob
+            </button>
+        </form>
+
+        <div id="status" class="mt-4 text-center text-sm"></div>
+    </div>
+
+    <script>
+        async function uploadVideo() {
+            const fileInput = document.getElementById('videoInput');
+            const statusDiv = document.getElementById('status');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                statusDiv.innerHTML = '<span class="text-yellow-400">Silakan pilih video terlebih dahulu.</span>';
+                return;
+            }
+
+            statusDiv.innerHTML = '<span class="text-blue-400">Meminta token upload...</span>';
+
+            try {
+                // 1. Minta token ke backend Flask
+                const tokenResponse = await fetch('/api/upload-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (!tokenResponse.ok) throw new Error('Gagal mendapatkan token');
+                const { token } = await tokenResponse.json();
+
+                statusDiv.innerHTML = '<span class="text-blue-400">Mengunggah video... (jangan tutup halaman)</span>';
+
+                // 2. Upload langsung ke Vercel Blob
+                const blobResponse = await fetch(`https://blob.vercel-storage.com/${file.name}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': file.type,
+                    },
+                    body: file
+                });
+
+                if (!blobResponse.ok) throw new Error('Gagal mengunggah ke Blob');
+                
+                const blobData = await blobResponse.json();
+                
+                statusDiv.innerHTML = `<span class="text-green-400">Berhasil! URL Video: <br> <a href="${blobData.url}" target="_blank" class="underline break-all">${blobData.url}</a></span>`;
+                
+            } catch (error) {
+                console.error(error);
+                statusDiv.innerHTML = `<span class="text-red-400">Error: ${error.message}</span>`;
+            }
+        }
+    </script>
+</body>
+</html>
