@@ -193,8 +193,6 @@ def submit_to_ai():
         is_single = data.get('is_single', False)
         single_url = data.get('single_url', '')
         
-        print(f"[AI] Sesi: {session_id}, Prompt: {prompt}")
-        
         import requests as req_lib
         
         if is_single:

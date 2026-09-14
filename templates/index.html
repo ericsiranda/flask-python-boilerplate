@@ -10,13 +10,13 @@
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
 
-        /* Animasi fade-out untuk overlay loading */
-        .fade-out-overlay {
-            animation: fadeOutOverlay 0.5s ease-out forwards;
+        /* Animasi pulse halus untuk indikator loading chunk */
+        .chunk-loading-pulse {
+            animation: chunkPulse 1.5s ease-in-out infinite;
         }
-        @keyframes fadeOutOverlay {
-            from { opacity: 1; }
-            to { opacity: 0; visibility: hidden; }
+        @keyframes chunkPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
         }
     </style>
 </head>
@@ -83,8 +83,7 @@
                                 <p id="selectedName" class="font-bold text-white break-words mt-1">-</p>
                             </div>
                             <button onclick="cancelSelection()" 
-                                    class="ml-2 bg-red-500/30 hover:bg-red-500/50 text-red-200 text-xs px-2 py-1 rounded-lg flex-shrink-0"
-                                    title="Batalkan pilihan">
+                                    class="ml-2 bg-red-500/30 hover:bg-red-500/50 text-red-200 text-xs px-2 py-1 rounded-lg flex-shrink-0">
                                 ✕ Batal
                             </button>
                         </div>
@@ -253,124 +252,207 @@
             container.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
-        // ==================== PREVIEW GROUPED (DENGAN OVERLAY LOADING) ====================
+        // ==================== PREVIEW GROUPED (STREAMING BERTAHAP) ====================
+        // Strategi:
+        // 1. Load chunk 1 dulu → langsung putar (tanpa tunggu semua)
+        // 2. Di background, preload chunk 2, 3, dst.
+        // 3. Saat chunk saat ini selesai, lanjut ke chunk berikutnya (jika sudah ter-preload → instan)
+        // 4. Setelah semua ter-preload, user bisa replay tanpa jeda.
         function previewGrouped(chunks, sessionId) {
             const container = document.getElementById('rawVideoContainer');
             
-            // Buat elemen video + overlay
+            // Status per chunk: 'pending' | 'loading' | 'ready'
+            const chunkStatus = chunks.map(() => 'pending');
+            
             container.innerHTML = `
-                <div class="w-full h-full relative">
-                    <video id="groupedVideo" controls preload="auto" 
-                           class="w-full h-full object-contain rounded-lg bg-black"></video>
-                    
-                    <!-- Overlay loading, muncul di atas video -->
-                    <div id="loadingOverlay" 
-                         class="absolute inset-0 bg-gray-900/95 rounded-lg flex flex-col items-center justify-center p-4 z-10">
+                <div class="w-full h-full flex flex-col">
+                    <!-- Video player -->
+                    <div class="relative flex-1">
+                        <video id="groupedVideo" controls preload="auto" 
+                               class="w-full h-full object-contain rounded-lg bg-black"></video>
                         
-                        <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500/30 border-t-blue-500 mb-4"></div>
-                        
-                        <div class="bg-yellow-500/20 border border-yellow-500/40 rounded-lg p-3 max-w-xs flex items-start gap-2 mb-4">
-                            <svg class="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                            </svg>
-                            <p class="text-xs text-yellow-200">
-                                <strong>Perhatian:</strong> Video ini terdiri dari ${chunks.length} file. Sedang memuat, mohon tunggu...
-                            </p>
-                        </div>
-                        
-                        <div class="w-full max-w-xs">
-                            <div class="bg-gray-700 rounded-full h-1.5">
-                                <div id="loadProgress" class="bg-blue-500 h-1.5 rounded-full transition-all" style="width: 0%"></div>
+                        <!-- Overlay loading untuk chunk pertama (hanya muncul saat load awal) -->
+                        <div id="firstLoadOverlay" 
+                             class="absolute inset-0 bg-gray-900/95 rounded-lg flex flex-col items-center justify-center p-4 z-10">
+                            <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500/30 border-t-blue-500 mb-4"></div>
+                            <div class="bg-yellow-500/20 border border-yellow-500/40 rounded-lg p-3 max-w-xs flex items-start gap-2 mb-3">
+                                <svg class="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                </svg>
+                                <p class="text-xs text-yellow-200">
+                                    <strong>Memuat...</strong> Video terdiri dari ${chunks.length} file, akan diputar otomatis.
+                                </p>
                             </div>
-                            <p class="text-xs text-gray-400 text-center mt-2">
-                                <span id="loadCounter">0</span> / ${chunks.length} potongan
-                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Info bar di bawah player -->
+                    <div class="mt-2 flex items-center gap-3">
+                        <div class="flex-1">
+                            <!-- Progress bar keseluruhan -->
+                            <div class="bg-gray-700 rounded-full h-1.5">
+                                <div id="loadProgress" class="bg-green-500 h-1.5 rounded-full transition-all" style="width: 0%"></div>
+                            </div>
+                            <div class="flex justify-between mt-1">
+                                <p class="text-xs text-gray-400">
+                                    🎬 Potongan <span id="currentChunkLabel" class="text-white font-bold">-</span> / ${chunks.length}
+                                </p>
+                                <p class="text-xs text-gray-400">
+                                    <span id="loadedCount">0</span> / ${chunks.length} siap
+                                </p>
+                            </div>
+                        </div>
+                        <!-- Indikator status chunk yang sedang dimuat -->
+                        <div id="chunkStatusIndicator" class="text-xs text-blue-400 chunk-loading-pulse hidden">
+                            ⏳ Memuat...
                         </div>
                     </div>
                 </div>
             `;
             
             const video = document.getElementById('groupedVideo');
-            const overlay = document.getElementById('loadingOverlay');
+            const firstOverlay = document.getElementById('firstLoadOverlay');
             const loadProgress = document.getElementById('loadProgress');
-            const loadCounter = document.getElementById('loadCounter');
+            const loadedCountEl = document.getElementById('loadedCount');
+            const currentChunkLabel = document.getElementById('currentChunkLabel');
+            const statusIndicator = document.getElementById('chunkStatusIndicator');
             
-            let loadedCount = 0;
             let currentIndex = 0;
-            let allLoaded = false;
+            let loadedCount = 0;
+            let allPreloaded = false;
             
-            // Fungsi untuk memutar chunk berurutan
+            // Update progress bar
+            const updateLoadedProgress = () => {
+                loadedCountEl.textContent = loadedCount;
+                loadProgress.style.width = ((loadedCount / chunks.length) * 100) + '%';
+            };
+            
+            // Preload satu chunk (Promise)
+            const preloadOneChunk = (index) => {
+                if (chunkStatus[index] === 'ready' || chunkStatus[index] === 'loading') return;
+                chunkStatus[index] = 'loading';
+                
+                const tempVideo = document.createElement('video');
+                tempVideo.preload = 'auto';
+                tempVideo.muted = true;
+                tempVideo.src = chunks[index].url;
+                
+                const finish = () => {
+                    if (chunkStatus[index] !== 'ready') {
+                        chunkStatus[index] = 'ready';
+                        loadedCount++;
+                        updateLoadedProgress();
+                    }
+                };
+                
+                // Timeout fallback (jangan blokir selamanya)
+                const timeout = setTimeout(finish, 10000);
+                
+                tempVideo.onloadeddata = () => {
+                    clearTimeout(timeout);
+                    finish();
+                };
+                
+                tempVideo.onerror = () => {
+                    clearTimeout(timeout);
+                    console.warn(`Chunk ${index} gagal preload`);
+                    finish();
+                };
+            };
+            
+            // Preload semua chunk di background (paralel, tapi bertahap)
+            const preloadAllInBackground = () => {
+                // Mulai preload chunk 2, 3, dst. satu per satu (delay kecil agar tidak blocking)
+                for (let i = 0; i < chunks.length; i++) {
+                    setTimeout(() => preloadOneChunk(i), i * 100);
+                }
+            };
+            
+            // Fungsi memutar chunk tertentu
             const playChunk = (index) => {
-                if (index >= chunks.length) return;
+                if (index >= chunks.length) {
+                    // Semua selesai
+                    currentChunkLabel.textContent = '✓';
+                    statusIndicator.classList.add('hidden');
+                    return;
+                }
                 
                 currentIndex = index;
+                currentChunkLabel.textContent = index + 1;
+                
+                // Jika chunk belum ready, tampilkan indikator loading
+                if (chunkStatus[index] !== 'ready') {
+                    statusIndicator.classList.remove('hidden');
+                    statusIndicator.textContent = '⏳ Memuat potongan ' + (index + 1) + '...';
+                    
+                    // Tunggu sampai ready, baru putar
+                    const waitForReady = setInterval(() => {
+                        if (chunkStatus[index] === 'ready') {
+                            clearInterval(waitForReady);
+                            statusIndicator.classList.add('hidden');
+                            actuallyPlay(index);
+                        }
+                    }, 200);
+                } else {
+                    statusIndicator.classList.add('hidden');
+                    actuallyPlay(index);
+                }
+            };
+            
+            const actuallyPlay = (index) => {
                 video.src = chunks[index].url;
                 video.load();
-                video.play().catch(e => console.warn('Autoplay diblokir:', e));
-            };
-            
-            // Fungsi menyembunyikan overlay setelah semua chunk siap
-            const hideOverlay = () => {
-                if (!allLoaded) return;
-                allLoaded = true;
-                
-                overlay.classList.add('fade-out-overlay');
-                setTimeout(() => {
-                    overlay.remove();
-                    // Mulai playback setelah overlay hilang
-                    playChunk(0);
-                }, 500);
-            };
-            
-            // Preload semua chunk di background
-            const preloadChunks = async () => {
-                const promises = chunks.map((chunk, index) => {
-                    return new Promise((resolve) => {
-                        const tempVideo = document.createElement('video');
-                        tempVideo.preload = 'auto';
-                        tempVideo.muted = true;
-                        tempVideo.src = chunk.url;
-                        
-                        const markLoaded = () => {
-                            loadedCount++;
-                            loadCounter.textContent = loadedCount;
-                            loadProgress.style.width = ((loadedCount / chunks.length) * 100) + '%';
-                            
-                            // Jika semua sudah loaded, sembunyikan overlay
-                            if (loadedCount >= chunks.length) {
-                                hideOverlay();
-                            }
-                            resolve();
-                        };
-                        
-                        // Timeout fallback jika terlalu lama
-                        const timeout = setTimeout(markLoaded, 8000);
-                        
-                        tempVideo.onloadeddata = () => {
-                            clearTimeout(timeout);
-                            markLoaded();
-                        };
-                        
-                        tempVideo.onerror = () => {
-                            clearTimeout(timeout);
-                            console.warn(`Chunk ${index} gagal preload`);
-                            markLoaded();
-                        };
-                    });
+                video.play().catch(e => {
+                    console.warn('Autoplay diblokir:', e);
+                    // Tampilkan tombol play manual jika autoplay diblokir
                 });
-                
-                await Promise.all(promises);
             };
             
-            // Event ketika satu chunk selesai diputar
+            // Saat chunk selesai diputar, lanjut ke berikutnya
             video.addEventListener('ended', () => {
                 if (currentIndex + 1 < chunks.length) {
                     playChunk(currentIndex + 1);
                 }
             });
             
-            // Mulai preload semua chunk
-            preloadChunks();
+            // Sembunyikan overlay pertama setelah chunk 1 siap
+            const hideFirstOverlay = () => {
+                firstOverlay.classList.add('transition-opacity', 'duration-500');
+                firstOverlay.style.opacity = '0';
+                setTimeout(() => {
+                    firstOverlay.remove();
+                    // Mulai putar dari chunk pertama
+                    playChunk(0);
+                    // Preload semua chunk lainnya di background
+                    preloadAllInBackground();
+                }, 500);
+            };
+            
+            // Tunggu chunk pertama siap
+            chunkStatus[0] = 'loading';
+            const firstVideo = document.createElement('video');
+            firstVideo.preload = 'auto';
+            firstVideo.muted = true;
+            firstVideo.src = chunks[0].url;
+            
+            const firstLoadFinish = () => {
+                if (chunkStatus[0] !== 'ready') {
+                    chunkStatus[0] = 'ready';
+                    loadedCount++;
+                    updateLoadedProgress();
+                    hideFirstOverlay();
+                }
+            };
+            
+            const firstTimeout = setTimeout(firstLoadFinish, 8000);
+            firstVideo.onloadeddata = () => {
+                clearTimeout(firstTimeout);
+                firstLoadFinish();
+            };
+            firstVideo.onerror = () => {
+                clearTimeout(firstTimeout);
+                firstLoadFinish();
+            };
             
             container.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
