@@ -1,7 +1,6 @@
 import os
-import json
 from flask import Flask, render_template, jsonify, request
-from vercel.blob import put
+from vercel.blob import presign_url
 import vercel_blob
 
 app = Flask(__name__)
@@ -10,39 +9,27 @@ app = Flask(__name__)
 def index():
     return render_template('index.html')
 
-# ==================== HANDLE UPLOAD (TOKEN UNTUK CLIENT UPLOAD) ====================
+# ==================== TOKEN UPLOAD (SIGNED URL) ====================
 @app.route('/api/upload-token', methods=['POST'])
 def handle_upload_token():
     """
-    Endpoint ini dipanggil oleh browser SEBELUM upload dimulai.
-    Tugasnya: memberikan 'izin' (token) ke browser agar bisa upload langsung ke Vercel Blob.
+    Endpoint ini dipanggil browser SEBELUM upload dimulai.
+    Tugasnya: membuat Signed URL yang memungkinkan browser
+    upload langsung ke Vercel Blob tanpa melewati server Flask.
     """
     try:
         body = request.json
-        type_ = body.get('type')
+        filename = body.get('filename', 'video.mp4')
         
-        if type_ == 'blob.generate-client-token':
-            # Berikan izin upload
-            from vercel.blob import generate_client_token
-            
-            pathname = body.get('payload', {}).get('pathname', 'video.mp4')
-            
-            token = generate_client_token(
-                pathname=pathname,
-                allowed_content_types=['video/*'],
-                maximum_size_in_bytes=5 * 1024 * 1024 * 1024,  # 5 GB
-                valid_until=int(__import__('time').time()) + 3600,  # 1 jam
-            )
-            
-            return jsonify({'clientToken': token})
+        # Buat signed URL untuk operasi PUT (upload)
+        # URL ini berlaku 1 jam untuk satu file tertentu
+        url = presign_url(
+            pathname=filename,
+            operation='put',
+            valid_until=3600
+        )
         
-        elif type_ == 'blob.upload-completed':
-            # Browser memberitahu server bahwa upload selesai
-            print(f"Upload completed: {body}")
-            return jsonify({'success': True})
-        
-        else:
-            return jsonify({'error': f'Unknown type: {type_}'}), 400
+        return jsonify({'url': url})
     
     except Exception as e:
         import traceback

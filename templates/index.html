@@ -187,7 +187,7 @@
             }
         }
 
-        // ==================== UPLOAD VIDEO DENGAN CLIENT UPLOAD ====================
+        // ==================== UPLOAD VIDEO VIA SIGNED URL ====================
         async function uploadVideo() {
             const fileInput = document.getElementById('videoInput');
             const statusDiv = document.getElementById('uploadStatus');
@@ -205,45 +205,41 @@
             const sizeMB = (file.size / 1024 / 1024).toFixed(2);
             statusDiv.innerHTML = `<span class="text-blue-400">📤 Mengunggah ${sizeMB} MB...</span>`;
             progressContainer.classList.remove('hidden');
-            progressBar.style.width = '0%';
+            progressBar.style.width = '10%';
 
             try {
-                // Panggil endpoint token untuk minta izin
+                // 1. Minta Signed URL dari backend Flask
                 const tokenResponse = await fetch('/api/upload-token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        type: 'blob.generate-client-token',
-                        payload: { pathname: file.name }
-                    })
+                    body: JSON.stringify({ filename: file.name })
                 });
-
-                if (!tokenResponse.ok) {
-                    const errText = await tokenResponse.text();
-                    throw new Error(`Gagal minta token: ${errText.substring(0, 100)}`);
-                }
 
                 const tokenData = await tokenResponse.json();
                 
-                if (!tokenData.clientToken) {
-                    throw new Error('Token tidak valid');
+                if (!tokenResponse.ok) {
+                    throw new Error(tokenData.error || 'Gagal minta token upload');
+                }
+                
+                if (!tokenData.url) {
+                    throw new Error('URL upload tidak diberikan oleh server');
                 }
 
-                // Upload langsung ke Vercel Blob via fetch
-                // (kita tidak pakai SDK @vercel/blob/client untuk menghindari konfigurasi tambahan)
-                const uploadResponse = await fetch(`https://blob.vercel-storage.com/${file.name}`, {
+                progressBar.style.width = '30%';
+                statusDiv.innerHTML = `<span class="text-blue-400">📤 Mengirim ${sizeMB} MB langsung ke cloud...</span>`;
+
+                // 2. Upload file langsung ke Vercel Blob via Signed URL
+                const uploadResponse = await fetch(tokenData.url, {
                     method: 'PUT',
+                    body: file,
                     headers: {
-                        'Authorization': `Bearer ${tokenData.clientToken}`,
-                        'Content-Type': file.type,
-                        'x-vercel-blob-access': 'public',
-                    },
-                    body: file
+                        'Content-Type': file.type || 'video/mp4'
+                    }
                 });
 
                 if (!uploadResponse.ok) {
                     const errText = await uploadResponse.text();
-                    throw new Error(`Upload gagal: ${errText.substring(0, 200)}`);
+                    throw new Error(`Upload gagal (${uploadResponse.status}): ${errText.substring(0, 150)}`);
                 }
 
                 progressBar.style.width = '100%';
