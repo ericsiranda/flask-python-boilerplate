@@ -1,4 +1,5 @@
 import os
+import json
 from flask import Flask, render_template, jsonify, request
 from vercel.blob import put
 import vercel_blob
@@ -9,36 +10,43 @@ app = Flask(__name__)
 def index():
     return render_template('index.html')
 
-# ==================== UPLOAD ====================
-@app.route('/api/upload', methods=['POST'])
-def upload_video():
+# ==================== HANDLE UPLOAD (TOKEN UNTUK CLIENT UPLOAD) ====================
+@app.route('/api/upload-token', methods=['POST'])
+def handle_upload_token():
+    """
+    Endpoint ini dipanggil oleh browser SEBELUM upload dimulai.
+    Tugasnya: memberikan 'izin' (token) ke browser agar bisa upload langsung ke Vercel Blob.
+    """
     try:
-        if 'video' not in request.files:
-            return jsonify({'error': 'Tidak ada file video'}), 400
+        body = request.json
+        type_ = body.get('type')
         
-        file = request.files['video']
-        if file.filename == '':
-            return jsonify({'error': 'Nama file kosong'}), 400
+        if type_ == 'blob.generate-client-token':
+            # Berikan izin upload
+            from vercel.blob import generate_client_token
+            
+            pathname = body.get('payload', {}).get('pathname', 'video.mp4')
+            
+            token = generate_client_token(
+                pathname=pathname,
+                allowed_content_types=['video/*'],
+                maximum_size_in_bytes=5 * 1024 * 1024 * 1024,  # 5 GB
+                valid_until=int(__import__('time').time()) + 3600,  # 1 jam
+            )
+            
+            return jsonify({'clientToken': token})
         
-        file_content = file.read()
+        elif type_ == 'blob.upload-completed':
+            # Browser memberitahu server bahwa upload selesai
+            print(f"Upload completed: {body}")
+            return jsonify({'success': True})
         
-        # PUBLIC STORE
-        result = put(
-            file.filename,
-            file_content,
-            access='public',
-            multipart=True
-        )
-        
-        return jsonify({
-            'success': True,
-            'url': result.url,
-            'pathname': result.pathname,
-            'filename': file.filename,
-            'size': len(file_content)
-        })
+        else:
+            return jsonify({'error': f'Unknown type: {type_}'}), 400
     
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # ==================== LIST FILES ====================
@@ -86,13 +94,11 @@ def delete_file():
 def debug_info():
     token = os.environ.get('BLOB_READ_WRITE_TOKEN')
     store_id = os.environ.get('BLOB_STORE_ID')
-    all_env = [k for k in os.environ.keys() if 'BLOB' in k]
     return jsonify({
         'token_available': token is not None,
         'store_id_available': store_id is not None,
         'token_preview': token[:20] + '...' if token else None,
         'store_id': store_id,
-        'all_blob_env_keys': all_env,
     })
 
 if __name__ == '__main__':

@@ -36,8 +36,11 @@
                            class="w-full text-sm text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white cursor-pointer bg-gray-700 rounded-lg p-1"/>
                     <button type="button" onclick="uploadVideo()" 
                             class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm">
-                        Upload ke Vercel Blob
+                        Upload Video (Bisa File Besar)
                     </button>
+                    <div class="w-full bg-gray-700 rounded-full h-2 hidden" id="progressContainer">
+                        <div id="progressBar" class="bg-blue-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+                    </div>
                     <div id="uploadStatus" class="text-center text-xs p-2 rounded-lg bg-gray-700/50 hidden"></div>
                 </div>
             </div>
@@ -154,20 +157,12 @@
             }
         }
 
-        // ==================== PREVIEW VIDEO (PUBLIC STORE) ====================
-        // Untuk public store, kita bisa langsung akses URL Vercel Blob
         function previewVideo(fileUrl) {
             const container = document.getElementById('rawVideoContainer');
-            
             container.innerHTML = `
-                <video 
-                    src="${fileUrl}" 
-                    controls 
-                    preload="metadata"
-                    class="w-full h-full object-contain rounded-lg bg-black"
-                ></video>
+                <video src="${fileUrl}" controls preload="metadata" 
+                       class="w-full h-full object-contain rounded-lg bg-black"></video>
             `;
-            
             container.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
@@ -192,9 +187,12 @@
             }
         }
 
+        // ==================== UPLOAD VIDEO DENGAN CLIENT UPLOAD ====================
         async function uploadVideo() {
             const fileInput = document.getElementById('videoInput');
             const statusDiv = document.getElementById('uploadStatus');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
             const file = fileInput.files[0];
 
             statusDiv.classList.remove('hidden');
@@ -204,29 +202,63 @@
                 return;
             }
 
-            statusDiv.innerHTML = '<span class="text-blue-400">📤 Mengunggah...</span>';
+            const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+            statusDiv.innerHTML = `<span class="text-blue-400">📤 Mengunggah ${sizeMB} MB...</span>`;
+            progressContainer.classList.remove('hidden');
+            progressBar.style.width = '0%';
 
             try {
-                const formData = new FormData();
-                formData.append('video', file);
-
-                const response = await fetch('/api/upload', {
+                // Panggil endpoint token untuk minta izin
+                const tokenResponse = await fetch('/api/upload-token', {
                     method: 'POST',
-                    body: formData
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'blob.generate-client-token',
+                        payload: { pathname: file.name }
+                    })
                 });
 
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error);
+                if (!tokenResponse.ok) {
+                    const errText = await tokenResponse.text();
+                    throw new Error(`Gagal minta token: ${errText.substring(0, 100)}`);
+                }
+
+                const tokenData = await tokenResponse.json();
                 
-                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil!</span>';
+                if (!tokenData.clientToken) {
+                    throw new Error('Token tidak valid');
+                }
+
+                // Upload langsung ke Vercel Blob via fetch
+                // (kita tidak pakai SDK @vercel/blob/client untuk menghindari konfigurasi tambahan)
+                const uploadResponse = await fetch(`https://blob.vercel-storage.com/${file.name}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${tokenData.clientToken}`,
+                        'Content-Type': file.type,
+                        'x-vercel-blob-access': 'public',
+                    },
+                    body: file
+                });
+
+                if (!uploadResponse.ok) {
+                    const errText = await uploadResponse.text();
+                    throw new Error(`Upload gagal: ${errText.substring(0, 200)}`);
+                }
+
+                progressBar.style.width = '100%';
+                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil diunggah!</span>';
 
                 setTimeout(function() {
                     loadFiles();
                     statusDiv.classList.add('hidden');
+                    progressContainer.classList.add('hidden');
                 }, 1500);
 
             } catch (error) {
+                console.error("Upload error:", error);
                 statusDiv.innerHTML = `<span class="text-red-400">❌ ${error.message}</span>`;
+                progressContainer.classList.add('hidden');
             }
         }
 
