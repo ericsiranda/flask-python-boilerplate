@@ -36,9 +36,12 @@
                            class="w-full text-sm text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white cursor-pointer bg-gray-700 rounded-lg p-1"/>
                     <button type="button" onclick="uploadVideo()" 
                             class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm">
-                        Upload ke Vercel Blob
+                        Upload Video (Otomatis Kompres)
                     </button>
-                    <p class="text-xs text-gray-500 text-center">Maksimal 4.5 MB per video</p>
+                    <p class="text-xs text-gray-500 text-center">Video besar akan dikompres otomatis</p>
+                    <div class="w-full bg-gray-700 rounded-full h-2 hidden" id="progressContainer">
+                        <div id="progressBar" class="bg-blue-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+                    </div>
                     <div id="uploadStatus" class="text-center text-xs p-2 rounded-lg bg-gray-700/50 hidden"></div>
                 </div>
             </div>
@@ -185,10 +188,51 @@
             }
         }
 
+        // ==================== KOMPRESI VIDEO DENGAN FFMPEG.WASM ====================
+        // Fungsi untuk mengompres video di browser sebelum upload
+        async function compressVideo(file, maxSizeMB = 4) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    // Load FFmpeg dari CDN
+                    const { createFFmpeg, fetchFile } = window.FFmpeg;
+                    const ffmpeg = createFFmpeg({
+                        log: false,
+                        corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+                    });
+                    
+                    await ffmpeg.load();
+                    
+                    ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
+                    
+                    // Kompres dengan kualitas yang disesuaikan
+                    // CRF 28 = kualitas sedang, resolusi 720p
+                    await ffmpeg.run(
+                        '-i', 'input.mp4',
+                        '-vcodec', 'libx264',
+                        '-crf', '28',
+                        '-preset', 'fast',
+                        '-vf', 'scale=-2:720',
+                        '-acodec', 'aac',
+                        '-b:a', '128k',
+                        'output.mp4'
+                    );
+                    
+                    const data = ffmpeg.FS('readFile', 'output.mp4');
+                    const blob = new Blob([data.buffer], { type: 'video/mp4' });
+                    
+                    resolve(blob);
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+
         // ==================== UPLOAD VIDEO ====================
         async function uploadVideo() {
             const fileInput = document.getElementById('videoInput');
             const statusDiv = document.getElementById('uploadStatus');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
             const file = fileInput.files[0];
 
             statusDiv.classList.remove('hidden');
@@ -198,43 +242,68 @@
                 return;
             }
 
-            const fileSizeMB = file.size / 1024 / 1024;
-            
-            // Cek ukuran SEBELUM upload
-            if (fileSizeMB > 4.5) {
-                statusDiv.innerHTML = `<span class="text-red-400">❌ File terlalu besar (${fileSizeMB.toFixed(2)} MB). Maksimal 4.5 MB. Silakan kompres video Anda terlebih dahulu.</span>`;
-                return;
+            const originalSizeMB = file.size / 1024 / 1024;
+            let fileToUpload = file;
+
+            // Jika file > 4 MB, kompres dulu
+            if (originalSizeMB > 4) {
+                statusDiv.innerHTML = `<span class="text-blue-400">🔄 Mengompres video (${originalSizeMB.toFixed(2)} MB) di browser...</span>`;
+                progressContainer.classList.remove('hidden');
+                progressBar.style.width = '30%';
+                progressBar.style.background = '#f59e0b'; // orange
+
+                try {
+                    const compressedBlob = await compressVideo(file);
+                    const compressedSizeMB = compressedBlob.size / 1024 / 1024;
+                    
+                    statusDiv.innerHTML = `<span class="text-green-400">✅ Kompresi selesai: ${originalSizeMB.toFixed(2)} MB → ${compressedSizeMB.toFixed(2)} MB</span>`;
+                    
+                    // Buat File object dari blob
+                    fileToUpload = new File([compressedBlob], file.name, { type: 'video/mp4' });
+                    progressBar.style.width = '60%';
+                    
+                } catch (err) {
+                    console.error('Kompresi gagal:', err);
+                    statusDiv.innerHTML = `<span class="text-red-400">❌ Kompresi gagal: ${err.message}</span>`;
+                    progressContainer.classList.add('hidden');
+                    return;
+                }
             }
 
-            statusDiv.innerHTML = `<span class="text-blue-400">📤 Mengunggah ${fileSizeMB.toFixed(2)} MB...</span>`;
+            const uploadSizeMB = fileToUpload.size / 1024 / 1024;
+            statusDiv.innerHTML = `<span class="text-blue-400">📤 Mengunggah ${uploadSizeMB.toFixed(2)} MB...</span>`;
+            progressBar.style.width = '80%';
 
             try {
                 const formData = new FormData();
-                formData.append('video', file);
+                formData.append('video', fileToUpload);
 
                 const response = await fetch('/api/upload', {
                     method: 'POST',
                     body: formData
                 });
 
-                // Cek konten sebelum parse JSON
                 const contentType = response.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
-                    throw new Error(`Server error ${response.status}. Coba file lebih kecil.`);
+                    throw new Error(`Server error ${response.status}`);
                 }
 
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
                 
-                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil!</span>';
+                progressBar.style.width = '100%';
+                progressBar.style.background = '#10b981'; // green
+                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil diunggah!</span>';
 
                 setTimeout(function() {
                     loadFiles();
                     statusDiv.classList.add('hidden');
+                    progressContainer.classList.add('hidden');
                 }, 1500);
 
             } catch (error) {
                 statusDiv.innerHTML = `<span class="text-red-400">❌ ${error.message}</span>`;
+                progressContainer.classList.add('hidden');
             }
         }
 
@@ -251,5 +320,8 @@
             alert(`Prompt: ${prompt}`);
         }
     </script>
+
+    <!-- FFmpeg.wasm dari CDN -->
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 </body>
 </html>

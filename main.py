@@ -21,13 +21,6 @@ def upload_video():
             return jsonify({'error': 'Nama file kosong'}), 400
         
         file_content = file.read()
-        file_size_mb = len(file_content) / 1024 / 1024
-        
-        # Cek batas 4.5 MB (batas Vercel Function)
-        if file_size_mb > 4.5:
-            return jsonify({
-                'error': f'File terlalu besar ({file_size_mb:.2f} MB). Maksimal 4.5 MB untuk upload via server. Untuk file lebih besar, kompres dulu atau gunakan layanan lain.'
-            }), 413
         
         # PUBLIC STORE
         result = put(
@@ -87,16 +80,6 @@ def delete_file():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-# ==================== DEBUG ====================
-@app.route('/api/debug', methods=['GET'])
-def debug_info():
-    token = os.environ.get('BLOB_READ_WRITE_TOKEN')
-    store_id = os.environ.get('BLOB_STORE_ID')
-    return jsonify({
-        'token_available': token is not None,
-        'store_id_available': store_id is not None,
-    })
 
 if __name__ == '__main__':
     app.run(debug=True)
