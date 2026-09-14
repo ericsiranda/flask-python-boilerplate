@@ -188,24 +188,21 @@
             }
         }
 
-        // ==================== KOMPRESI VIDEO SEDERHANA ====================
-        // Menggunakan MediaRecorder API bawaan browser (tanpa ffmpeg.wasm)
-        // Kualitas lebih rendah, tapi tidak butuh SharedArrayBuffer
-        async function compressVideoWithMediaRecorder(file) {
+        // ==================== KOMPRESI VIDEO DENGAN MEDIARECORDER ====================
+        async function compressVideo(file) {
             return new Promise(async (resolve, reject) => {
                 try {
-                    // Buat elemen video untuk memuat file
                     const video = document.createElement('video');
                     video.src = URL.createObjectURL(file);
-                    video.muted = true;
+                    video.muted = false; // biarkan audio ikut
                     video.playsInline = true;
                     
                     await new Promise((res, rej) => {
                         video.onloadedmetadata = res;
-                        video.onerror = rej;
+                        video.onerror = () => rej(new Error('Gagal memuat video'));
                     });
 
-                    // Buat canvas untuk downscale
+                    // Buat canvas untuk downscale ke 720p
                     const canvas = document.createElement('canvas');
                     const targetWidth = 720;
                     const scale = targetWidth / video.videoWidth;
@@ -216,7 +213,7 @@
                     // Capture stream dari canvas
                     const canvasStream = canvas.captureStream(25); // 25 fps
 
-                    // Coba ambil audio dari video
+                    // Ambil audio dari video
                     let audioTrack = null;
                     try {
                         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -233,9 +230,14 @@
                     
                     const outputStream = new MediaStream(tracks);
                     
-                    // MediaRecorder untuk output
+                    // Pilih mimeType yang didukung browser
+                    let mimeType = 'video/webm;codecs=vp8,opus';
+                    if (!MediaRecorder.isTypeSupported(mimeType)) {
+                        mimeType = 'video/webm';
+                    }
+
                     const recorder = new MediaRecorder(outputStream, {
-                        mimeType: 'video/webm;codecs=vp8,opus',
+                        mimeType: mimeType,
                         videoBitsPerSecond: 1000000, // 1 Mbps
                     });
 
@@ -250,14 +252,18 @@
                         resolve(blob);
                     };
 
+                    recorder.onerror = (e) => {
+                        reject(new Error('MediaRecorder error: ' + e.error));
+                    };
+
                     // Mulai playback video dan rekam
                     video.play();
                     recorder.start();
 
-                    // Setiap frame, gambar ke canvas
+                    // Gambar setiap frame ke canvas
                     const drawFrame = () => {
                         if (video.paused || video.ended) {
-                            recorder.stop();
+                            setTimeout(() => recorder.stop(), 500);
                             return;
                         }
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -291,13 +297,13 @@
 
             // Jika file > 4 MB, kompres dulu
             if (originalSizeMB > 4) {
-                statusDiv.innerHTML = `<span class="text-blue-400">🔄 Mengompres video (${originalSizeMB.toFixed(2)} MB) di browser...</span>`;
+                statusDiv.innerHTML = `<span class="text-blue-400">🔄 Mengompres video (${originalSizeMB.toFixed(2)} MB) di browser... Mohon tunggu.</span>`;
                 progressContainer.classList.remove('hidden');
                 progressBar.style.width = '30%';
                 progressBar.style.background = '#f59e0b';
 
                 try {
-                    const compressedBlob = await compressVideoWithMediaRecorder(file);
+                    const compressedBlob = await compressVideo(file);
                     const compressedSizeMB = compressedBlob.size / 1024 / 1024;
                     
                     statusDiv.innerHTML = `<span class="text-green-400">✅ Kompresi selesai: ${originalSizeMB.toFixed(2)} MB → ${compressedSizeMB.toFixed(2)} MB</span>`;
