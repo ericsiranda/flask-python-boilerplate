@@ -18,17 +18,19 @@ def upload_video():
         if file.filename == '':
             return jsonify({'error': 'Nama file kosong'}), 400
         
-        # Simpan file ke Vercel Blob (untuk video, gunakan multipart)
+        # Baca isi file
+        file_content = file.read()
+        
+        # Upload ke Vercel Blob
         response = vercel_blob.put(
             file.filename,
-            file.read(),
-            multipart=True  # Direkomendasikan untuk file > 100MB [citation:7]
+            file_content,
+            multipart=True
         )
         
         return jsonify({
             'success': True,
-            'url': response['url'],
-            'downloadUrl': response['downloadUrl']
+            'url': response['url']
         })
     
     except Exception as e:
