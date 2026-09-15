@@ -1292,65 +1292,8 @@
             if (!response.ok) throw new Error(data.error);
         }
 
+        // ==================== COMPRESS VIDEO (DENGAN AUDIO TERJAGA) ====================
         async function compressVideo(file, onProgress) {
-            return new Promise(async (resolve, reject) => {
-                try {
-                    const video = document.createElement('video');
-                    video.src = URL.createObjectURL(file);
-                    video.muted = true;
-                    video.playsInline = true;
-                    await new Promise((res, rej) => {
-                        video.onloadedmetadata = res;
-                        video.onerror = () => rej(new Error('Gagal memuat video'));
-                    });
-                    const canvas = document.createElement('canvas');
-                    const targetWidth = 480;
-                    const scale = Math.min(1, targetWidth / video.videoWidth);
-                    canvas.width = Math.round(video.videoWidth * scale);
-                    canvas.height = Math.round(video.videoHeight * scale);
-                    const ctx = canvas.getContext('2d');
-                    const canvasStream = canvas.captureStream(20);
-                    let audioTrack = null;
-                    try {
-                        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                        const source = audioCtx.createMediaElementSource(video);
-                        const dest = audioCtx.createMediaStreamDestination();
-                        source.connect(dest);
-                        audioTrack = dest.stream.getAudioTracks()[0];
-                    } catch(e) {}
-                    const tracks = [...canvasStream.getVideoTracks()];
-                    if (audioTrack) tracks.push(audioTrack);
-                    const outputStream = new MediaStream(tracks);
-                    let mimeType = 'video/webm;codecs=vp8,opus';
-                    if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
-                    const recorder = new MediaRecorder(outputStream, {
-                        mimeType: mimeType, videoBitsPerSecond: 400000, audioBitsPerSecond: 64000,
-                    });
-                    const chunks = [];
-                    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-                    recorder.onstop = () => {
-                        const blob = new Blob(chunks, { type: 'video/webm' });
-                        URL.revokeObjectURL(video.src);
-                        resolve(blob);
-                    };
-                    video.play();
-                    recorder.start(1000);
-                    const drawFrame = () => {
-                        if (video.paused || video.ended) {
-                            setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, 500);
-                            return;
-                        }
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        if (onProgress && video.duration) onProgress((video.currentTime / video.duration) * 100);
-                        requestAnimationFrame(drawFrame);
-                    };
-                    drawFrame();
-                } catch (err) { reject(err); }
-            });
-        }
-
-        // ==================== CUT VIDEO (DENGAN AUDIO TERJAGA) ====================
-        async function cutVideo(file, chunkDurationSec, onProgress) {
             return new Promise(async (resolve, reject) => {
                 try {
                     const video = document.createElement('video');
@@ -1366,12 +1309,14 @@
                         video.onerror = () => rej(new Error('Gagal memuat video'));
                     });
                     
-                    const totalDuration = video.duration;
-                    const chunks = [];
-                    let chunkIndex = 0;
+                    const canvas = document.createElement('canvas');
+                    const targetWidth = 480;
+                    const scale = Math.min(1, targetWidth / video.videoWidth);
+                    canvas.width = Math.round(video.videoWidth * scale);
+                    canvas.height = Math.round(video.videoHeight * scale);
+                    const ctx = canvas.getContext('2d');
                     
-                    // Set up video stream dari video element
-                    const videoStream = video.captureStream();
+                    const canvasStream = canvas.captureStream(20);
                     
                     // Set up Web Audio API untuk audio track
                     let audioTrack = null;
@@ -1383,23 +1328,17 @@
                     try {
                         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                         
-                        // Resume AudioContext (beberapa browser butuh ini)
                         if (audioCtx.state === 'suspended') {
                             await audioCtx.resume();
                         }
                         
-                        // Source dari video
                         sourceNode = audioCtx.createMediaElementSource(video);
-                        
-                        // Destination untuk capture (ini yang direkam)
                         destNode = audioCtx.createMediaStreamDestination();
-                        
-                        // Silent gain untuk cegah suara keluar ke speaker
                         silentGain = audioCtx.createGain();
                         silentGain.gain.value = 0;
                         
                         // Routing:
-                        // 1. source → dest (untuk rekaman) ← INI YANG PENTING
+                        // 1. source → dest (untuk rekaman)
                         sourceNode.connect(destNode);
                         
                         // 2. source → silentGain → speaker (tidak ada suara keluar)
@@ -1409,7 +1348,7 @@
                         audioTrack = destNode.stream.getAudioTracks()[0];
                         
                         if (audioTrack) {
-                            console.log('✅ Audio track berhasil dibuat untuk rekaman');
+                            console.log('✅ Audio track berhasil dibuat untuk kompresi');
                         } else {
                             console.warn('⚠️ Audio track kosong');
                         }
@@ -1417,7 +1356,120 @@
                         console.warn('Audio setup gagal:', e);
                     }
                     
-                    // Gabungkan video track + audio track
+                    // Gabungkan video track (dari canvas) + audio track
+                    const videoTracks = canvasStream.getVideoTracks();
+                    const combinedTracks = [...videoTracks];
+                    if (audioTrack) {
+                        combinedTracks.push(audioTrack);
+                    }
+                    
+                    const outputStream = new MediaStream(combinedTracks);
+                    
+                    let mimeType = 'video/webm;codecs=vp8,opus';
+                    if (!MediaRecorder.isTypeSupported(mimeType)) {
+                        mimeType = 'video/webm';
+                    }
+                    
+                    const recorder = new MediaRecorder(outputStream, {
+                        mimeType: mimeType,
+                        videoBitsPerSecond: 400000,
+                        audioBitsPerSecond: 64000,
+                    });
+                    
+                    const chunks = [];
+                    recorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) chunks.push(e.data);
+                    };
+                    recorder.onstop = () => {
+                        const blob = new Blob(chunks, { type: 'video/webm' });
+                        URL.revokeObjectURL(video.src);
+                        
+                        // Tutup AudioContext untuk free memory
+                        if (audioCtx && audioCtx.state !== 'closed') {
+                            audioCtx.close().catch(() => {});
+                        }
+                        
+                        resolve(blob);
+                    };
+                    
+                    video.play();
+                    recorder.start(1000);
+                    
+                    const drawFrame = () => {
+                        if (video.paused || video.ended) {
+                            setTimeout(() => {
+                                if (recorder.state !== 'inactive') recorder.stop();
+                            }, 500);
+                            return;
+                        }
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        if (onProgress && video.duration) {
+                            onProgress((video.currentTime / video.duration) * 100);
+                        }
+                        requestAnimationFrame(drawFrame);
+                    };
+                    drawFrame();
+                    
+                } catch (err) { reject(err); }
+            });
+        }
+
+        // ==================== CUT VIDEO (DENGAN AUDIO TERJAGA) ====================
+        async function cutVideo(file, chunkDurationSec, onProgress) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    const video = document.createElement('video');
+                    video.src = URL.createObjectURL(file);
+                    video.playsInline = true;
+                    // PENTING: Jangan set muted = true.
+                    video.muted = false;
+                    video.volume = 1.0;
+                    
+                    await new Promise((res, rej) => {
+                        video.onloadedmetadata = res;
+                        video.onerror = () => rej(new Error('Gagal memuat video'));
+                    });
+                    
+                    const totalDuration = video.duration;
+                    const chunks = [];
+                    let chunkIndex = 0;
+                    
+                    const videoStream = video.captureStream();
+                    
+                    // Set up Web Audio API
+                    let audioTrack = null;
+                    let audioCtx = null;
+                    let sourceNode = null;
+                    let destNode = null;
+                    let silentGain = null;
+                    
+                    try {
+                        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        
+                        if (audioCtx.state === 'suspended') {
+                            await audioCtx.resume();
+                        }
+                        
+                        sourceNode = audioCtx.createMediaElementSource(video);
+                        destNode = audioCtx.createMediaStreamDestination();
+                        silentGain = audioCtx.createGain();
+                        silentGain.gain.value = 0;
+                        
+                        sourceNode.connect(destNode);
+                        sourceNode.connect(silentGain);
+                        silentGain.connect(audioCtx.destination);
+                        
+                        audioTrack = destNode.stream.getAudioTracks()[0];
+                        
+                        if (audioTrack) {
+                            console.log('✅ Audio track berhasil dibuat untuk pemotongan');
+                        } else {
+                            console.warn('⚠️ Audio track kosong');
+                        }
+                    } catch(e) {
+                        console.warn('Audio setup gagal:', e);
+                    }
+                    
                     const videoTracks = videoStream.getVideoTracks();
                     const combinedTracks = [...videoTracks];
                     if (audioTrack) {
@@ -1463,10 +1515,8 @@
                                 }
                             }, 100);
                         } else {
-                            // Selesai - cleanup
                             URL.revokeObjectURL(video.src);
                             
-                            // Tutup AudioContext untuk free memory
                             if (audioCtx && audioCtx.state !== 'closed') {
                                 audioCtx.close().catch(() => {});
                             }
@@ -1475,7 +1525,6 @@
                         }
                     };
                     
-                    // Mulai playback dan rekam
                     video.play();
                     recorder.start();
                     
