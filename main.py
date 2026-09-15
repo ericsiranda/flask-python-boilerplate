@@ -15,15 +15,13 @@ app = Flask(__name__)
 # ==================== DATABASE CONNECTION ====================
 def get_db():
     """
-    Koneksi ke Supabase Postgres.
-    Mencari environment variable dalam urutan prioritas.
+    Koneksi ke Supabase Postgres dengan logging verbose.
     """
     import re
     
-    # Prioritas pencarian env var (dari paling spesifik)
     priority_keys = [
-        'DB_URL',                    # ← Nama baru kita buat
-        'DATABASE_URL',              # ← Backup kita
+        'DB_URL',
+        'DATABASE_URL',
         'SUPABASE_POSTGRES_URL_NON_POOLING',
         'POSTGRES_URL_NON_POOLING',
         'SUPABASE_POSTGRES_URL',
@@ -33,7 +31,6 @@ def get_db():
     db_url = None
     used_key = None
     
-    # Cari berdasarkan prioritas
     for key in priority_keys:
         val = os.environ.get(key)
         if val and val.startswith('postgres'):
@@ -41,7 +38,6 @@ def get_db():
             used_key = key
             break
     
-    # Fallback: cari env var apapun yang mengandung POSTGRES_URL/DATABASE_URL
     if not db_url:
         for key in sorted(os.environ.keys()):
             if ('POSTGRES_URL' in key or 'DATABASE_URL' in key) and 'PRISMA' not in key:
@@ -51,35 +47,21 @@ def get_db():
                     used_key = key
                     break
     
-    # Fallback: bangun dari komponen (HOST + PASSWORD)
     if not db_url:
-        host = None
-        password = None
-        for key in os.environ.keys():
-            if 'POSTGRES_HOST' in key and not host:
-                host = os.environ.get(key)
-            if 'POSTGRES_PASSWORD' in key and not password:
-                password = os.environ.get(key)
-        
-        if host and password:
-            m = re.match(r'db\.([a-z0-9]+)\.supabase\.co', host)
-            if m:
-                ref = m.group(1)
-                db_url = f"postgres://postgres:{password}@db.{ref}.supabase.co:5432/postgres?sslmode=require"
-                used_key = 'constructed_from_components'
-    
-    if not db_url:
-        print("⚠️ Tidak ada POSTGRES_URL/DATABASE_URL/DB_URL di environment")
+        print("⚠️ Tidak ada URL database di environment")
         return None
     
     try:
         print(f"DB: mencoba {used_key}...")
+        print(f"DB: URL preview: {db_url[:60]}...")
         conn = psycopg2.connect(db_url, sslmode='require', connect_timeout=10)
         print(f"DB: ✅ berhasil dengan {used_key}")
         return conn
+    except psycopg2.OperationalError as e:
+        print(f"DB: ❌ OperationalError: {str(e)[:200]}")
+        return None
     except Exception as e:
-        error_msg = str(e)[:150]
-        print(f"DB: ❌ {used_key} gagal: {error_msg}")
+        print(f"DB: ❌ {type(e).__name__}: {str(e)[:200]}")
         return None
 
 
@@ -148,10 +130,9 @@ def index():
 # ==================== DEBUG ====================
 @app.route('/api/debug-db', methods=['GET'])
 def debug_db():
-    """Debug: cek env var dan koneksi."""
-    import re
+    """Debug: cek env var dan coba koneksi dengan error detail."""
+    import traceback
     
-    # Kumpulkan info env var yang relevan
     relevant_keys = []
     for key in sorted(os.environ.keys()):
         if 'POSTGRES' in key or 'DATABASE' in key or key == 'DB_URL':
@@ -160,39 +141,65 @@ def debug_db():
                 'key': key,
                 'has_value': bool(val),
                 'starts_with_postgres': val.startswith('postgres') if val else False,
-                'preview': (val[:50] + '...') if len(val) > 50 else val
+                'preview': (val[:60] + '...') if len(val) > 60 else val
             })
     
-    # Coba koneksi
-    result = {
-        'env_vars': relevant_keys,
-        'connection': None,
-    }
+    attempts = []
     
-    try:
-        conn = get_db()
-        if conn:
+    priority_keys = [
+        'DB_URL',
+        'DATABASE_URL',
+        'SUPABASE_POSTGRES_URL_NON_POOLING',
+        'POSTGRES_URL_NON_POOLING',
+        'SUPABASE_POSTGRES_URL',
+        'POSTGRES_URL',
+    ]
+    
+    for key in priority_keys:
+        val = os.environ.get(key)
+        if not val or not val.startswith('postgres'):
+            continue
+        
+        try:
+            conn = psycopg2.connect(val, sslmode='require', connect_timeout=10)
             cur = conn.cursor()
             cur.execute("SELECT version()")
             version = cur.fetchone()[0]
             cur.close()
             conn.close()
-            result['connection'] = {
+            
+            attempts.append({
+                'key': key,
                 'status': 'success',
                 'postgres_version': version[:80]
-            }
-        else:
-            result['connection'] = {
+            })
+            
+            return jsonify({
+                'env_vars': relevant_keys,
+                'connection_attempts': attempts,
+                'connection': {
+                    'status': 'success',
+                    'used_key': key,
+                    'postgres_version': version[:80]
+                }
+            })
+        
+        except Exception as e:
+            attempts.append({
+                'key': key,
                 'status': 'failed',
-                'error': 'get_db() mengembalikan None'
-            }
-    except Exception as e:
-        result['connection'] = {
-            'status': 'exception',
-            'error': str(e)[:200]
-        }
+                'error_type': type(e).__name__,
+                'error_message': str(e)[:250]
+            })
     
-    return jsonify(result)
+    return jsonify({
+        'env_vars': relevant_keys,
+        'connection_attempts': attempts,
+        'connection': {
+            'status': 'all_failed',
+            'total_attempts': len(attempts)
+        }
+    })
 
 
 # ==================== USER MANAGEMENT ====================
