@@ -237,10 +237,7 @@ def reset_ai():
                 vercel_blob.delete(item.get('url'))
                 deleted += 1
         
-        return jsonify({
-            'success': True,
-            'deleted': deleted
-        })
+        return jsonify({'success': True, 'deleted': deleted})
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
