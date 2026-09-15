@@ -16,13 +16,8 @@
         
         .modal-backdrop { backdrop-filter: blur(4px); }
         
-        .video-list-item {
-            transition: all 0.15s ease;
-        }
-        .video-list-item:hover {
-            background: rgba(55, 65, 81, 0.5);
-            transform: translateX(1px);
-        }
+        .video-list-item { transition: all 0.15s ease; }
+        .video-list-item:hover { background: rgba(55, 65, 81, 0.5); }
         .video-list-item.selected {
             background: linear-gradient(to right, rgba(59, 130, 246, 0.15), transparent);
             border-left: 3px solid #3b82f6;
@@ -60,25 +55,27 @@
             line-height: 1;
         }
         
-        .slide-in {
-            animation: slideIn 0.3s ease-out;
+        /* Animasi untuk panel AI slide-in */
+        .slide-in-right {
+            animation: slideInRight 0.3s ease-out;
         }
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(-8px); }
-            to { opacity: 1; transform: translateY(0); }
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(-15px); }
+            to { opacity: 1; transform: translateX(0); }
         }
         
-        /* Delete button muncul saat hover item */
+        /* Delete button muncul saat hover */
         .video-list-item .delete-btn {
             opacity: 0;
             transition: opacity 0.2s ease;
         }
-        .video-list-item:hover .delete-btn {
-            opacity: 1;
-        }
+        .video-list-item:hover .delete-btn { opacity: 1; }
         .video-list-item.selected .delete-btn,
-        .video-list-item.checked .delete-btn {
-            opacity: 1;
+        .video-list-item.checked .delete-btn { opacity: 1; }
+        
+        /* Transisi untuk layout grid berubah */
+        .main-grid {
+            transition: all 0.3s ease;
         }
     </style>
 </head>
@@ -107,82 +104,72 @@
         </div>
     </nav>
 
-    <!-- Main Layout -->
-    <main class="max-w-[1600px] mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-4" style="min-height: calc(100vh - 60px);">
+    <!-- Main Layout: Grid dinamis 12 kolom -->
+    <main id="mainGrid" class="main-grid max-w-[1600px] mx-auto p-4 grid gap-4" 
+          style="grid-template-columns: 5fr 7fr; min-height: calc(100vh - 60px);">
         
-        <!-- ========== KOLOM KIRI: Daftar Video + Panel AI ========== -->
-        <div class="lg:col-span-5 flex flex-col gap-4" style="max-height: calc(100vh - 90px);">
-            
-            <!-- Card Daftar Video -->
-            <div class="bg-gray-800 rounded-2xl border border-gray-700 flex flex-col overflow-hidden" 
-                 style="flex: 1 1 auto; min-height: 200px;">
-                <div class="px-4 py-3 border-b border-gray-700 flex justify-between items-center">
-                    <h2 class="font-bold text-white text-sm flex items-center gap-2">
-                        📹 Daftar Video
-                        <span id="videoCountBadge" class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">0</span>
-                    </h2>
-                    <button onclick="loadFiles()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2.5 py-1 rounded-lg" title="Refresh">
-                        🔄
-                    </button>
-                </div>
-                
-                <!-- Filter tabs -->
-                <div class="flex border-b border-gray-700 text-xs">
-                    <button onclick="setFilter('all')" id="filter-all" class="flex-1 py-2 px-3 text-blue-400 border-b-2 border-blue-400 font-medium">
-                        Semua
-                    </button>
-                    <button onclick="setFilter('raw')" id="filter-raw" class="flex-1 py-2 px-3 text-gray-400 hover:text-white">
-                        Mentah
-                    </button>
-                    <button onclick="setFilter('ai')" id="filter-ai" class="flex-1 py-2 px-3 text-gray-400 hover:text-white">
-                        Hasil AI
-                    </button>
-                </div>
-                
-                <!-- Video list -->
-                <div id="videoListContainer" class="flex-1 overflow-y-auto p-2 space-y-1.5">
-                    <div class="text-center text-gray-500 italic p-4 text-sm">Memuat data...</div>
-                </div>
+        <!-- KOLOM 1: Daftar Video -->
+        <div id="videoListColumn" class="bg-gray-800 rounded-2xl border border-gray-700 flex flex-col overflow-hidden" 
+             style="max-height: calc(100vh - 90px);">
+            <div class="px-4 py-3 border-b border-gray-700 flex justify-between items-center">
+                <h2 class="font-bold text-white text-sm flex items-center gap-2">
+                    📹 Daftar Video
+                    <span id="videoCountBadge" class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">0</span>
+                </h2>
+                <button onclick="loadFiles()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2.5 py-1 rounded-lg" title="Refresh">
+                    🔄
+                </button>
             </div>
-
-            <!-- Panel AI (muncul saat ada checkbox tercentang) -->
-            <div id="aiEditPanel" class="bg-gray-800 rounded-2xl border border-purple-500/40 overflow-hidden hidden slide-in">
-                <div class="px-4 py-3 border-b border-purple-500/20 flex justify-between items-center bg-purple-500/5">
-                    <h2 class="font-bold text-purple-400 text-sm flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
-                        Edit dengan AI
-                        <span id="checkedCountBadge" class="text-xs px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-300">0</span>
-                    </h2>
-                    <button onclick="clearChecked()" class="text-xs text-gray-400 hover:text-white" title="Bersihkan pilihan">
-                        ✕
-                    </button>
-                </div>
-                
-                <div class="p-3 space-y-3 max-h-[300px] overflow-y-auto">
-                    <!-- Daftar video yang dicentang -->
-                    <div class="bg-purple-500/10 border border-purple-500/20 rounded-lg p-2">
-                        <p class="text-xs text-purple-300 mb-1.5 font-medium">📋 Video yang akan diedit:</p>
-                        <div id="checkedVideosList" class="text-xs text-white space-y-1"></div>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Prompt / Instruksi Edit</label>
-                        <textarea id="promptInput" rows="3" 
-                                  placeholder="Contoh:&#10;- Buat cinematic dengan warna hangat&#10;- Potong jadi 60 detik&#10;- Tambahkan subtitle otomatis"
-                                  class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-sm text-white outline-none resize-none"></textarea>
-                    </div>
-                    
-                    <button onclick="submitToAI()" 
-                            class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        Kirim ke AI untuk Edit
-                    </button>
-                </div>
+            
+            <!-- Filter tabs -->
+            <div class="flex border-b border-gray-700 text-xs">
+                <button onclick="setFilter('all')" id="filter-all" class="flex-1 py-2 px-3 text-blue-400 border-b-2 border-blue-400 font-medium">Semua</button>
+                <button onclick="setFilter('raw')" id="filter-raw" class="flex-1 py-2 px-3 text-gray-400 hover:text-white">Mentah</button>
+                <button onclick="setFilter('ai')" id="filter-ai" class="flex-1 py-2 px-3 text-gray-400 hover:text-white">Hasil AI</button>
+            </div>
+            
+            <!-- Video list -->
+            <div id="videoListContainer" class="flex-1 overflow-y-auto p-2 space-y-1.5">
+                <div class="text-center text-gray-500 italic p-4 text-sm">Memuat data...</div>
             </div>
         </div>
 
-        <!-- ========== KOLOM KANAN: Preview + Scheduling ========== -->
-        <div class="lg:col-span-7 space-y-4" style="max-height: calc(100vh - 90px); overflow-y: auto;">
+        <!-- KOLOM 2: Panel AI (muncul hanya saat ada centang) -->
+        <div id="aiEditColumn" class="bg-gray-800 rounded-2xl border border-purple-500/40 flex-col overflow-hidden hidden slide-in-right" 
+             style="max-height: calc(100vh - 90px);">
+            <div class="px-4 py-3 border-b border-purple-500/20 flex justify-between items-center bg-purple-500/5">
+                <h2 class="font-bold text-purple-400 text-sm flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                    Edit dengan AI
+                    <span id="checkedCountBadge" class="text-xs px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-300">0</span>
+                </h2>
+                <button onclick="clearChecked()" class="text-xs text-gray-400 hover:text-white" title="Bersihkan pilihan">✕</button>
+            </div>
+            
+            <div class="p-3 space-y-3 flex-1 overflow-y-auto">
+                <!-- Daftar video yang dicentang -->
+                <div class="bg-purple-500/10 border border-purple-500/20 rounded-lg p-2">
+                    <p class="text-xs text-purple-300 mb-1.5 font-medium">📋 Video yang akan diedit:</p>
+                    <div id="checkedVideosList" class="text-xs text-white space-y-1"></div>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">Prompt / Instruksi Edit</label>
+                    <textarea id="promptInput" rows="6" 
+                              placeholder="Contoh:&#10;- Buat cinematic dengan warna hangat&#10;- Potong jadi 60 detik&#10;- Tambahkan subtitle otomatis&#10;- Ubah aspect ratio jadi 9:16"
+                              class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-sm text-white outline-none resize-none"></textarea>
+                </div>
+                
+                <button onclick="submitToAI()" 
+                        class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    Kirim ke AI untuk Edit
+                </button>
+            </div>
+        </div>
+
+        <!-- KOLOM 3: Preview + Scheduling -->
+        <div id="rightColumn" class="space-y-4" style="max-height: calc(100vh - 90px); overflow-y: auto;">
             
             <!-- Preview Video -->
             <div class="bg-gray-800 rounded-2xl border border-gray-700 p-4">
@@ -218,7 +205,7 @@
                                    class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-xs text-white outline-none"/>
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1">Platform Medsos</label>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">Platform</label>
                             <select id="schedulePlatform" 
                                     class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-xs text-white outline-none">
                                 <option value="">- Pilih -</option>
@@ -229,9 +216,8 @@
                     <div>
                         <label class="block text-xs font-medium text-gray-400 mb-1">Caption Posting</label>
                         <textarea id="scheduleCaption" rows="3" 
-                                  placeholder="Tulis caption untuk posting...&#10;Contoh: Check out resep ini! 🔥 #viral #fyp"
+                                  placeholder="Tulis caption...&#10;Contoh: Check out! 🔥 #viral #fyp"
                                   class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none resize-none"></textarea>
-                        <p class="text-xs text-gray-500 mt-1">💡 Caption bisa berisi hashtag, mention, dan emoji</p>
                     </div>
                     
                     <button onclick="saveSchedule()" 
@@ -239,14 +225,13 @@
                         💾 Simpan Jadwal Posting
                     </button>
                     
-                    <!-- Daftar jadwal tersimpan -->
                     <div id="scheduleList" class="mt-3 space-y-2"></div>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- ==================== MODAL: UPLOAD ==================== -->
+    <!-- MODAL: UPLOAD -->
     <div id="uploadModal" class="fixed inset-0 bg-black/70 modal-backdrop z-50 hidden items-center justify-center p-4">
         <div class="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-md overflow-hidden">
             <div class="p-4 border-b border-gray-700 flex justify-between items-center">
@@ -261,10 +246,10 @@
                     <p class="text-xs text-yellow-400">⚠️ File > 4.5 MB. Pilih metode:</p>
                     <div class="grid grid-cols-2 gap-2">
                         <button onclick="doUpload('compress')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm">
-                            🗜️ Kompres<br><span class="text-xs font-normal">Kualitas turun, ukuran kecil</span>
+                            🗜️ Kompres<br><span class="text-xs font-normal">Kualitas turun</span>
                         </button>
                         <button onclick="doUpload('cut')" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg text-sm">
-                            ✂️ Potong<br><span class="text-xs font-normal">Kualitas asli, banyak file</span>
+                            ✂️ Potong<br><span class="text-xs font-normal">Kualitas asli</span>
                         </button>
                     </div>
                 </div>
@@ -282,7 +267,7 @@
         </div>
     </div>
 
-    <!-- ==================== MODAL: LOGIN MEDSOS ==================== -->
+    <!-- MODAL: LOGIN MEDSOS -->
     <div id="loginModal" class="fixed inset-0 bg-black/70 modal-backdrop z-50 hidden items-center justify-center p-4">
         <div class="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-md overflow-hidden">
             <div class="p-4 border-b border-gray-700 flex justify-between items-center">
@@ -290,7 +275,6 @@
                 <button onclick="closeLoginModal()" class="text-gray-400 hover:text-white">✕</button>
             </div>
             <div class="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
-                
                 <div>
                     <p class="text-xs font-medium text-gray-400 mb-2">✅ Akun Terhubung:</p>
                     <div id="connectedAccounts" class="space-y-2">
@@ -303,37 +287,23 @@
                 <div>
                     <p class="text-xs font-medium text-gray-400 mb-2">➕ Tambah Akun Baru:</p>
                     <div class="space-y-3">
-                        <div>
-                            <label class="block text-xs text-gray-500 mb-1">Platform</label>
-                            <select id="loginPlatform" 
-                                    class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none">
-                                <option value="instagram">📷 Instagram</option>
-                                <option value="tiktok">🎵 TikTok</option>
-                                <option value="youtube">▶️ YouTube</option>
-                                <option value="facebook">👤 Facebook</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-500 mb-1">Username / Email</label>
-                            <input type="text" id="loginUsername" placeholder="username atau email" 
-                                   class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none"/>
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-500 mb-1">Password</label>
-                            <div class="relative">
-                                <input type="password" id="loginPassword" placeholder="password" 
-                                       class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 pr-10 text-sm text-white outline-none"/>
-                                <button type="button" onclick="togglePasswordVisibility()" 
-                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-xs">
-                                    👁️
-                                </button>
-                            </div>
+                        <select id="loginPlatform" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none">
+                            <option value="instagram">📷 Instagram</option>
+                            <option value="tiktok">🎵 TikTok</option>
+                            <option value="youtube">▶️ YouTube</option>
+                            <option value="facebook">👤 Facebook</option>
+                        </select>
+                        <input type="text" id="loginUsername" placeholder="Username / Email" 
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none"/>
+                        <div class="relative">
+                            <input type="password" id="loginPassword" placeholder="Password" 
+                                   class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 pr-10 text-sm text-white outline-none"/>
+                            <button type="button" onclick="togglePasswordVisibility()" 
+                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-xs">👁️</button>
                         </div>
                         
                         <div class="bg-blue-500/10 border border-blue-500/20 rounded-lg p-2">
-                            <p class="text-xs text-blue-300">
-                                🔒 <strong>Keamanan:</strong> Sistem akan cek koneksi sebelum menyimpan.
-                            </p>
+                            <p class="text-xs text-blue-300">🔒 Sistem akan cek koneksi sebelum menyimpan.</p>
                         </div>
                         
                         <button onclick="connectAccount()" 
@@ -429,7 +399,7 @@
             renderVideoList();
         }
 
-        // ==================== RENDER VIDEO LIST (COMPACT) ====================
+        // ==================== RENDER VIDEO LIST ====================
         function renderVideoList() {
             const container = document.getElementById('videoListContainer');
             const countBadge = document.getElementById('videoCountBadge');
@@ -460,10 +430,9 @@
                     ? 'bg-green-500/20 text-green-400' 
                     : 'bg-blue-500/20 text-blue-400';
                 
-                // Layout compact: nama file + size di sebelah, status di bawah
                 return `
                     <div class="video-list-item ${isSelected ? 'selected' : ''} ${isChecked ? 'checked' : ''} 
-                                bg-gray-700/20 border border-gray-700/40 rounded-lg p-2.5 cursor-pointer group">
+                                bg-gray-700/20 border border-gray-700/40 rounded-lg p-2.5 cursor-pointer">
                         <div class="flex items-center gap-2">
                             ${canBeChecked ? `
                                 <input type="checkbox" class="checkbox-custom" 
@@ -497,6 +466,25 @@
             }).join('');
         }
 
+        // ==================== GRID LAYOUT DINAMIS ====================
+        function updateGridLayout() {
+            const mainGrid = document.getElementById('mainGrid');
+            const aiColumn = document.getElementById('aiEditColumn');
+            
+            if (checkedVideos.length > 0) {
+                // 3 kolom: daftar video (kiri) + panel AI (tengah) + preview (kanan)
+                // Rasio: 3 : 3 : 6 (agak kecil daftar karena panel AI muncul)
+                mainGrid.style.gridTemplateColumns = '3fr 3fr 6fr';
+                aiColumn.classList.remove('hidden');
+                aiColumn.classList.add('flex');
+            } else {
+                // 2 kolom: daftar video (kiri) + preview (kanan)
+                mainGrid.style.gridTemplateColumns = '5fr 7fr';
+                aiColumn.classList.add('hidden');
+                aiColumn.classList.remove('flex');
+            }
+        }
+
         // ==================== CHECK VIDEO ====================
         function toggleCheck(uniqueId) {
             const file = allFiles.find(f => f.unique_id === uniqueId);
@@ -511,32 +499,31 @@
             
             updateCheckedUI();
             renderVideoList();
+            updateGridLayout();
         }
 
         function clearChecked() {
             checkedVideos = [];
             updateCheckedUI();
             renderVideoList();
+            updateGridLayout();
         }
 
         function updateCheckedUI() {
-            const aiPanel = document.getElementById('aiEditPanel');
             const countBadge = document.getElementById('checkedCountBadge');
             const listEl = document.getElementById('checkedVideosList');
             
             if (checkedVideos.length === 0) {
-                aiPanel.classList.add('hidden');
                 return;
             }
             
-            aiPanel.classList.remove('hidden');
             countBadge.textContent = checkedVideos.length;
             
             listEl.innerHTML = checkedVideos.map(v => `
                 <div class="flex items-center gap-2">
                     <span class="text-purple-400">•</span>
                     <span class="truncate">${v.displayName}</span>
-                    <span class="text-gray-500 ml-auto flex-shrink-0">${(v.size / 1024 / 1024).toFixed(1)} MB</span>
+                    <span class="text-gray-500 ml-auto flex-shrink-0 text-xs">${(v.size / 1024 / 1024).toFixed(1)} MB</span>
                 </div>
             `).join('');
         }
@@ -736,12 +723,10 @@
             const file = allFiles.find(f => f.unique_id === uniqueId);
             if (!file) return;
             
-            // Konfirmasi dengan nama
             if (!confirm(`Yakin ingin menghapus "${file.displayName}"?\n\nTindakan ini tidak bisa dibatalkan.`)) return;
             
             try {
                 if (file.is_single || file.type === 'ai') {
-                    // File tunggal atau hasil AI
                     const response = await fetch('/api/delete-file', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -749,7 +734,6 @@
                     });
                     if (!response.ok) throw new Error('Gagal hapus');
                 } else if (file.chunks) {
-                    // File potongan (hapus semua chunk)
                     for (const chunk of file.chunks) {
                         await fetch('/api/delete-file', {
                             method: 'POST',
@@ -759,14 +743,11 @@
                     }
                 }
                 
-                // Hapus jadwal terkait
                 videoSchedules = videoSchedules.filter(s => s.session_id !== file.session_id);
                 localStorage.setItem('videoSchedules', JSON.stringify(videoSchedules));
                 
-                // Hapus dari checked
                 checkedVideos = checkedVideos.filter(v => v.unique_id !== uniqueId);
                 
-                // Reset selected jika yang dihapus sedang aktif
                 if (selectedVideo && selectedVideo.unique_id === uniqueId) {
                     selectedVideo = null;
                     document.getElementById('rawVideoContainer').innerHTML = `
@@ -776,8 +757,8 @@
                     document.getElementById('previewBadge').textContent = 'Belum ada video';
                 }
                 
-                // Update UI
                 updateCheckedUI();
+                updateGridLayout();
                 renderScheduleList();
                 loadFiles();
                 
@@ -1184,14 +1165,16 @@
             
             if (!confirm(`Kirim ${checkedVideos.length} video (${totalMB} MB) ke AI?\n\nPrompt: ${prompt.substring(0, 100)}...`)) return;
             
-            const aiPanel = document.getElementById('aiEditPanel');
-            const originalHTML = aiPanel.innerHTML;
+            const aiColumn = document.getElementById('aiEditColumn');
+            const originalHTML = aiColumn.innerHTML;
             
-            aiPanel.innerHTML = `
-                <div class="text-center p-6">
-                    <div class="animate-spin rounded-full h-10 w-10 border-4 border-purple-500/30 border-t-purple-500 mx-auto mb-3"></div>
-                    <p class="text-sm text-purple-400 font-medium">Memproses ${checkedVideos.length} video...</p>
-                    <p class="text-xs text-gray-400 mt-1">"${prompt.substring(0, 60)}..."</p>
+            aiColumn.innerHTML = `
+                <div class="text-center p-6 flex items-center justify-center h-full">
+                    <div>
+                        <div class="animate-spin rounded-full h-10 w-10 border-4 border-purple-500/30 border-t-purple-500 mx-auto mb-3"></div>
+                        <p class="text-sm text-purple-400 font-medium">Memproses ${checkedVideos.length} video...</p>
+                        <p class="text-xs text-gray-400 mt-1">"${prompt.substring(0, 60)}..."</p>
+                    </div>
                 </div>
             `;
             
@@ -1218,12 +1201,11 @@
                 
                 alert(`✅ ${successCount} dari ${checkedVideos.length} video berhasil diproses AI!`);
                 clearChecked();
-                document.getElementById('promptInput').value = '';
                 loadFiles();
                 
             } catch (error) {
                 alert(`❌ Error: ${error.message}`);
-                aiPanel.innerHTML = originalHTML;
+                aiColumn.innerHTML = originalHTML;
             }
         }
 
@@ -1291,11 +1273,9 @@
             statusDiv.innerHTML = '<span class="text-blue-400">🔄 Membuka halaman login ' + platform + '...</span>';
             
             await new Promise(r => setTimeout(r, 1000));
-            
             statusDiv.innerHTML = '<span class="text-blue-400">🔐 Verifikasi kredensial...</span>';
             await new Promise(r => setTimeout(r, 1500));
-            
-            statusDiv.innerHTML = '<span class="text-blue-400">🔌 Mengecek koneksi ke ' + platform + '...</span>';
+            statusDiv.innerHTML = '<span class="text-blue-400">🔌 Mengecek koneksi...</span>';
             await new Promise(r => setTimeout(r, 1500));
             
             const exists = connectedAccounts.find(a => a.platform === platform && a.username === username);
@@ -1317,7 +1297,7 @@
                 
                 localStorage.setItem('connectedAccounts', JSON.stringify(connectedAccounts));
                 
-                statusDiv.innerHTML = '<span class="text-green-400">✅ Koneksi berhasil! Akun tersimpan.</span>';
+                statusDiv.innerHTML = '<span class="text-green-400">✅ Koneksi berhasil!</span>';
                 document.getElementById('loginUsername').value = '';
                 document.getElementById('loginPassword').value = '';
                 
@@ -1327,7 +1307,7 @@
                 
                 setTimeout(() => statusDiv.classList.add('hidden'), 3000);
             } else {
-                statusDiv.innerHTML = '<span class="text-red-400">❌ Gagal terhubung. Periksa username/password.</span>';
+                statusDiv.innerHTML = '<span class="text-red-400">❌ Gagal terhubung.</span>';
             }
         }
 
