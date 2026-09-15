@@ -1,15 +1,218 @@
 import os
 import time
+import json
+import bcrypt
+import redis
+from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from vercel.blob import put
 import vercel_blob
-import requests
+import requests as req_lib
 
 app = Flask(__name__)
+
+# ==================== REDIS (VERCEL KV) ====================
+def get_redis():
+    """Koneksi ke Vercel KV via Redis URL."""
+    # Vercel KV menyediakan beberapa env var, coba semua
+    redis_url = (
+        os.environ.get('KV_URL') or 
+        os.environ.get('REDIS_URL') or
+        os.environ.get('KV_REST_API_URL')
+    )
+    
+    if not redis_url:
+        print("⚠️ Tidak ada KV_URL / REDIS_URL di environment")
+        return None
+    
+    try:
+        # Decode responses=True agar string otomatis (tidak bytes)
+        return redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
+    except Exception as e:
+        print(f"⚠️ Gagal connect Redis: {e}")
+        return None
+
 
 @app.route('/')
 def index():
     return render_template('index.html')
+
+# ==================== USER MANAGEMENT ====================
+
+@app.route('/api/users/has-any', methods=['GET'])
+def has_any_user():
+    """Cek apakah ada user terdaftar (untuk login gate)."""
+    try:
+        r = get_redis()
+        if not r:
+            # Fallback: anggap tidak ada user jika DB tidak tersedia
+            return jsonify({'success': True, 'has_users': False, 'count': 0, 'db_available': False})
+        
+        count = r.scard('users')
+        return jsonify({
+            'success': True, 
+            'has_users': count > 0, 
+            'count': count,
+            'db_available': True
+        })
+    
+    except Exception as e:
+        print(f"Error has_any_user: {e}")
+        return jsonify({'success': True, 'has_users': False, 'count': 0, 'db_available': False})
+
+
+@app.route('/api/users/list', methods=['GET'])
+def list_users():
+    """Ambil daftar user (tanpa password)."""
+    try:
+        r = get_redis()
+        if not r:
+            return jsonify({'error': 'Database tidak tersedia'}), 500
+        
+        user_ids = r.smembers('users')
+        users = []
+        
+        for uid in user_ids:
+            user_data = r.hgetall(f'user:{uid}')
+            if user_data and user_data.get('username'):
+                users.append({
+                    'username': user_data.get('username'),
+                    'createdAt': user_data.get('createdAt', ''),
+                })
+        
+        users.sort(key=lambda u: u.get('createdAt', ''))
+        
+        return jsonify({'success': True, 'users': users})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/users/add', methods=['POST'])
+def add_user():
+    """Tambah user baru."""
+    try:
+        data = request.json
+        username = (data.get('username') or '').strip()
+        password = data.get('password') or ''
+        
+        # Validasi
+        if not username or len(username) < 3:
+            return jsonify({'error': 'Username minimal 3 karakter'}), 400
+        
+        if not password or len(password) < 4:
+            return jsonify({'error': 'Password minimal 4 karakter'}), 400
+        
+        r = get_redis()
+        if not r:
+            return jsonify({'error': 'Database tidak tersedia. Hubungi admin.'}), 500
+        
+        username_lower = username.lower()
+        
+        # Cek duplikat
+        if r.sismember('usernames', username_lower):
+            return jsonify({'error': 'Username sudah digunakan'}), 400
+        
+        # Hash password dengan bcrypt
+        password_hash = bcrypt.hashpw(
+            password.encode('utf-8'), 
+            bcrypt.gensalt()
+        ).decode('utf-8')
+        
+        # Simpan ke Redis
+        r.hset(f'user:{username_lower}', mapping={
+            'username': username,
+            'password_hash': password_hash,
+            'createdAt': datetime.utcnow().isoformat(),
+        })
+        
+        r.sadd('users', username_lower)
+        r.sadd('usernames', username_lower)
+        
+        return jsonify({'success': True, 'message': 'User berhasil ditambahkan'})
+    
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/users/login', methods=['POST'])
+def login_user():
+    """Verifikasi login user."""
+    try:
+        data = request.json
+        username = (data.get('username') or '').strip().lower()
+        password = data.get('password') or ''
+        
+        if not username or not password:
+            return jsonify({'error': 'Username & password wajib diisi'}), 400
+        
+        r = get_redis()
+        if not r:
+            return jsonify({'error': 'Database tidak tersedia'}), 500
+        
+        user_data = r.hgetall(f'user:{username}')
+        
+        if not user_data:
+            return jsonify({'error': 'Username atau password salah'}), 401
+        
+        password_hash = user_data.get('password_hash', '')
+        
+        if not password_hash:
+            return jsonify({'error': 'Data user rusak'}), 500
+        
+        # Verifikasi bcrypt
+        try:
+            valid = bcrypt.checkpw(
+                password.encode('utf-8'), 
+                password_hash.encode('utf-8')
+            )
+        except Exception as e:
+            print(f"Bcrypt error: {e}")
+            return jsonify({'error': 'Verifikasi gagal'}), 500
+        
+        if not valid:
+            return jsonify({'error': 'Username atau password salah'}), 401
+        
+        return jsonify({
+            'success': True,
+            'user': {
+                'username': user_data.get('username'),
+                'createdAt': user_data.get('createdAt', ''),
+            }
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/users/delete', methods=['POST'])
+def delete_user():
+    """Hapus user."""
+    try:
+        data = request.json
+        username = (data.get('username') or '').strip().lower()
+        
+        if not username:
+            return jsonify({'error': 'Username wajib diisi'}), 400
+        
+        r = get_redis()
+        if not r:
+            return jsonify({'error': 'Database tidak tersedia'}), 500
+        
+        if not r.sismember('usernames', username):
+            return jsonify({'error': 'User tidak ditemukan'}), 404
+        
+        r.delete(f'user:{username}')
+        r.srem('users', username)
+        r.srem('usernames', username)
+        
+        return jsonify({'success': True, 'message': 'User berhasil dihapus'})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 # ==================== UPLOAD ====================
 @app.route('/api/upload', methods=['POST'])
@@ -42,7 +245,7 @@ def upload_video():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ==================== UPLOAD CHUNK ====================
+
 @app.route('/api/upload-chunk', methods=['POST'])
 def upload_chunk():
     try:
@@ -74,7 +277,7 @@ def upload_chunk():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ==================== FINALIZE CUT ====================
+
 @app.route('/api/finalize-cut', methods=['POST'])
 def finalize_cut():
     try:
@@ -87,7 +290,7 @@ def finalize_cut():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ==================== LIST FILES GROUPED ====================
+
 @app.route('/api/list-files-grouped', methods=['GET'])
 def list_files_grouped():
     try:
@@ -171,7 +374,7 @@ def list_files_grouped():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ==================== DELETE FILE ====================
+
 @app.route('/api/delete-file', methods=['POST'])
 def delete_file():
     try:
@@ -185,58 +388,44 @@ def delete_file():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ==================== RENAME FILE ====================
+
 @app.route('/api/rename-file', methods=['POST'])
 def rename_file():
-    """
-    Rename file di Vercel Blob.
-    Karena Vercel Blob tidak support rename langsung,
-    kita download file lama, upload dengan nama baru, lalu hapus yang lama.
-    """
     try:
         data = request.json
         old_url = data.get('old_url')
         old_pathname = data.get('old_pathname')
-        new_name = data.get('new_name', '').strip()
+        new_name = (data.get('new_name') or '').strip()
         
         if not old_url or not old_pathname or not new_name:
             return jsonify({'error': 'Data tidak lengkap'}), 400
         
-        # Bersihkan nama baru (hilangkan karakter berbahaya)
         import re
         safe_name = re.sub(r'[^\w\s\-\.]', '', new_name)
         
-        # Pastikan ekstensi .webm
         if not safe_name.endswith('.webm'):
             safe_name = safe_name + '.webm'
         
-        # Sama dengan nama lama? Skip
         if safe_name == old_pathname:
             return jsonify({'success': True, 'message': 'Nama sama, tidak berubah'})
         
-        # Download file lama
-        file_response = requests.get(old_url)
+        file_response = req_lib.get(old_url)
         if file_response.status_code != 200:
-            return jsonify({'error': f'Gagal download file lama: {file_response.status_code}'}), 500
+            return jsonify({'error': f'Gagal download: {file_response.status_code}'}), 500
         
-        file_content = file_response.content
-        
-        # Upload dengan nama baru
         result = put(
             safe_name,
-            file_content,
+            file_response.content,
             access='public',
             multipart=True
         )
         
-        # Hapus file lama
         vercel_blob.delete(old_url)
         
         return jsonify({
             'success': True,
             'new_url': result.url,
             'new_pathname': result.pathname,
-            'new_filename': safe_name,
         })
     
     except Exception as e:
@@ -244,32 +433,30 @@ def rename_file():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-# ==================== SUBMIT TO AI (SIMULASI) ====================
+
 @app.route('/api/submit-to-ai', methods=['POST'])
 def submit_to_ai():
     try:
         data = request.json
         session_id = data.get('session_id', '')
         chunks = data.get('chunks', [])
-        prompt = data.get('prompt', '')
         is_single = data.get('is_single', False)
         single_url = data.get('single_url', '')
         
         if is_single:
             ai_filename = f"ai_edit_single_{int(time.time())}.webm"
-            file_data = requests.get(single_url).content
+            file_data = req_lib.get(single_url).content
             result = put(ai_filename, file_data, access='public', multipart=True)
         else:
             ai_filename = f"ai_edit_{session_id}.webm"
             if chunks:
-                file_data = requests.get(chunks[0]['url']).content
+                file_data = req_lib.get(chunks[0]['url']).content
                 result = put(ai_filename, file_data, access='public', multipart=True)
             else:
                 return jsonify({'error': 'Tidak ada chunk'}), 400
         
         return jsonify({
             'success': True,
-            'message': 'Video berhasil diproses AI (simulasi).',
             'ai_result': {
                 'pathname': result.pathname,
                 'url': result.url,
@@ -282,7 +469,7 @@ def submit_to_ai():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-# ==================== RESET ALL AI ====================
+
 @app.route('/api/reset-ai', methods=['POST'])
 def reset_ai():
     try:
@@ -299,6 +486,7 @@ def reset_ai():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)

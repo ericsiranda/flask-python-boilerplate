@@ -61,7 +61,6 @@
             to { opacity: 1; transform: translateX(0); }
         }
         
-        /* Tombol aksi muncul saat hover */
         .video-list-item .action-btn {
             opacity: 0;
             transition: opacity 0.2s ease;
@@ -104,7 +103,7 @@
             <div class="p-6 space-y-4">
                 <div id="loginGateInfo" class="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-center">
                     <p class="text-xs text-blue-300">
-                        <span id="loginGateMessage">🔐 Masukkan password untuk masuk</span>
+                        <span id="loginGateMessage">⏳ Memuat...</span>
                     </p>
                 </div>
                 
@@ -125,7 +124,7 @@
                     </div>
                 </div>
                 
-                <button onclick="attemptLogin()" 
+                <button onclick="attemptLogin()" id="loginGateBtn"
                         class="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-3 rounded-lg text-sm">
                     <span id="loginGateBtnText">🔓 Masuk</span>
                 </button>
@@ -138,7 +137,6 @@
     <!-- ==================== APP CONTAINER ==================== -->
     <div id="appContainer" class="hidden">
 
-        <!-- Navbar -->
         <nav class="bg-gray-800 border-b border-gray-700 px-4 py-3 flex justify-between items-center sticky top-0 z-40">
             <div class="flex items-center gap-2">
                 <div class="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-lg">
@@ -178,11 +176,9 @@
             </div>
         </nav>
 
-        <!-- Main Layout -->
         <main id="mainGrid" class="main-grid max-w-[1600px] mx-auto p-4 grid gap-4" 
               style="grid-template-columns: 5fr 7fr; min-height: calc(100vh - 60px);">
             
-            <!-- KOLOM 1: Daftar Video -->
             <div id="videoListColumn" class="bg-gray-800 rounded-2xl border border-gray-700 flex flex-col overflow-hidden" 
                  style="max-height: calc(100vh - 90px);">
                 <div class="px-4 py-3 border-b border-gray-700 flex justify-between items-center gap-2">
@@ -191,7 +187,6 @@
                         <span id="videoCountBadge" class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">0</span>
                     </h2>
                     <div class="flex items-center gap-1.5">
-                        <!-- Tombol Upload + -->
                         <button onclick="openUploadModal()" 
                                 class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-1.5">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -214,7 +209,6 @@
                 </div>
             </div>
 
-            <!-- KOLOM 2: Panel AI -->
             <div id="aiEditColumn" class="bg-gray-800 rounded-2xl border border-purple-500/40 flex-col overflow-hidden hidden slide-in-right" 
                  style="max-height: calc(100vh - 90px);">
                 <div class="px-4 py-3 border-b border-purple-500/20 flex justify-between items-center bg-purple-500/5">
@@ -247,7 +241,6 @@
                 </div>
             </div>
 
-            <!-- KOLOM 3: Preview + Scheduling -->
             <div id="rightColumn" class="space-y-4" style="max-height: calc(100vh - 90px); overflow-y: auto;">
                 
                 <div class="bg-gray-800 rounded-2xl border border-gray-700 p-4">
@@ -318,12 +311,8 @@
                     <div id="uploadMethodChoice" class="hidden space-y-2">
                         <p class="text-xs text-yellow-400">⚠️ File > 4.5 MB. Pilih metode:</p>
                         <div class="grid grid-cols-2 gap-2">
-                            <button onclick="doUpload('compress')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm">
-                                🗜️ Kompres
-                            </button>
-                            <button onclick="doUpload('cut')" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg text-sm">
-                                ✂️ Potong
-                            </button>
+                            <button onclick="doUpload('compress')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm">🗜️ Kompres</button>
+                            <button onclick="doUpload('cut')" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg text-sm">✂️ Potong</button>
                         </div>
                     </div>
                     
@@ -359,13 +348,6 @@
                         <input type="text" id="renameNewName" placeholder="nama_baru.webm" 
                                class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none focus:border-blue-500"
                                onkeypress="if(event.key==='Enter') submitRename()"/>
-                        <p class="text-xs text-gray-500 mt-1">Ekstensi .webm akan otomatis ditambahkan jika belum ada.</p>
-                    </div>
-                    
-                    <div class="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
-                        <p class="text-xs text-amber-300">
-                            ⚠️ File akan <strong>didownload & diupload ulang</strong> dengan nama baru, lalu file lama dihapus.
-                        </p>
                     </div>
                     
                     <div class="flex gap-2">
@@ -441,14 +423,14 @@
                     
                     <div id="userStatusInfo" class="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
                         <p class="text-xs text-emerald-300">
-                            <span id="userStatusText">💡 Belum ada user terdaftar.</span>
+                            <span id="userStatusText">💡 Memuat...</span>
                         </p>
                     </div>
                     
                     <div>
                         <p class="text-xs font-medium text-gray-400 mb-2">✅ User Terdaftar:</p>
                         <div id="userList" class="space-y-2">
-                            <p class="text-xs text-gray-500 italic">Belum ada user terdaftar</p>
+                            <p class="text-xs text-gray-500 italic">Memuat...</p>
                         </div>
                     </div>
                     
@@ -481,7 +463,7 @@
                             
                             <div class="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
                                 <p class="text-xs text-amber-300">
-                                    ⚠️ Setelah user ditambahkan, login berikutnya <strong>wajib</strong> menggunakan password ini.
+                                    💾 User disimpan di <strong>database server</strong> (Vercel KV).
                                 </p>
                             </div>
                             
@@ -501,25 +483,9 @@
     </div>
 
     <script>
-        // ==================== USER MANAGEMENT ====================
-        const USERS_KEY = 'app_users_db';
+        // ==================== USER MANAGEMENT (via API) ====================
         const SESSION_KEY = 'app_user_session';
         const CURRENT_USER_KEY = 'app_current_user';
-
-        function getUsers() {
-            try {
-                const data = localStorage.getItem(USERS_KEY);
-                return data ? JSON.parse(data) : [];
-            } catch(e) { return []; }
-        }
-
-        function saveUsers(users) {
-            localStorage.setItem(USERS_KEY, JSON.stringify(users));
-        }
-
-        function hasRegisteredUsers() {
-            return getUsers().length > 0;
-        }
 
         function isLoggedIn() {
             return sessionStorage.getItem(SESSION_KEY) === 'true';
@@ -537,34 +503,69 @@
             location.reload();
         }
 
+        async function fetchHasUsers() {
+            try {
+                const res = await fetch('/api/users/has-any');
+                const data = await res.json();
+                return { hasUsers: data.has_users === true, dbAvailable: data.db_available === true, count: data.count || 0 };
+            } catch(e) {
+                return { hasUsers: false, dbAvailable: false, count: 0 };
+            }
+        }
+
+        async function fetchUsersList() {
+            try {
+                const res = await fetch('/api/users/list');
+                const data = await res.json();
+                return data.success ? data.users : [];
+            } catch(e) {
+                return [];
+            }
+        }
+
         // ==================== LOGIN GATE ====================
-        function showLoginGate() {
+        async function showLoginGate() {
             const gate = document.getElementById('loginGate');
             const msgEl = document.getElementById('loginGateMessage');
             const usernameWrap = document.getElementById('loginGateUsernameWrap');
             const passwordWrap = document.getElementById('loginGatePasswordWrap');
             const btnText = document.getElementById('loginGateBtnText');
-            
-            if (!hasRegisteredUsers()) {
-                msgEl.innerHTML = '👋 Selamat datang! Ini pertama kali Anda mengakses. Klik <strong>Masuk</strong> untuk melanjutkan.';
-                usernameWrap.classList.add('hidden');
-                passwordWrap.classList.add('hidden');
-                btnText.textContent = '🔓 Masuk (Guest)';
-            } else {
-                msgEl.innerHTML = '🔐 Masukkan username & password untuk masuk';
-                usernameWrap.classList.remove('hidden');
-                passwordWrap.classList.remove('hidden');
-                btnText.textContent = '🔓 Masuk';
-            }
+            const btn = document.getElementById('loginGateBtn');
             
             gate.classList.remove('hidden');
             gate.classList.add('flex');
             
-            setTimeout(() => {
-                if (hasRegisteredUsers()) {
-                    document.getElementById('loginGateUsername').focus();
-                }
-            }, 300);
+            // Default state
+            msgEl.textContent = '⏳ Memeriksa database...';
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            
+            const status = await fetchHasUsers();
+            
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            
+            if (!status.dbAvailable) {
+                msgEl.innerHTML = '⚠️ <strong>Database tidak tersedia.</strong> Hubungkan Vercel KV untuk mengaktifkan login.';
+                usernameWrap.classList.add('hidden');
+                passwordWrap.classList.add('hidden');
+                btnText.textContent = '🔓 Masuk (Offline)';
+                btn.dataset.mode = 'offline';
+            } else if (!status.hasUsers) {
+                msgEl.innerHTML = '👋 <strong>Belum ada user terdaftar.</strong> Klik Masuk untuk mulai (mode guest).';
+                usernameWrap.classList.add('hidden');
+                passwordWrap.classList.add('hidden');
+                btnText.textContent = '🔓 Masuk (Guest)';
+                btn.dataset.mode = 'guest';
+            } else {
+                msgEl.innerHTML = `🔐 <strong>${status.count} user terdaftar.</strong> Masukkan username & password.`;
+                usernameWrap.classList.remove('hidden');
+                passwordWrap.classList.remove('hidden');
+                btnText.textContent = '🔓 Masuk';
+                btn.dataset.mode = 'login';
+                
+                setTimeout(() => document.getElementById('loginGateUsername').focus(), 300);
+            }
         }
 
         function hideLoginGate() {
@@ -578,18 +579,23 @@
             input.type = input.type === 'password' ? 'text' : 'password';
         }
 
-        function attemptLogin() {
+        async function attemptLogin() {
+            const btn = document.getElementById('loginGateBtn');
+            const mode = btn.dataset.mode || 'guest';
             const errorEl = document.getElementById('loginGateError');
             const card = document.getElementById('loginCard');
-            const users = getUsers();
             
-            if (users.length === 0) {
+            errorEl.classList.add('hidden');
+            
+            // Mode offline atau guest → langsung masuk
+            if (mode === 'offline' || mode === 'guest') {
                 setLoggedIn('Guest');
                 hideLoginGate();
                 showApp();
                 return;
             }
             
+            // Mode login → verifikasi ke API
             const username = document.getElementById('loginGateUsername').value.trim();
             const password = document.getElementById('loginGatePassword').value;
             
@@ -599,18 +605,44 @@
                 return;
             }
             
-            const user = users.find(u => u.username === username && u.password === password);
-            
-            if (user) {
-                setLoggedIn(user.username);
-                hideLoginGate();
-                showApp();
-            } else {
-                errorEl.textContent = '❌ Username atau password salah!';
+            if (!password) {
+                errorEl.textContent = '❌ Password wajib diisi!';
                 errorEl.classList.remove('hidden');
-                card.classList.add('shake');
-                setTimeout(() => card.classList.remove('shake'), 400);
-                document.getElementById('loginGatePassword').value = '';
+                return;
+            }
+            
+            // Disable button sementara
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.querySelector('span').textContent = '⏳ Memverifikasi...';
+            
+            try {
+                const res = await fetch('/api/users/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok && data.success) {
+                    setLoggedIn(data.user.username);
+                    hideLoginGate();
+                    showApp();
+                } else {
+                    errorEl.textContent = '❌ ' + (data.error || 'Username atau password salah!');
+                    errorEl.classList.remove('hidden');
+                    card.classList.add('shake');
+                    setTimeout(() => card.classList.remove('shake'), 400);
+                    document.getElementById('loginGatePassword').value = '';
+                }
+            } catch(e) {
+                errorEl.textContent = '❌ Gagal terhubung ke server';
+                errorEl.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.querySelector('span').textContent = '🔓 Masuk';
             }
         }
 
@@ -631,11 +663,11 @@
         });
 
         // ==================== KELOLA USER ====================
-        function openUserModal() {
+        async function openUserModal() {
             document.getElementById('userModal').classList.remove('hidden');
             document.getElementById('userModal').classList.add('flex');
-            renderUserList();
-            updateUserStatusInfo();
+            await refreshUserList();
+            await updateUserStatusInfo();
         }
 
         function closeUserModal() {
@@ -652,16 +684,18 @@
             input.type = input.type === 'password' ? 'text' : 'password';
         }
 
-        function renderUserList() {
+        async function refreshUserList() {
             const container = document.getElementById('userList');
-            const users = getUsers();
+            container.innerHTML = '<p class="text-xs text-gray-500 italic">Memuat...</p>';
+            
+            const users = await fetchUsersList();
             
             if (users.length === 0) {
                 container.innerHTML = '<p class="text-xs text-gray-500 italic">Belum ada user terdaftar</p>';
                 return;
             }
             
-            container.innerHTML = users.map((u, idx) => `
+            container.innerHTML = users.map((u) => `
                 <div class="flex justify-between items-center bg-gray-700/50 rounded-lg p-2">
                     <div class="flex items-center gap-2">
                         <div class="w-8 h-8 rounded-full bg-gradient-to-r from-emerald-500 to-blue-500 flex items-center justify-center text-xs font-bold">
@@ -669,28 +703,33 @@
                         </div>
                         <div>
                             <p class="text-xs font-medium text-white">${u.username}</p>
-                            <p class="text-xs text-gray-400">Ditambahkan: ${new Date(u.createdAt).toLocaleDateString('id-ID')}</p>
+                            <p class="text-xs text-gray-400">Ditambahkan: ${u.createdAt ? new Date(u.createdAt).toLocaleDateString('id-ID') : '-'}</p>
                         </div>
                     </div>
-                    <button onclick='deleteUser(${idx})' class="text-xs text-red-400 hover:underline">Hapus</button>
+                    <button onclick='deleteUser("${u.username}")' class="text-xs text-red-400 hover:underline">Hapus</button>
                 </div>
             `).join('');
         }
 
-        function updateUserStatusInfo() {
+        async function updateUserStatusInfo() {
             const textEl = document.getElementById('userStatusText');
             const infoEl = document.getElementById('userStatusInfo');
             
-            if (hasRegisteredUsers()) {
+            const status = await fetchHasUsers();
+            
+            if (!status.dbAvailable) {
+                infoEl.className = 'bg-red-500/10 border border-red-500/20 rounded-lg p-3';
+                textEl.innerHTML = '⚠️ <strong>Database tidak tersedia.</strong> Hubungkan Vercel KV di dashboard Vercel.';
+            } else if (status.hasUsers) {
                 infoEl.className = 'bg-blue-500/10 border border-blue-500/20 rounded-lg p-3';
-                textEl.innerHTML = '🔒 Login <strong>wajib</strong> menggunakan username & password saat membuka aplikasi.';
+                textEl.innerHTML = `🔒 <strong>${status.count} user terdaftar.</strong> Login <strong>wajib</strong> menggunakan username & password.`;
             } else {
                 infoEl.className = 'bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3';
-                textEl.innerHTML = '💡 Belum ada user terdaftar. Login Gate akan <strong>bisa langsung masuk</strong> tanpa password.';
+                textEl.innerHTML = '💡 Belum ada user. Login Gate akan <strong>bisa langsung masuk</strong> tanpa password.';
             }
         }
 
-        function addUser() {
+        async function addUser() {
             const username = document.getElementById('newUserName').value.trim();
             const password = document.getElementById('newUserPassword').value;
             const passwordConfirm = document.getElementById('newUserPasswordConfirm').value;
@@ -704,53 +743,67 @@
             if (password.length < 4) { statusDiv.innerHTML = '<span class="text-red-400">❌ Password minimal 4 karakter</span>'; return; }
             if (password !== passwordConfirm) { statusDiv.innerHTML = '<span class="text-red-400">❌ Konfirmasi password tidak cocok</span>'; return; }
             
-            const users = getUsers();
-            if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) {
-                statusDiv.innerHTML = '<span class="text-red-400">❌ Username sudah digunakan</span>';
-                return;
+            statusDiv.innerHTML = '<span class="text-blue-400">💾 Menyimpan ke database...</span>';
+            
+            try {
+                const res = await fetch('/api/users/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok && data.success) {
+                    statusDiv.innerHTML = '<span class="text-green-400">✅ User berhasil ditambahkan ke database!</span>';
+                    
+                    document.getElementById('newUserName').value = '';
+                    document.getElementById('newUserPassword').value = '';
+                    document.getElementById('newUserPasswordConfirm').value = '';
+                    
+                    await refreshUserList();
+                    await updateUserStatusInfo();
+                    await updateUserButton();
+                    
+                    setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+                } else {
+                    statusDiv.innerHTML = `<span class="text-red-400">❌ ${data.error || 'Gagal menambah user'}</span>`;
+                }
+            } catch(e) {
+                statusDiv.innerHTML = `<span class="text-red-400">❌ Error: ${e.message}</span>`;
             }
-            
-            users.push({
-                username: username,
-                password: password,
-                createdAt: new Date().toISOString(),
-            });
-            saveUsers(users);
-            
-            statusDiv.innerHTML = '<span class="text-green-400">✅ User berhasil ditambahkan!</span>';
-            
-            document.getElementById('newUserName').value = '';
-            document.getElementById('newUserPassword').value = '';
-            document.getElementById('newUserPasswordConfirm').value = '';
-            
-            renderUserList();
-            updateUserStatusInfo();
-            updateUserButton();
-            
-            setTimeout(() => statusDiv.classList.add('hidden'), 3000);
         }
 
-        function deleteUser(idx) {
-            const users = getUsers();
-            const user = users[idx];
-            if (!user) return;
+        async function deleteUser(username) {
+            if (!confirm(`Hapus user "${username}"?\n\nUser tidak akan bisa login lagi.`)) return;
             
-            if (!confirm(`Hapus user "${user.username}"?`)) return;
-            
-            users.splice(idx, 1);
-            saveUsers(users);
-            
-            renderUserList();
-            updateUserStatusInfo();
-            updateUserButton();
+            try {
+                const res = await fetch('/api/users/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok && data.success) {
+                    await refreshUserList();
+                    await updateUserStatusInfo();
+                    await updateUserButton();
+                } else {
+                    alert('❌ ' + (data.error || 'Gagal menghapus'));
+                }
+            } catch(e) {
+                alert('❌ Error: ' + e.message);
+            }
         }
 
-        function updateUserButton() {
+        async function updateUserButton() {
             const btnText = document.getElementById('userBtnText');
-            const count = getUsers().length;
+            const status = await fetchHasUsers();
             
-            if (count > 0) {
-                btnText.textContent = `Kelola User (${count})`;
+            if (status.count > 0) {
+                btnText.textContent = `Kelola User (${status.count})`;
             } else {
                 btnText.textContent = 'Kelola User';
             }
@@ -831,7 +884,7 @@
             renderVideoList();
         }
 
-        // ==================== RENDER VIDEO LIST (ONE LINE LAYOUT) ====================
+        // ==================== RENDER VIDEO LIST ====================
         function renderVideoList() {
             const container = document.getElementById('videoListContainer');
             const countBadge = document.getElementById('videoCountBadge');
@@ -862,7 +915,6 @@
                     ? 'bg-green-500/20 text-green-400' 
                     : 'bg-blue-500/20 text-blue-400';
                 
-                // Layout compact: semua info dalam 1 baris
                 return `
                     <div class="video-list-item ${isSelected ? 'selected' : ''} ${isChecked ? 'checked' : ''} 
                                 bg-gray-700/20 border border-gray-700/40 rounded-lg px-2 py-1.5 cursor-pointer"
@@ -879,7 +931,7 @@
                                 <span class="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">${sizeMB} MB</span>
                                 <span class="text-xs px-1.5 py-0.5 rounded ${statusClass} whitespace-nowrap flex-shrink-0">${statusText}</span>
                                 ${file.total_chunks ? `<span class="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">•${file.total_chunks}</span>` : ''}
-                                ${scheduleCount > 0 ? `<span class="text-xs text-blue-400 whitespace-nowrap flex-shrink-0" title="${scheduleCount} jadwal">📅</span>` : ''}
+                                ${scheduleCount > 0 ? `<span class="text-xs text-blue-400 whitespace-nowrap flex-shrink-0">📅</span>` : ''}
                             </div>
                             
                             <div class="flex items-center gap-0.5 flex-shrink-0">
@@ -1153,7 +1205,7 @@
             if (!file) return;
             
             if (file.type === 'ai') {
-                alert('⚠️ File hasil AI tidak bisa di-rename (otomatis dari sistem).');
+                alert('⚠️ File hasil AI tidak bisa di-rename.');
                 return;
             }
             
@@ -1187,17 +1239,14 @@
             }
             
             statusDiv.classList.remove('hidden');
-            statusDiv.innerHTML = '<span class="text-blue-400">🔄 Mengubah nama... Mohon tunggu.</span>';
+            statusDiv.innerHTML = '<span class="text-blue-400">🔄 Mengubah nama...</span>';
             
-            // Dapatkan URL & pathname lama
             let old_url, old_pathname;
             
             if (renamingFile.is_single) {
                 old_url = renamingFile.url;
                 old_pathname = renamingFile.pathname;
             } else if (renamingFile.chunks && renamingFile.chunks.length > 0) {
-                // Untuk file potongan, kita rename chunk pertama sebagai penanda
-                // dan sisanya tetap (atau bisa juga copy ulang semua)
                 old_url = renamingFile.chunks[0].url;
                 old_pathname = renamingFile.chunks[0].pathname;
             } else {
