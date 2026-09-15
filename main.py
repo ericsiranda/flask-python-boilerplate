@@ -105,6 +105,7 @@ def list_files_grouped():
                     'url': item.get('url'),
                     'size': item.get('size', 0),
                     'session_id': pathname.replace('ai_edit_', '').replace('.webm', ''),
+                    'uploadedAt': item.get('uploadedAt'),
                 })
                 continue
             
@@ -139,6 +140,7 @@ def list_files_grouped():
                     'url': item.get('url'),
                     'size': item.get('size', 0),
                     'is_single': True,
+                    'uploadedAt': item.get('uploadedAt'),
                 })
         
         for sid in sessions:
@@ -222,7 +224,7 @@ def submit_to_ai():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-# ==================== RESET ALL AI STATUS ====================
+# ==================== RESET ALL AI ====================
 @app.route('/api/reset-ai', methods=['POST'])
 def reset_ai():
     try:
@@ -237,7 +239,6 @@ def reset_ai():
         
         return jsonify({
             'success': True,
-            'message': f'{deleted} file hasil AI dihapus.',
             'deleted': deleted
         })
     

@@ -6,10 +6,11 @@
     <title>AI Video Editor Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
-
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        
         .chunk-loading-pulse {
             animation: chunkPulse 1.5s ease-in-out infinite;
         }
@@ -17,161 +18,250 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
         }
-
-        /* PENTING: Pastikan video menampilkan kontrol default browser */
-        #groupedVideo {
-            background: #000;
+        
+        .modal-backdrop {
+            backdrop-filter: blur(4px);
         }
-        /* Paksa kontrol muncul di beberapa browser */
-        #groupedVideo::-webkit-media-controls {
-            display: flex !important;
+        
+        .video-list-item {
+            transition: all 0.2s ease;
+        }
+        .video-list-item:hover {
+            transform: translateX(2px);
+        }
+        .video-list-item.active {
+            background: linear-gradient(to right, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.05));
+            border-left: 3px solid #3b82f6;
         }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen font-sans">
 
-    <nav class="bg-gray-800 border-b border-gray-700 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+    <!-- Navbar -->
+    <nav class="bg-gray-800 border-b border-gray-700 px-4 py-3 flex justify-between items-center sticky top-0 z-40">
         <div class="flex items-center gap-2">
             <div class="bg-blue-600 p-2 rounded-lg">
-                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
             </div>
-            <h1 class="text-xl font-bold tracking-tight">AI Video Editor</h1>
+            <h1 class="text-lg font-bold tracking-tight">AI Video Editor</h1>
         </div>
-        <button onclick="alert('Fitur Login Instagram akan segera hadir!')" class="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-semibold py-2 px-4 rounded-lg">
-            Login Instagram
-        </button>
+        <div class="flex items-center gap-2">
+            <button onclick="openUploadModal()" 
+                    class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 px-4 rounded-lg flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Upload Video
+            </button>
+            <button onclick="openLoginModal()" 
+                    id="loginBtn"
+                    class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-semibold py-2 px-4 rounded-lg flex items-center gap-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                <span id="loginBtnText">Login Medsos</span>
+            </button>
+        </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        <div class="lg:col-span-1 space-y-6">
-            
-            <div class="bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-700">
-                <h2 class="text-lg font-bold mb-4 text-blue-400">1. Upload Video Mentah</h2>
-                <div class="space-y-4">
-                    <input type="file" id="videoInput" accept="video/*" 
-                           class="w-full text-sm text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white cursor-pointer bg-gray-700 rounded-lg p-1"/>
-                    
-                    <div class="grid grid-cols-2 gap-2">
-                        <button type="button" onclick="uploadCompressed()" 
-                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg text-xs">
-                            🗜️ Kompres
-                        </button>
-                        <button type="button" onclick="uploadCut()" 
-                                class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-3 rounded-lg text-xs">
-                            ✂️ Potong
-                        </button>
-                    </div>
-                    
-                    <div class="w-full bg-gray-700 rounded-full h-2 hidden" id="progressContainer">
-                        <div id="progressBar" class="bg-blue-500 h-2 rounded-full transition-all" style="width: 0%"></div>
-                    </div>
-                    <div id="uploadStatus" class="text-center text-xs p-2 rounded-lg bg-gray-700/50 hidden"></div>
-                </div>
+    <!-- Main Layout: Kiri Daftar Video, Kanan Preview -->
+    <main class="max-w-[1600px] mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-4" style="height: calc(100vh - 60px);">
+        
+        <!-- KIRI: Daftar Video -->
+        <div class="lg:col-span-5 bg-gray-800 rounded-2xl border border-gray-700 flex flex-col overflow-hidden">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h2 class="font-bold text-white">📹 Daftar Video</h2>
+                <button onclick="loadFiles()" class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg">
+                    🔄 Refresh
+                </button>
             </div>
-
-            <div class="bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-700">
-                <h2 class="text-lg font-bold mb-4 text-purple-400">2. Instruksi & Jadwal</h2>
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Prompt Edit Video</label>
-                        <textarea id="promptInput" rows="3" placeholder="Contoh: Buat video ini cinematic..." 
-                                  class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm text-white outline-none resize-none"></textarea>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Jadwal Upload ke Instagram</label>
-                        <input type="datetime-local" id="scheduleInput" 
-                               class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm text-white outline-none"/>
-                    </div>
-                    
-                    <div id="selectedInfo" class="hidden text-xs p-3 rounded-lg bg-purple-500/20 border border-purple-500/40">
-                        <div class="flex justify-between items-start mb-2">
-                            <div class="flex-1 min-w-0">
-                                <p class="text-purple-300 font-medium">📌 Terpilih untuk AI:</p>
-                                <p id="selectedName" class="font-bold text-white break-words mt-1">-</p>
-                            </div>
-                            <button onclick="cancelSelection()" 
-                                    class="ml-2 bg-red-500/30 hover:bg-red-500/50 text-red-200 text-xs px-2 py-1 rounded-lg flex-shrink-0">
-                                ✕ Batal
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <button type="button" onclick="submitToAI()" 
-                            class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm">
-                        🚀 Kirim ke AI untuk Edit
-                    </button>
-                    
-                    <button type="button" onclick="resetAllStatus()" 
-                            class="w-full bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium py-2 px-4 rounded-lg text-xs">
-                        🔄 Reset Semua Status
-                    </button>
-                </div>
+            
+            <!-- Filter tabs -->
+            <div class="flex border-b border-gray-700 text-xs">
+                <button onclick="setFilter('all')" id="filter-all" class="flex-1 py-2 px-3 text-blue-400 border-b-2 border-blue-400 font-medium">
+                    Semua
+                </button>
+                <button onclick="setFilter('raw')" id="filter-raw" class="flex-1 py-2 px-3 text-gray-400 hover:text-white">
+                    Mentah
+                </button>
+                <button onclick="setFilter('ai')" id="filter-ai" class="flex-1 py-2 px-3 text-gray-400 hover:text-white">
+                    Hasil AI
+                </button>
+            </div>
+            
+            <!-- Video list -->
+            <div id="videoListContainer" class="flex-1 overflow-y-auto p-2 space-y-2">
+                <div class="text-center text-gray-500 italic p-4 text-sm">Memuat data...</div>
             </div>
         </div>
 
-        <div class="lg:col-span-2 space-y-6">
+        <!-- KANAN: Preview -->
+        <div class="lg:col-span-7 space-y-4 overflow-y-auto">
             
-            <div class="bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-700">
-                <h2 class="text-lg font-bold mb-4 text-green-400">3. Preview Video</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="bg-gray-900 rounded-xl p-3 border border-gray-700">
-                        <p class="text-xs text-gray-400 mb-2 font-semibold uppercase">Video Mentah</p>
-                        <div id="rawVideoContainer" class="aspect-video bg-gray-800 rounded-lg flex items-center justify-center text-gray-600 text-sm overflow-hidden">
-                            Klik "Preview" di tabel
+            <!-- Preview Video -->
+            <div class="bg-gray-800 rounded-2xl border border-gray-700 p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="font-bold text-white">🎬 Preview</h2>
+                    <span id="previewBadge" class="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-400">Belum ada video</span>
+                </div>
+                <div id="rawVideoContainer" class="aspect-video bg-gray-900 rounded-lg flex items-center justify-center text-gray-600 text-sm overflow-hidden">
+                    Pilih video dari daftar di kiri
+                </div>
+            </div>
+
+            <!-- Info & Aksi Video Terpilih -->
+            <div id="videoActions" class="bg-gray-800 rounded-2xl border border-gray-700 p-4 hidden">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="min-w-0 flex-1">
+                        <h3 id="selectedVideoName" class="font-bold text-white truncate">-</h3>
+                        <p id="selectedVideoInfo" class="text-xs text-gray-400 mt-1">-</p>
+                    </div>
+                    <button onclick="clearSelection()" class="text-gray-400 hover:text-white text-xs">✕</button>
+                </div>
+                
+                <!-- Prompt & Jadwal -->
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Prompt Edit AI (opsional)</label>
+                        <textarea id="promptInput" rows="2" placeholder="Contoh: Buat video ini cinematic..." 
+                                  class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none resize-none"></textarea>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">Jadwal Tayang</label>
+                            <input type="datetime-local" id="scheduleInput" 
+                                   class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-xs text-white outline-none"/>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">Medsos</label>
+                            <select id="medsosSelect" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-xs text-white outline-none">
+                                <option value="">- Pilih -</option>
+                                <option value="instagram">Instagram</option>
+                                <option value="tiktok">TikTok</option>
+                                <option value="youtube">YouTube</option>
+                                <option value="facebook">Facebook</option>
+                            </select>
                         </div>
                     </div>
-                    <div class="bg-gray-900 rounded-xl p-3 border border-gray-700">
-                        <p class="text-xs text-gray-400 mb-2 font-semibold uppercase flex items-center gap-2">
-                            Hasil Edit AI
-                            <span id="aiStatusBadge" class="hidden text-xs px-2 py-0.5 rounded-full"></span>
-                        </p>
-                        <div id="editedVideoContainer" class="aspect-video bg-gray-800 rounded-lg flex items-center justify-center text-gray-600 text-sm overflow-hidden">
-                            Menunggu proses AI
-                        </div>
+                    
+                    <div class="flex gap-2">
+                        <button onclick="submitToAI()" 
+                                class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm">
+                            🚀 Kirim ke AI
+                        </button>
+                        <button onclick="saveSchedule()" 
+                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm">
+                            💾 Simpan Jadwal
+                        </button>
+                        <button onclick="deleteSelectedVideo()" 
+                                class="bg-red-600/20 hover:bg-red-600/40 text-red-400 font-bold py-2.5 px-3 rounded-lg text-sm">
+                            🗑️
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-700">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-bold text-yellow-400">4. Report & Review</h2>
-                    <button onclick="loadFiles()" class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg">
-                        🔄 Refresh
-                    </button>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left text-gray-400">
-                        <thead class="text-xs text-gray-500 uppercase bg-gray-700/50">
-                            <tr>
-                                <th class="px-4 py-3 rounded-l-lg">Nama File</th>
-                                <th class="px-4 py-3">Status AI</th>
-                                <th class="px-4 py-3">Ukuran</th>
-                                <th class="px-4 py-3 rounded-r-lg">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody id="reportTableBody">
-                            <tr><td class="px-4 py-3 text-gray-500 italic" colspan="4">Memuat data...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+            <!-- Hasil Edit AI (jika ada) -->
+            <div id="aiResultCard" class="bg-gray-800 rounded-2xl border border-gray-700 p-4 hidden">
+                <h3 class="font-bold text-green-400 mb-2 text-sm">✅ Hasil Edit AI</h3>
+                <div id="aiResultContainer" class="aspect-video bg-gray-900 rounded-lg overflow-hidden"></div>
             </div>
-
         </div>
     </main>
 
-    <script>
-        let selectedForAI = null;
-        let aiStatusMap = {};
+    <!-- ==================== MODAL: UPLOAD ==================== -->
+    <div id="uploadModal" class="fixed inset-0 bg-black/70 modal-backdrop z-50 hidden items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-md overflow-hidden">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="font-bold text-white">📤 Upload Video</h3>
+                <button onclick="closeUploadModal()" class="text-gray-400 hover:text-white">✕</button>
+            </div>
+            <div class="p-4 space-y-4">
+                <input type="file" id="uploadInput" accept="video/*" 
+                       class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white cursor-pointer bg-gray-700 rounded-lg p-1"/>
+                
+                <div id="uploadMethodChoice" class="hidden space-y-2">
+                    <p class="text-xs text-yellow-400">⚠️ File > 4.5 MB. Pilih metode:</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="doUpload('compress')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm">
+                            🗜️ Kompres<br><span class="text-xs font-normal">Kualitas turun</span>
+                        </button>
+                        <button onclick="doUpload('cut')" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg text-sm">
+                            ✂️ Potong<br><span class="text-xs font-normal">Kualitas asli</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <button id="uploadDirectBtn" onclick="checkAndUpload()" 
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm">
+                    Upload
+                </button>
+                
+                <div class="w-full bg-gray-700 rounded-full h-2 hidden" id="uploadProgressContainer">
+                    <div id="uploadProgressBar" class="bg-blue-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+                </div>
+                <div id="uploadStatus" class="text-xs p-2 rounded-lg bg-gray-700/50 hidden text-center"></div>
+            </div>
+        </div>
+    </div>
 
+    <!-- ==================== MODAL: LOGIN MEDSOS ==================== -->
+    <div id="loginModal" class="fixed inset-0 bg-black/70 modal-backdrop z-50 hidden items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-md overflow-hidden">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="font-bold text-white">🔐 Login Medsos</h3>
+                <button onclick="closeLoginModal()" class="text-gray-400 hover:text-white">✕</button>
+            </div>
+            <div class="p-4 space-y-4">
+                <!-- Daftar akun yang sudah login -->
+                <div>
+                    <p class="text-xs font-medium text-gray-400 mb-2">Akun Terhubung:</p>
+                    <div id="connectedAccounts" class="space-y-2">
+                        <p class="text-xs text-gray-500 italic">Belum ada akun terhubung</p>
+                    </div>
+                </div>
+                
+                <hr class="border-gray-700">
+                
+                <!-- Form login -->
+                <div>
+                    <p class="text-xs font-medium text-gray-400 mb-2">Tambah Akun Baru:</p>
+                    <div class="space-y-2">
+                        <select id="loginPlatform" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none">
+                            <option value="instagram">📷 Instagram</option>
+                            <option value="tiktok">🎵 TikTok</option>
+                            <option value="youtube">▶️ YouTube</option>
+                            <option value="facebook">👤 Facebook</option>
+                        </select>
+                        <input type="text" id="loginUsername" placeholder="Username" 
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none"/>
+                        <button onclick="connectAccount()" 
+                                class="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2.5 rounded-lg text-sm">
+                            🔗 Hubungkan Akun
+                        </button>
+                    </div>
+                    <div id="loginStatus" class="text-xs p-2 rounded-lg bg-gray-700/50 hidden text-center mt-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== GLOBAL STATE ====================
+        let allFiles = [];
+        let filteredFiles = [];
+        let currentFilter = 'all';
+        let selectedVideo = null;
+        let videoSchedules = JSON.parse(localStorage.getItem('videoSchedules') || '{}');
+        let connectedAccounts = JSON.parse(localStorage.getItem('connectedAccounts') || '[]');
+
+        // ==================== INIT ====================
         window.addEventListener('DOMContentLoaded', function() {
             loadFiles();
+            updateLoginButton();
         });
 
         // ==================== LOAD FILES ====================
         async function loadFiles() {
-            const tableBody = document.getElementById('reportTableBody');
-            tableBody.innerHTML = '<tr><td class="px-4 py-3 text-gray-500 italic" colspan="4">Memuat data...</td></tr>';
+            const container = document.getElementById('videoListContainer');
+            container.innerHTML = '<div class="text-center text-gray-500 italic p-4 text-sm">Memuat data...</div>';
             
             try {
                 const response = await fetch('/api/list-files-grouped');
@@ -179,128 +269,222 @@
                 
                 if (!response.ok) throw new Error(data.error || 'Gagal');
                 
-                tableBody.innerHTML = '';
-                
-                if (!data.files || data.files.length === 0) {
-                    tableBody.innerHTML = '<tr><td class="px-4 py-3 text-gray-500 italic" colspan="4">Belum ada data upload.</td></tr>';
-                    return;
-                }
+                // Buat daftar video lengkap (mentah + AI)
+                allFiles = [];
                 
                 data.files.forEach(function(file) {
-                    const sizeMB = (file.size / 1024 / 1024).toFixed(2);
-                    const row = document.createElement('tr');
-                    row.className = 'border-b border-gray-700 hover:bg-gray-700/30';
+                    // Tambah video mentah
+                    allFiles.push({
+                        ...file,
+                        type: 'raw',
+                        displayName: file.is_single ? file.pathname : file.pathname.replace('.webm', ''),
+                        displayStatus: 'Mentah',
+                        statusColor: 'blue',
+                    });
                     
-                    if (selectedForAI && selectedForAI.session_id === file.session_id) {
-                        row.classList.add('bg-purple-900/30');
+                    // Jika ada hasil AI, tambah sebagai entry terpisah
+                    if (file.ai_result) {
+                        allFiles.push({
+                            ...file,
+                            type: 'ai',
+                            url: file.ai_result.url,
+                            displayName: `AI: ${file.pathname.replace('.webm', '')}`,
+                            displayStatus: 'AI',
+                            statusColor: 'green',
+                            ai_timestamp: file.ai_result.uploadedAt || new Date().toISOString(),
+                        });
                     }
-                    
-                    let aiStatus = aiStatusMap[file.session_id] || file.ai_status || 'idle';
-                    if (file.ai_result && file.ai_status === 'done') aiStatus = 'done';
-                    
-                    const statusBadge = renderAIStatusBadge(aiStatus);
-                    
-                    if (file.is_single) {
-                        row.innerHTML = `
-                            <td class="px-4 py-3 text-white">${file.pathname}</td>
-                            <td class="px-4 py-3">${statusBadge}</td>
-                            <td class="px-4 py-3">${sizeMB} MB</td>
-                            <td class="px-4 py-3 flex gap-2 flex-wrap">
-                                <button onclick='previewSingle("${file.url}", "${file.pathname}")' class="text-green-400 hover:underline text-xs">Preview</button>
-                                <button onclick='selectForAI(${JSON.stringify({is_single: true, url: file.url, pathname: file.pathname, session_id: file.session_id || 'single_' + Date.now()})})' class="text-purple-400 hover:underline text-xs">Pilih AI</button>
-                                <button onclick="deleteVideo('${file.url}', '${file.pathname}')" class="text-red-400 hover:underline text-xs">Hapus</button>
-                            </td>
-                        `;
-                    } else {
-                        const chunksJson = JSON.stringify(file.chunks).replace(/"/g, '&quot;');
-                        row.innerHTML = `
-                            <td class="px-4 py-3 text-white">
-                                ${file.pathname}
-                                <div class="text-xs text-gray-500">${file.total_chunks} potongan</div>
-                            </td>
-                            <td class="px-4 py-3">${statusBadge}</td>
-                            <td class="px-4 py-3">${sizeMB} MB</td>
-                            <td class="px-4 py-3 flex gap-2 flex-wrap">
-                                <button onclick='previewGrouped(${chunksJson}, "${file.session_id}")' class="text-green-400 hover:underline text-xs">Preview</button>
-                                <button onclick='selectForAI(${JSON.stringify({is_single: false, session_id: file.session_id, chunks: file.chunks, pathname: file.pathname})})' class="text-purple-400 hover:underline text-xs">Pilih AI</button>
-                                ${file.ai_result ? `<button onclick='previewAIResult(${JSON.stringify(file.ai_result).replace(/"/g, '&quot;')})' class="text-yellow-400 hover:underline text-xs">Lihat Hasil</button>` : ''}
-                                <button onclick='deleteGrouped(${chunksJson}, "${file.session_id}")' class="text-red-400 hover:underline text-xs">Hapus</button>
-                            </td>
-                        `;
-                    }
-                    
-                    tableBody.appendChild(row);
                 });
                 
+                applyFilter();
             } catch (error) {
-                tableBody.innerHTML = `<tr><td class="px-4 py-3 text-red-400 italic" colspan="4">Error: ${error.message}</td></tr>`;
+                container.innerHTML = `<div class="text-center text-red-400 italic p-4 text-sm">Error: ${error.message}</div>`;
             }
         }
 
-        function renderAIStatusBadge(status) {
-            switch(status) {
-                case 'pending':
-                    return '<span class="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-400">📋 Terpilih</span>';
-                case 'processing':
-                    return '<span class="px-2 py-1 text-xs rounded-full bg-orange-500/20 text-orange-400">⏳ Diproses</span>';
-                case 'done':
-                    return '<span class="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-400">✅ Selesai</span>';
-                default:
-                    return '<span class="px-2 py-1 text-xs rounded-full bg-gray-500/20 text-gray-400">- Belum</span>';
-            }
+        // ==================== FILTER ====================
+        function setFilter(filter) {
+            currentFilter = filter;
+            
+            // Update tab styling
+            ['all', 'raw', 'ai'].forEach(f => {
+                const btn = document.getElementById(`filter-${f}`);
+                if (f === filter) {
+                    btn.className = 'flex-1 py-2 px-3 text-blue-400 border-b-2 border-blue-400 font-medium';
+                } else {
+                    btn.className = 'flex-1 py-2 px-3 text-gray-400 hover:text-white';
+                }
+            });
+            
+            applyFilter();
         }
 
-        // ==================== PREVIEW SINGLE ====================
-        function previewSingle(fileUrl, pathname) {
-            const container = document.getElementById('rawVideoContainer');
-            container.innerHTML = `
-                <video src="${fileUrl}" 
-                       controls 
-                       controlsList="nodownload noremoteplayback"
-                       playsinline
-                       preload="metadata" 
-                       class="w-full h-full object-contain rounded-lg bg-black"></video>
+        function applyFilter() {
+            if (currentFilter === 'all') {
+                filteredFiles = allFiles;
+            } else {
+                filteredFiles = allFiles.filter(f => f.type === currentFilter);
+            }
+            
+            renderVideoList();
+        }
+
+        // ==================== RENDER VIDEO LIST ====================
+        function renderVideoList() {
+            const container = document.getElementById('videoListContainer');
+            
+            if (filteredFiles.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-500 italic p-4 text-sm">Belum ada video.</div>';
+                return;
+            }
+            
+            container.innerHTML = filteredFiles.map((file, idx) => {
+                const schedule = videoSchedules[file.session_id] || null;
+                const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+                const isActive = selectedVideo && selectedVideo.session_id === file.session_id && selectedVideo.type === file.type;
+                
+                // Format tanggal untuk AI
+                let statusText = file.displayStatus;
+                if (file.type === 'ai' && file.ai_timestamp) {
+                    try {
+                        const d = new Date(file.ai_timestamp);
+                        statusText = `AI • ${d.toLocaleDateString('id-ID', {day: '2-digit', month: 'short'})}`;
+                    } catch(e) {
+                        statusText = 'AI';
+                    }
+                }
+                
+                // Status color
+                const statusClass = file.type === 'ai' 
+                    ? 'bg-green-500/20 text-green-400' 
+                    : 'bg-blue-500/20 text-blue-400';
+                
+                // Jadwal & Medsos
+                let scheduleText = '-';
+                if (schedule) {
+                    try {
+                        const d = new Date(schedule.time);
+                        scheduleText = d.toLocaleString('id-ID', {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'});
+                        if (schedule.medsos) scheduleText += ` • ${schedule.medsos}`;
+                    } catch(e) {}
+                }
+                
+                return `
+                    <div onclick='selectVideoByIndex(${idx})' 
+                         class="video-list-item ${isActive ? 'active' : ''} bg-gray-700/30 border border-gray-700/50 rounded-lg p-3 cursor-pointer hover:bg-gray-700/50">
+                        <div class="flex justify-between items-start gap-2 mb-1">
+                            <h4 class="text-sm font-medium text-white truncate flex-1">${file.displayName}</h4>
+                            <span class="text-xs px-2 py-0.5 rounded-full ${statusClass} whitespace-nowrap">${statusText}</span>
+                        </div>
+                        <div class="flex justify-between text-xs text-gray-400 mt-1">
+                            <span>${sizeMB} MB ${file.total_chunks ? `• ${file.total_chunks} bagian` : ''}</span>
+                        </div>
+                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                            <span>🕐 ${scheduleText}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ==================== SELECT VIDEO ====================
+        function selectVideoByIndex(idx) {
+            const file = filteredFiles[idx];
+            if (!file) return;
+            
+            selectedVideo = file;
+            
+            // Re-render list untuk highlight
+            renderVideoList();
+            
+            // Tampilkan preview
+            showPreview(file);
+            
+            // Tampilkan panel aksi
+            document.getElementById('videoActions').classList.remove('hidden');
+            document.getElementById('selectedVideoName').textContent = file.displayName;
+            document.getElementById('selectedVideoInfo').textContent = 
+                `${(file.size / 1024 / 1024).toFixed(2)} MB${file.total_chunks ? ` • ${file.total_chunks} bagian` : ''} • ${file.type === 'ai' ? 'Hasil AI' : 'Mentah'}`;
+            
+            // Tampilkan hasil AI jika ada
+            if (file.ai_result) {
+                document.getElementById('aiResultCard').classList.remove('hidden');
+                document.getElementById('aiResultContainer').innerHTML = `
+                    <video src="${file.ai_result.url}" controls playsinline preload="metadata" 
+                           class="w-full h-full object-contain bg-black"></video>
+                `;
+            } else {
+                document.getElementById('aiResultCard').classList.add('hidden');
+            }
+            
+            // Load jadwal yang sudah ada
+            const schedule = videoSchedules[file.session_id];
+            if (schedule) {
+                document.getElementById('scheduleInput').value = schedule.time || '';
+                document.getElementById('medsosSelect').value = schedule.medsos || '';
+            } else {
+                document.getElementById('scheduleInput').value = '';
+                document.getElementById('medsosSelect').value = '';
+            }
+            
+            // Update badge
+            const badge = document.getElementById('previewBadge');
+            badge.className = `text-xs px-2 py-1 rounded-full ${file.type === 'ai' ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'}`;
+            badge.textContent = file.type === 'ai' ? '✅ Hasil AI' : '📹 Video Mentah';
+        }
+
+        function clearSelection() {
+            selectedVideo = null;
+            document.getElementById('videoActions').classList.add('hidden');
+            document.getElementById('aiResultCard').classList.add('hidden');
+            document.getElementById('rawVideoContainer').innerHTML = `
+                <div class="text-center text-gray-600 text-sm">Pilih video dari daftar di kiri</div>
             `;
-            container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            document.getElementById('previewBadge').className = 'text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-400';
+            document.getElementById('previewBadge').textContent = 'Belum ada video';
+            renderVideoList();
         }
 
-        // ==================== PREVIEW GROUPED (STREAMING BERTAHAP) ====================
-        function previewGrouped(chunks, sessionId) {
+        // ==================== SHOW PREVIEW ====================
+        function showPreview(file) {
             const container = document.getElementById('rawVideoContainer');
             
+            // Jika file potongan (bukan single)
+            if (!file.is_single && file.type === 'raw') {
+                previewGrouped(file.chunks, container);
+            } else {
+                // File tunggal atau hasil AI
+                container.innerHTML = `
+                    <video src="${file.url}" controls playsinline preload="metadata" 
+                           class="w-full h-full object-contain rounded-lg bg-black"></video>
+                `;
+            }
+        }
+
+        // ==================== PREVIEW GROUPED ====================
+        function previewGrouped(chunks, container) {
             const chunkStatus = chunks.map(() => 'pending');
             
-            // Struktur: video di atas, info bar DI BAWAH (tidak menutupi kontrol video)
             container.innerHTML = `
                 <div class="w-full h-full flex flex-col">
-                    <!-- Video player -->
                     <div class="relative flex-1 bg-black rounded-lg overflow-hidden">
-                        <video id="groupedVideo" 
-                               controls 
-                               controlsList="nodownload noremoteplayback"
-                               playsinline
-                               preload="auto" 
-                               class="w-full h-full object-contain bg-black"
-                               style="min-height: 200px;">
-                        </video>
+                        <video id="groupedVideo" controls playsinline preload="auto" 
+                               class="w-full h-full object-contain bg-black" style="min-height: 200px;"></video>
                         
-                        <!-- Overlay loading untuk chunk pertama -->
                         <div id="firstLoadOverlay" 
-                             class="absolute inset-0 bg-gray-900/95 flex flex-col items-center justify-center p-4 z-10"
-                             style="pointer-events: auto;">
+                             class="absolute inset-0 bg-gray-900/95 flex flex-col items-center justify-center p-4 z-10">
                             <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500/30 border-t-blue-500 mb-4"></div>
                             <div class="bg-yellow-500/20 border border-yellow-500/40 rounded-lg p-3 max-w-xs flex items-start gap-2 mb-3">
                                 <svg class="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
                                 </svg>
                                 <p class="text-xs text-yellow-200">
-                                    <strong>Memuat...</strong> Video terdiri dari ${chunks.length} file, akan diputar otomatis.
+                                    <strong>Memuat...</strong> Video terdiri dari ${chunks.length} file.
                                 </p>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Info bar DI BAWAH video -->
                     <div class="mt-3 flex items-center gap-3 flex-wrap">
                         <div class="flex-1 min-w-[200px]">
                             <div class="bg-gray-700 rounded-full h-1.5">
@@ -332,7 +516,6 @@
             let currentIndex = 0;
             let loadedCount = 0;
             
-            // PENTING: Set controls aktif
             video.controls = true;
             
             const updateLoadedProgress = () => {
@@ -358,23 +541,22 @@
                 };
                 
                 const timeout = setTimeout(finish, 10000);
-                
-                tempVideo.onloadeddata = () => {
-                    clearTimeout(timeout);
-                    finish();
-                };
-                
-                tempVideo.onerror = () => {
-                    clearTimeout(timeout);
-                    console.warn(`Chunk ${index} gagal preload`);
-                    finish();
-                };
+                tempVideo.onloadeddata = () => { clearTimeout(timeout); finish(); };
+                tempVideo.onerror = () => { clearTimeout(timeout); finish(); };
             };
             
             const preloadAllInBackground = () => {
                 for (let i = 0; i < chunks.length; i++) {
                     setTimeout(() => preloadOneChunk(i), i * 150);
                 }
+            };
+            
+            const actuallyPlay = (index) => {
+                video.controls = true;
+                video.src = chunks[index].url;
+                video.load();
+                video.onloadedmetadata = () => { video.controls = true; };
+                video.play().catch(e => console.warn('Autoplay diblokir:', e));
             };
             
             const playChunk = (index) => {
@@ -404,24 +586,6 @@
                 }
             };
             
-            const actuallyPlay = (index) => {
-                // PENTING: Pastikan controls tetap true
-                video.controls = true;
-                
-                video.src = chunks[index].url;
-                video.load();
-                
-                // PENTING: Paksa controls kembali setelah metadata dimuat
-                video.onloadedmetadata = () => {
-                    video.controls = true;
-                };
-                
-                video.play().catch(e => {
-                    console.warn('Autoplay diblokir:', e);
-                    // Jika autoplay diblokir, kontrol tetap terlihat untuk user klik manual
-                });
-            };
-            
             video.addEventListener('ended', () => {
                 if (currentIndex + 1 < chunks.length) {
                     playChunk(currentIndex + 1);
@@ -431,9 +595,7 @@
             const hideFirstOverlay = () => {
                 firstOverlay.style.transition = 'opacity 0.5s';
                 firstOverlay.style.opacity = '0';
-                // PENTING: matikan pointer-events agar tidak block klik ke video
                 firstOverlay.style.pointerEvents = 'none';
-                
                 setTimeout(() => {
                     firstOverlay.remove();
                     playChunk(0);
@@ -441,7 +603,6 @@
                 }, 500);
             };
             
-            // Tunggu chunk pertama siap
             chunkStatus[0] = 'loading';
             const firstVideo = document.createElement('video');
             firstVideo.preload = 'auto';
@@ -458,159 +619,139 @@
             };
             
             const firstTimeout = setTimeout(firstLoadFinish, 8000);
-            firstVideo.onloadeddata = () => {
-                clearTimeout(firstTimeout);
-                firstLoadFinish();
-            };
-            firstVideo.onerror = () => {
-                clearTimeout(firstTimeout);
-                firstLoadFinish();
-            };
-            
-            container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            firstVideo.onloadeddata = () => { clearTimeout(firstTimeout); firstLoadFinish(); };
+            firstVideo.onerror = () => { clearTimeout(firstTimeout); firstLoadFinish(); };
         }
 
-        // ==================== PREVIEW AI RESULT ====================
-        function previewAIResult(aiResult) {
-            const container = document.getElementById('editedVideoContainer');
-            const badge = document.getElementById('aiStatusBadge');
-            
-            badge.className = 'text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400';
-            badge.textContent = '✅ Selesai';
-            badge.classList.remove('hidden');
-            
-            container.innerHTML = `
-                <video src="${aiResult.url}" 
-                       controls 
-                       controlsList="nodownload noremoteplayback"
-                       playsinline
-                       preload="metadata" 
-                       class="w-full h-full object-contain rounded-lg bg-black"></video>
-            `;
-            container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // ==================== UPLOAD MODAL ====================
+        function openUploadModal() {
+            document.getElementById('uploadModal').classList.remove('hidden');
+            document.getElementById('uploadModal').classList.add('flex');
+            document.getElementById('uploadMethodChoice').classList.add('hidden');
+            document.getElementById('uploadDirectBtn').classList.remove('hidden');
+            document.getElementById('uploadProgressContainer').classList.add('hidden');
+            document.getElementById('uploadStatus').classList.add('hidden');
+            document.getElementById('uploadInput').value = '';
         }
 
-        // ==================== PILIH UNTUK AI ====================
-        function selectForAI(data) {
-            selectedForAI = data;
-            const sessionId = data.session_id;
-            aiStatusMap[sessionId] = 'pending';
+        function closeUploadModal() {
+            document.getElementById('uploadModal').classList.add('hidden');
+            document.getElementById('uploadModal').classList.remove('flex');
+        }
+
+        function checkAndUpload() {
+            const file = document.getElementById('uploadInput').files[0];
+            if (!file) {
+                alert('Pilih file dulu!');
+                return;
+            }
             
-            const infoDiv = document.getElementById('selectedInfo');
-            const nameSpan = document.getElementById('selectedName');
-            infoDiv.classList.remove('hidden');
-            nameSpan.textContent = data.is_single 
-                ? data.pathname 
-                : `${data.pathname} (${data.chunks.length} potongan)`;
+            const sizeMB = file.size / 1024 / 1024;
             
-            loadFiles();
+            if (sizeMB > 4.5) {
+                // Tampilkan pilihan
+                document.getElementById('uploadMethodChoice').classList.remove('hidden');
+                document.getElementById('uploadDirectBtn').classList.add('hidden');
+            } else {
+                // Langsung upload
+                doUpload('direct');
+            }
+        }
+
+        async function doUpload(method) {
+            const file = document.getElementById('uploadInput').files[0];
+            if (!file) return;
             
+            const progressContainer = document.getElementById('uploadProgressContainer');
+            const progressBar = document.getElementById('uploadProgressBar');
             const statusDiv = document.getElementById('uploadStatus');
+            
+            progressContainer.classList.remove('hidden');
             statusDiv.classList.remove('hidden');
-            statusDiv.innerHTML = `<span class="text-yellow-400">📋 Video dipilih untuk AI</span>`;
-            setTimeout(() => statusDiv.classList.add('hidden'), 2000);
-        }
-
-        // ==================== BATALKAN PILIHAN ====================
-        function cancelSelection() {
-            if (selectedForAI && aiStatusMap[selectedForAI.session_id] === 'pending') {
-                delete aiStatusMap[selectedForAI.session_id];
-            }
-            
-            selectedForAI = null;
-            document.getElementById('selectedInfo').classList.add('hidden');
-            document.getElementById('aiStatusBadge').classList.add('hidden');
-            document.getElementById('editedVideoContainer').innerHTML = `
-                <div class="text-center text-gray-600 text-sm">Menunggu proses AI</div>
-            `;
-            
-            const statusDiv = document.getElementById('uploadStatus');
-            statusDiv.classList.remove('hidden');
-            statusDiv.innerHTML = `<span class="text-gray-400">✕ Pilihan dibatalkan</span>`;
-            setTimeout(() => statusDiv.classList.add('hidden'), 2000);
-            
-            loadFiles();
-        }
-
-        // ==================== RESET SEMUA STATUS ====================
-        async function resetAllStatus() {
-            if (!confirm('Reset semua status AI?\n\n• Menghapus semua file hasil AI\n• Video mentah tetap aman\n\nLanjutkan?')) return;
+            progressBar.style.width = '0%';
+            statusDiv.innerHTML = '<span class="text-blue-400">Memproses...</span>';
             
             try {
-                const response = await fetch('/api/reset-ai', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error);
-                
-                selectedForAI = null;
-                aiStatusMap = {};
-                
-                document.getElementById('selectedInfo').classList.add('hidden');
-                document.getElementById('aiStatusBadge').classList.add('hidden');
-                document.getElementById('editedVideoContainer').innerHTML = `
-                    <div class="text-center text-gray-600 text-sm">Menunggu proses AI</div>
-                `;
-                
-                const statusDiv = document.getElementById('uploadStatus');
-                statusDiv.classList.remove('hidden');
-                statusDiv.innerHTML = `<span class="text-green-400">✅ Status di-reset. ${data.deleted} file hasil AI dihapus.</span>`;
-                setTimeout(() => statusDiv.classList.add('hidden'), 3000);
-                
-                loadFiles();
-            } catch (error) {
-                alert(`❌ Gagal reset: ${error.message}`);
-            }
-        }
-
-        // ==================== DELETE ====================
-        async function deleteVideo(url, pathname) {
-            if (!confirm(`Yakin ingin menghapus "${pathname}"?`)) return;
-            try {
-                const response = await fetch('/api/delete-file', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: url })
-                });
-                if (!response.ok) throw new Error('Gagal hapus');
-                alert('✅ File berhasil dihapus!');
-                loadFiles();
-            } catch (error) {
-                alert(`❌ Gagal: ${error.message}`);
-            }
-        }
-
-        async function deleteGrouped(chunks, sessionId) {
-            if (!confirm(`Yakin ingin menghapus semua ${chunks.length} potongan dari sesi "${sessionId}"?`)) return;
-            try {
-                for (const chunk of chunks) {
-                    await fetch('/api/delete-file', {
+                if (method === 'compress') {
+                    statusDiv.innerHTML = '<span class="text-blue-400">🗜️ Mengompres...</span>';
+                    const compressedBlob = await compressVideo(file, (percent) => {
+                        progressBar.style.width = (percent * 0.5).toFixed(0) + '%';
+                        statusDiv.innerHTML = `<span class="text-blue-400">🗜️ Kompresi ${percent.toFixed(0)}%</span>`;
+                    });
+                    
+                    const compressedSizeMB = compressedBlob.size / 1024 / 1024;
+                    if (compressedSizeMB > 4) {
+                        statusDiv.innerHTML = `<span class="text-red-400">❌ Hasil ${compressedSizeMB.toFixed(2)} MB. Coba "Potong".</span>`;
+                        return;
+                    }
+                    
+                    const newFile = new File([compressedBlob], file.name.replace(/\.[^.]+$/, '.webm'), { type: 'video/webm' });
+                    await uploadSingleFile(newFile, progressBar, statusDiv);
+                    
+                } else if (method === 'cut') {
+                    statusDiv.innerHTML = '<span class="text-purple-400">✂️ Memotong... (muted)</span>';
+                    const sessionId = Date.now().toString(36);
+                    
+                    const chunks = await cutVideo(file, 10, (percent, idx) => {
+                        progressBar.style.width = (percent * 0.5).toFixed(0) + '%';
+                        statusDiv.innerHTML = `<span class="text-purple-400">✂️ Memotong ${percent.toFixed(0)}% (bagian ${idx})</span>`;
+                    });
+                    
+                    // Upload chunks
+                    let uploadedCount = 0;
+                    for (let i = 0; i < chunks.length; i++) {
+                        const chunkFile = new File([chunks[i]], `cut_${sessionId}_${i}.webm`, { type: 'video/webm' });
+                        const formData = new FormData();
+                        formData.append('video', chunkFile);
+                        formData.append('session_id', sessionId);
+                        formData.append('chunk_index', i);
+                        
+                        await fetch('/api/upload-chunk', { method: 'POST', body: formData });
+                        uploadedCount++;
+                        progressBar.style.width = (50 + (uploadedCount / chunks.length) * 50).toFixed(0) + '%';
+                        statusDiv.innerHTML = `<span class="text-blue-400">📤 Upload ${uploadedCount}/${chunks.length}</span>`;
+                    }
+                    
+                    await fetch('/api/finalize-cut', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url: chunk.url })
+                        body: JSON.stringify({ session_id: sessionId, total_chunks: chunks.length })
                     });
+                    
+                } else {
+                    // Direct
+                    await uploadSingleFile(file, progressBar, statusDiv);
                 }
-                delete aiStatusMap[sessionId];
-                if (selectedForAI && selectedForAI.session_id === sessionId) {
-                    selectedForAI = null;
-                    document.getElementById('selectedInfo').classList.add('hidden');
-                }
-                alert(`✅ ${chunks.length} potongan berhasil dihapus!`);
-                loadFiles();
+                
+                progressBar.style.width = '100%';
+                progressBar.style.background = '#10b981';
+                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil!</span>';
+                
+                setTimeout(() => {
+                    closeUploadModal();
+                    loadFiles();
+                }, 1500);
+                
             } catch (error) {
-                alert(`❌ Gagal: ${error.message}`);
+                statusDiv.innerHTML = `<span class="text-red-400">❌ ${error.message}</span>`;
             }
         }
 
-        // ==================== KOMPRES ====================
+        async function uploadSingleFile(file, progressBar, statusDiv) {
+            const formData = new FormData();
+            formData.append('video', file);
+            const response = await fetch('/api/upload', { method: 'POST', body: formData });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error);
+        }
+
+        // ==================== KOMPRES VIDEO ====================
         async function compressVideo(file, onProgress) {
             return new Promise(async (resolve, reject) => {
                 try {
                     const video = document.createElement('video');
                     video.src = URL.createObjectURL(file);
-                    video.muted = false;
+                    video.muted = true;
                     video.playsInline = true;
                     
                     await new Promise((res, rej) => {
@@ -679,13 +820,15 @@
             });
         }
 
-        // ==================== POTONG ====================
+        // ==================== POTONG VIDEO (MUTED) ====================
         async function cutVideo(file, chunkDurationSec, onProgress) {
             return new Promise(async (resolve, reject) => {
                 try {
                     const video = document.createElement('video');
                     video.src = URL.createObjectURL(file);
-                    video.muted = false;
+                    // PENTING: muted=true agar tidak keluar suara saat proses
+                    video.muted = true;
+                    video.volume = 0;
                     video.playsInline = true;
                     
                     await new Promise((res, rej) => {
@@ -698,13 +841,14 @@
                     let chunkIndex = 0;
                     const stream = video.captureStream();
                     
+                    // Ambil audio tapi tetap muted di output preview
                     let audioTrack = null;
                     try {
                         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                         const source = audioCtx.createMediaElementSource(video);
                         const dest = audioCtx.createMediaStreamDestination();
                         source.connect(dest);
-                        source.connect(audioCtx.destination);
+                        // PENTING: Jangan connect ke destination speaker agar tidak keluar suara
                         audioTrack = dest.stream.getAudioTracks()[0];
                     } catch(e) {}
 
@@ -757,161 +901,47 @@
             });
         }
 
-        // ==================== UPLOAD KOMPRES ====================
-        async function uploadCompressed() {
-            const fileInput = document.getElementById('videoInput');
-            const statusDiv = document.getElementById('uploadStatus');
-            const progressContainer = document.getElementById('progressContainer');
-            const progressBar = document.getElementById('progressBar');
-            const file = fileInput.files[0];
-
-            statusDiv.classList.remove('hidden');
-            if (!file) { statusDiv.innerHTML = '<span class="text-yellow-400">⚠️ Pilih video dulu.</span>'; return; }
-
-            const originalSizeMB = file.size / 1024 / 1024;
-            let fileToUpload = file;
-
-            if (originalSizeMB > 3) {
-                statusDiv.innerHTML = `<span class="text-blue-400">🗜️ Mengompres (${originalSizeMB.toFixed(2)} MB)...</span>`;
-                progressContainer.classList.remove('hidden');
-                progressBar.style.width = '0%';
-                progressBar.style.background = '#f59e0b';
-
-                try {
-                    const compressedBlob = await compressVideo(file, (percent) => {
-                        progressBar.style.width = percent.toFixed(0) + '%';
-                        statusDiv.innerHTML = `<span class="text-blue-400">🗜️ Mengompres... ${percent.toFixed(0)}%</span>`;
-                    });
-                    
-                    const compressedSizeMB = compressedBlob.size / 1024 / 1024;
-                    statusDiv.innerHTML = `<span class="text-green-400">✅ Kompresi: ${originalSizeMB.toFixed(2)} → ${compressedSizeMB.toFixed(2)} MB</span>`;
-                    
-                    if (compressedSizeMB > 4) {
-                        statusDiv.innerHTML = `<span class="text-red-400">❌ Hasil ${compressedSizeMB.toFixed(2)} MB. Coba "Potong".</span>`;
-                        progressContainer.classList.add('hidden');
-                        return;
-                    }
-                    fileToUpload = new File([compressedBlob], file.name.replace(/\.[^.]+$/, '.webm'), { type: 'video/webm' });
-                    progressBar.style.width = '80%';
-                } catch (err) {
-                    statusDiv.innerHTML = `<span class="text-red-400">❌ ${err.message}</span>`;
-                    progressContainer.classList.add('hidden');
-                    return;
-                }
-            }
-
-            statusDiv.innerHTML = `<span class="text-blue-400">📤 Mengunggah...</span>`;
-            progressBar.style.width = '90%';
-
-            try {
-                const formData = new FormData();
-                formData.append('video', fileToUpload);
-                const response = await fetch('/api/upload', { method: 'POST', body: formData });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error);
-                
-                progressBar.style.width = '100%';
-                progressBar.style.background = '#10b981';
-                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil!</span>';
-                setTimeout(() => { loadFiles(); statusDiv.classList.add('hidden'); progressContainer.classList.add('hidden'); }, 1500);
-            } catch (error) {
-                statusDiv.innerHTML = `<span class="text-red-400">❌ ${error.message}</span>`;
-                progressContainer.classList.add('hidden');
-            }
-        }
-
-        // ==================== UPLOAD POTONG ====================
-        async function uploadCut() {
-            const fileInput = document.getElementById('videoInput');
-            const statusDiv = document.getElementById('uploadStatus');
-            const progressContainer = document.getElementById('progressContainer');
-            const progressBar = document.getElementById('progressBar');
-            const file = fileInput.files[0];
-
-            statusDiv.classList.remove('hidden');
-            if (!file) { statusDiv.innerHTML = '<span class="text-yellow-400">⚠️ Pilih video dulu.</span>'; return; }
-
-            const originalSizeMB = file.size / 1024 / 1024;
-            const sessionId = Date.now().toString(36);
-
-            statusDiv.innerHTML = `<span class="text-purple-400">✂️ Memotong (${originalSizeMB.toFixed(2)} MB)...</span>`;
-            progressContainer.classList.remove('hidden');
-            progressBar.style.width = '0%';
-            progressBar.style.background = '#a855f7';
-
-            try {
-                const chunks = await cutVideo(file, 10, (percent, idx) => {
-                    progressBar.style.width = percent.toFixed(0) + '%';
-                    statusDiv.innerHTML = `<span class="text-purple-400">✂️ Memotong... ${percent.toFixed(0)}% (potongan ${idx})</span>`;
-                });
-
-                progressBar.style.width = '50%';
-                let uploadedCount = 0;
-                for (let i = 0; i < chunks.length; i++) {
-                    const chunkFile = new File([chunks[i]], `cut_${sessionId}_${i}.webm`, { type: 'video/webm' });
-                    const formData = new FormData();
-                    formData.append('video', chunkFile);
-                    formData.append('session_id', sessionId);
-                    formData.append('chunk_index', i);
-                    
-                    const response = await fetch('/api/upload-chunk', { method: 'POST', body: formData });
-                    if (!response.ok) throw new Error(`Chunk ${i} gagal`);
-                    
-                    uploadedCount++;
-                    progressBar.style.width = (50 + (uploadedCount / chunks.length) * 50).toFixed(0) + '%';
-                    statusDiv.innerHTML = `<span class="text-blue-400">📤 Upload ${uploadedCount}/${chunks.length}...</span>`;
-                }
-
-                await fetch('/api/finalize-cut', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId, total_chunks: chunks.length, original_name: file.name })
-                });
-
-                progressBar.style.width = '100%';
-                progressBar.style.background = '#10b981';
-                statusDiv.innerHTML = `<span class="text-green-400">✅ ${chunks.length} potongan berhasil!</span>`;
-                setTimeout(() => { loadFiles(); statusDiv.classList.add('hidden'); progressContainer.classList.add('hidden'); }, 1500);
-            } catch (error) {
-                statusDiv.innerHTML = `<span class="text-red-400">❌ ${error.message}</span>`;
-                progressContainer.classList.add('hidden');
-            }
+        // ==================== SCHEDULE ====================
+        function saveSchedule() {
+            if (!selectedVideo) { alert('Pilih video dulu!'); return; }
+            
+            const time = document.getElementById('scheduleInput').value;
+            const medsos = document.getElementById('medsosSelect').value;
+            
+            if (!time) { alert('Isi jadwal tayang!'); return; }
+            
+            videoSchedules[selectedVideo.session_id] = { time, medsos };
+            localStorage.setItem('videoSchedules', JSON.stringify(videoSchedules));
+            
+            renderVideoList();
+            alert('✅ Jadwal disimpan!');
         }
 
         // ==================== SUBMIT TO AI ====================
         async function submitToAI() {
+            if (!selectedVideo) { alert('Pilih video dulu!'); return; }
+            
+            if (selectedVideo.type === 'ai') {
+                alert('Ini sudah hasil AI!');
+                return;
+            }
+            
             const prompt = document.getElementById('promptInput').value;
-            const schedule = document.getElementById('scheduleInput').value;
-
             if (!prompt) { alert('Isi prompt dulu!'); return; }
-            if (!selectedForAI) { alert('Pilih video dulu (klik "Pilih AI" di tabel)!'); return; }
-
-            const sessionId = selectedForAI.session_id;
-            aiStatusMap[sessionId] = 'processing';
             
-            const badge = document.getElementById('aiStatusBadge');
-            badge.className = 'text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400';
-            badge.textContent = '⏳ Memproses...';
-            badge.classList.remove('hidden');
+            // Tampilkan loading
+            const badge = document.getElementById('previewBadge');
+            badge.className = 'text-xs px-2 py-1 rounded-full bg-orange-500/20 text-orange-400';
+            badge.textContent = '⏳ Memproses AI...';
             
-            document.getElementById('editedVideoContainer').innerHTML = `
-                <div class="text-center">
-                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-400 mx-auto mb-2"></div>
-                    <p class="text-xs text-orange-400">Memproses dengan AI...</p>
-                </div>
-            `;
-            
-            loadFiles();
-
             try {
                 const payload = {
                     prompt: prompt,
-                    schedule: schedule,
-                    is_single: selectedForAI.is_single,
-                    single_url: selectedForAI.url || '',
-                    session_id: sessionId,
-                    chunks: selectedForAI.chunks || [],
-                    pathname: selectedForAI.pathname,
+                    is_single: selectedVideo.is_single,
+                    single_url: selectedVideo.url || '',
+                    session_id: selectedVideo.session_id,
+                    chunks: selectedVideo.chunks || [],
+                    pathname: selectedVideo.pathname,
                 };
 
                 const response = await fetch('/api/submit-to-ai', {
@@ -922,36 +952,160 @@
 
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
-
-                aiStatusMap[sessionId] = 'done';
                 
-                badge.className = 'text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400';
+                badge.className = 'text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-400';
                 badge.textContent = '✅ Selesai';
                 
-                document.getElementById('editedVideoContainer').innerHTML = `
-                    <video src="${data.ai_result.url}" 
-                           controls 
-                           controlsList="nodownload noremoteplayback"
-                           playsinline
-                           preload="metadata" 
-                           class="w-full h-full object-contain rounded-lg bg-black"></video>
-                `;
-                
+                alert('✅ Video berhasil diproses AI!');
                 loadFiles();
                 
             } catch (error) {
-                aiStatusMap[sessionId] = 'pending';
-                badge.className = 'text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400';
+                badge.className = 'text-xs px-2 py-1 rounded-full bg-red-500/20 text-red-400';
                 badge.textContent = '❌ Gagal';
-                
-                document.getElementById('editedVideoContainer').innerHTML = `
-                    <div class="text-center text-red-400 text-sm p-4">
-                        ❌ Error: ${error.message}
-                    </div>
-                `;
-                loadFiles();
+                alert(`❌ Error: ${error.message}`);
             }
         }
+
+        // ==================== DELETE VIDEO ====================
+        async function deleteSelectedVideo() {
+            if (!selectedVideo) return;
+            
+            const name = selectedVideo.displayName;
+            if (!confirm(`Yakin ingin menghapus "${name}"?`)) return;
+            
+            try {
+                if (selectedVideo.is_single || selectedVideo.type === 'ai') {
+                    await fetch('/api/delete-file', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: selectedVideo.url })
+                    });
+                } else if (selectedVideo.chunks) {
+                    for (const chunk of selectedVideo.chunks) {
+                        await fetch('/api/delete-file', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url: chunk.url })
+                        });
+                    }
+                }
+                
+                // Hapus jadwal
+                delete videoSchedules[selectedVideo.session_id];
+                localStorage.setItem('videoSchedules', JSON.stringify(videoSchedules));
+                
+                alert('✅ Video dihapus!');
+                clearSelection();
+                loadFiles();
+            } catch (error) {
+                alert(`❌ Gagal: ${error.message}`);
+            }
+        }
+
+        // ==================== LOGIN MEDSOS ====================
+        function openLoginModal() {
+            document.getElementById('loginModal').classList.remove('hidden');
+            document.getElementById('loginModal').classList.add('flex');
+            renderConnectedAccounts();
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').classList.add('hidden');
+            document.getElementById('loginModal').classList.remove('flex');
+        }
+
+        function renderConnectedAccounts() {
+            const container = document.getElementById('connectedAccounts');
+            
+            if (connectedAccounts.length === 0) {
+                container.innerHTML = '<p class="text-xs text-gray-500 italic">Belum ada akun terhubung</p>';
+                return;
+            }
+            
+            const platformIcons = {
+                instagram: '📷',
+                tiktok: '🎵',
+                youtube: '▶️',
+                facebook: '👤',
+            };
+            
+            container.innerHTML = connectedAccounts.map((acc, idx) => `
+                <div class="flex justify-between items-center bg-gray-700/50 rounded-lg p-2">
+                    <div class="flex items-center gap-2">
+                        <span>${platformIcons[acc.platform] || '🔗'}</span>
+                        <div>
+                            <p class="text-xs font-medium text-white">${acc.username}</p>
+                            <p class="text-xs text-gray-400">${acc.platform}</p>
+                        </div>
+                    </div>
+                    <span class="text-xs text-green-400">✅ Aktif</span>
+                </div>
+            `).join('');
+        }
+
+        async function connectAccount() {
+            const platform = document.getElementById('loginPlatform').value;
+            const username = document.getElementById('loginUsername').value.trim();
+            const statusDiv = document.getElementById('loginStatus');
+            
+            if (!username) {
+                alert('Isi username!');
+                return;
+            }
+            
+            statusDiv.classList.remove('hidden');
+            statusDiv.innerHTML = '<span class="text-blue-400">🔄 Menghubungkan...</span>';
+            
+            // Simulasi koneksi (di production, ini panggil OAuth API)
+            await new Promise(r => setTimeout(r, 1500));
+            
+            // Cek apakah sudah ada
+            const exists = connectedAccounts.find(a => a.platform === platform && a.username === username);
+            if (exists) {
+                statusDiv.innerHTML = '<span class="text-yellow-400">⚠️ Akun sudah terhubung</span>';
+                return;
+            }
+            
+            // Simulasi berhasil (di production, cek response OAuth)
+            const success = Math.random() > 0.1; // 90% success rate untuk demo
+            
+            if (success) {
+                connectedAccounts.push({
+                    platform,
+                    username,
+                    connectedAt: new Date().toISOString(),
+                    token: 'simulated_token_' + Date.now(), // Di production: token asli dari OAuth
+                });
+                localStorage.setItem('connectedAccounts', JSON.stringify(connectedAccounts));
+                
+                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil terhubung!</span>';
+                document.getElementById('loginUsername').value = '';
+                
+                renderConnectedAccounts();
+                updateLoginButton();
+                
+                setTimeout(() => statusDiv.classList.add('hidden'), 2000);
+            } else {
+                statusDiv.innerHTML = '<span class="text-red-400">❌ Gagal terhubung. Coba lagi.</span>';
+            }
+        }
+
+        function updateLoginButton() {
+            const btnText = document.getElementById('loginBtnText');
+            if (connectedAccounts.length > 0) {
+                btnText.textContent = `${connectedAccounts.length} Akun`;
+            } else {
+                btnText.textContent = 'Login Medsos';
+            }
+        }
+
+        // ==================== INIT: Cleanup saat close ====================
+        window.addEventListener('beforeunload', () => {
+            // Simpan state terakhir
+            if (selectedVideo) {
+                // Opsional: simpan state terakhir user
+            }
+        });
     </script>
 </body>
 </html>
