@@ -61,13 +61,14 @@
             to { opacity: 1; transform: translateX(0); }
         }
         
-        .video-list-item .delete-btn {
+        /* Tombol aksi muncul saat hover */
+        .video-list-item .action-btn {
             opacity: 0;
             transition: opacity 0.2s ease;
         }
-        .video-list-item:hover .delete-btn { opacity: 1; }
-        .video-list-item.selected .delete-btn,
-        .video-list-item.checked .delete-btn { opacity: 1; }
+        .video-list-item:hover .action-btn { opacity: 1; }
+        .video-list-item.selected .action-btn,
+        .video-list-item.checked .action-btn { opacity: 1; }
         
         .main-grid { transition: all 0.3s ease; }
         
@@ -83,17 +84,11 @@
             25% { transform: translateX(-8px); }
             75% { transform: translateX(8px); }
         }
-        
-        .fade-in { animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen font-sans">
 
-    <!-- ==================== LOGIN GATE (Tampil sebelum login) ==================== -->
+    <!-- ==================== LOGIN GATE ==================== -->
     <div id="loginGate" class="fixed inset-0 bg-gray-900 z-[100] hidden items-center justify-center p-4 modal-backdrop">
         <div id="loginCard" class="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-sm overflow-hidden login-pop shadow-2xl">
             <div class="p-6 border-b border-gray-700 text-center">
@@ -157,11 +152,6 @@
                 </div>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
-                <button onclick="openUploadModal()" 
-                        class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 px-4 rounded-lg flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                    <span class="hidden sm:inline">Upload</span>
-                </button>
                 <button onclick="openLoginModal()" 
                         id="loginBtn"
                         class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-semibold py-2 px-3 rounded-lg flex items-center gap-2">
@@ -169,7 +159,6 @@
                     <span id="loginBtnText" class="hidden sm:inline">Login Medsos</span>
                 </button>
                 
-                <!-- Tombol Kelola User -->
                 <button onclick="openUserModal()" 
                         id="userBtn"
                         class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2 px-3 rounded-lg flex items-center gap-2">
@@ -179,7 +168,6 @@
                     <span id="userBtnText" class="hidden sm:inline">Kelola User</span>
                 </button>
                 
-                <!-- Tombol Logout -->
                 <button onclick="logoutUser()" 
                         class="bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold py-2 px-3 rounded-lg flex items-center gap-1"
                         title="Logout">
@@ -194,14 +182,25 @@
         <main id="mainGrid" class="main-grid max-w-[1600px] mx-auto p-4 grid gap-4" 
               style="grid-template-columns: 5fr 7fr; min-height: calc(100vh - 60px);">
             
+            <!-- KOLOM 1: Daftar Video -->
             <div id="videoListColumn" class="bg-gray-800 rounded-2xl border border-gray-700 flex flex-col overflow-hidden" 
                  style="max-height: calc(100vh - 90px);">
-                <div class="px-4 py-3 border-b border-gray-700 flex justify-between items-center">
+                <div class="px-4 py-3 border-b border-gray-700 flex justify-between items-center gap-2">
                     <h2 class="font-bold text-white text-sm flex items-center gap-2">
                         📹 Daftar Video
                         <span id="videoCountBadge" class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">0</span>
                     </h2>
-                    <button onclick="loadFiles()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2.5 py-1 rounded-lg" title="Refresh">🔄</button>
+                    <div class="flex items-center gap-1.5">
+                        <!-- Tombol Upload + -->
+                        <button onclick="openUploadModal()" 
+                                class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            Upload
+                        </button>
+                        <button onclick="loadFiles()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2.5 py-1.5 rounded-lg" title="Refresh">🔄</button>
+                    </div>
                 </div>
                 
                 <div class="flex border-b border-gray-700 text-xs">
@@ -210,11 +209,12 @@
                     <button onclick="setFilter('ai')" id="filter-ai" class="flex-1 py-2 px-3 text-gray-400 hover:text-white">Hasil AI</button>
                 </div>
                 
-                <div id="videoListContainer" class="flex-1 overflow-y-auto p-2 space-y-1.5">
+                <div id="videoListContainer" class="flex-1 overflow-y-auto p-2 space-y-1">
                     <div class="text-center text-gray-500 italic p-4 text-sm">Memuat data...</div>
                 </div>
             </div>
 
+            <!-- KOLOM 2: Panel AI -->
             <div id="aiEditColumn" class="bg-gray-800 rounded-2xl border border-purple-500/40 flex-col overflow-hidden hidden slide-in-right" 
                  style="max-height: calc(100vh - 90px);">
                 <div class="px-4 py-3 border-b border-purple-500/20 flex justify-between items-center bg-purple-500/5">
@@ -247,6 +247,7 @@
                 </div>
             </div>
 
+            <!-- KOLOM 3: Preview + Scheduling -->
             <div id="rightColumn" class="space-y-4" style="max-height: calc(100vh - 90px); overflow-y: auto;">
                 
                 <div class="bg-gray-800 rounded-2xl border border-gray-700 p-4">
@@ -339,6 +340,50 @@
             </div>
         </div>
 
+        <!-- MODAL: RENAME -->
+        <div id="renameModal" class="fixed inset-0 bg-black/70 modal-backdrop z-50 hidden items-center justify-center p-4">
+            <div class="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-sm overflow-hidden">
+                <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                    <h3 class="font-bold text-white">✏️ Rename File</h3>
+                    <button onclick="closeRenameModal()" class="text-gray-400 hover:text-white">✕</button>
+                </div>
+                <div class="p-4 space-y-3">
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Nama Saat Ini</label>
+                        <input type="text" id="renameOldName" disabled 
+                               class="w-full bg-gray-900/50 border border-gray-600 rounded-lg p-2 text-sm text-gray-400 outline-none"/>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Nama Baru</label>
+                        <input type="text" id="renameNewName" placeholder="nama_baru.webm" 
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none focus:border-blue-500"
+                               onkeypress="if(event.key==='Enter') submitRename()"/>
+                        <p class="text-xs text-gray-500 mt-1">Ekstensi .webm akan otomatis ditambahkan jika belum ada.</p>
+                    </div>
+                    
+                    <div class="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
+                        <p class="text-xs text-amber-300">
+                            ⚠️ File akan <strong>didownload & diupload ulang</strong> dengan nama baru, lalu file lama dihapus.
+                        </p>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <button onclick="closeRenameModal()" 
+                                class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2.5 rounded-lg text-sm">
+                            Batal
+                        </button>
+                        <button onclick="submitRename()" 
+                                class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm">
+                            ✏️ Rename
+                        </button>
+                    </div>
+                    
+                    <div id="renameStatus" class="text-xs p-2 rounded-lg bg-gray-700/50 hidden text-center"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- MODAL: LOGIN MEDSOS -->
         <div id="loginModal" class="fixed inset-0 bg-black/70 modal-backdrop z-50 hidden items-center justify-center p-4">
             <div class="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-md overflow-hidden">
@@ -385,7 +430,7 @@
             </div>
         </div>
 
-        <!-- ==================== MODAL: KELOLA USER ==================== -->
+        <!-- MODAL: KELOLA USER -->
         <div id="userModal" class="fixed inset-0 bg-black/70 modal-backdrop z-50 hidden items-center justify-center p-4">
             <div class="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-md overflow-hidden">
                 <div class="p-4 border-b border-gray-700 flex justify-between items-center">
@@ -394,14 +439,12 @@
                 </div>
                 <div class="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
                     
-                    <!-- Info status user -->
                     <div id="userStatusInfo" class="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
                         <p class="text-xs text-emerald-300">
-                            <span id="userStatusText">💡 Belum ada user terdaftar. Tambah user untuk mengaktifkan login wajib.</span>
+                            <span id="userStatusText">💡 Belum ada user terdaftar.</span>
                         </p>
                     </div>
                     
-                    <!-- Daftar user terdaftar -->
                     <div>
                         <p class="text-xs font-medium text-gray-400 mb-2">✅ User Terdaftar:</p>
                         <div id="userList" class="space-y-2">
@@ -411,7 +454,6 @@
                     
                     <hr class="border-gray-700">
                     
-                    <!-- Form tambah user -->
                     <div>
                         <p class="text-xs font-medium text-gray-400 mb-2">➕ Tambah User Baru:</p>
                         <div class="space-y-3">
@@ -464,7 +506,6 @@
         const SESSION_KEY = 'app_user_session';
         const CURRENT_USER_KEY = 'app_current_user';
 
-        // Ambil semua user dari "database"
         function getUsers() {
             try {
                 const data = localStorage.getItem(USERS_KEY);
@@ -472,17 +513,14 @@
             } catch(e) { return []; }
         }
 
-        // Simpan users ke "database"
         function saveUsers(users) {
             localStorage.setItem(USERS_KEY, JSON.stringify(users));
         }
 
-        // Cek apakah ada user terdaftar
         function hasRegisteredUsers() {
             return getUsers().length > 0;
         }
 
-        // Cek session login
         function isLoggedIn() {
             return sessionStorage.getItem(SESSION_KEY) === 'true';
         }
@@ -492,11 +530,6 @@
             sessionStorage.setItem(CURRENT_USER_KEY, username);
         }
 
-        function getCurrentUser() {
-            return sessionStorage.getItem(CURRENT_USER_KEY) || 'Guest';
-        }
-
-        // Logout
         function logoutUser() {
             if (!confirm('Yakin ingin logout?')) return;
             sessionStorage.removeItem(SESSION_KEY);
@@ -510,23 +543,17 @@
             const msgEl = document.getElementById('loginGateMessage');
             const usernameWrap = document.getElementById('loginGateUsernameWrap');
             const passwordWrap = document.getElementById('loginGatePasswordWrap');
-            const passwordInput = document.getElementById('loginGatePassword');
-            const usernameInput = document.getElementById('loginGateUsername');
             const btnText = document.getElementById('loginGateBtnText');
             
             if (!hasRegisteredUsers()) {
-                // Belum ada user - mode "First Time"
                 msgEl.innerHTML = '👋 Selamat datang! Ini pertama kali Anda mengakses. Klik <strong>Masuk</strong> untuk melanjutkan.';
                 usernameWrap.classList.add('hidden');
                 passwordWrap.classList.add('hidden');
                 btnText.textContent = '🔓 Masuk (Guest)';
             } else {
-                // Sudah ada user - mode "Login"
                 msgEl.innerHTML = '🔐 Masukkan username & password untuk masuk';
                 usernameWrap.classList.remove('hidden');
                 passwordWrap.classList.remove('hidden');
-                usernameInput.placeholder = 'Username';
-                passwordInput.placeholder = 'Password';
                 btnText.textContent = '🔓 Masuk';
             }
             
@@ -535,7 +562,7 @@
             
             setTimeout(() => {
                 if (hasRegisteredUsers()) {
-                    usernameInput.focus();
+                    document.getElementById('loginGateUsername').focus();
                 }
             }, 300);
         }
@@ -557,14 +584,12 @@
             const users = getUsers();
             
             if (users.length === 0) {
-                // First time - langsung masuk sebagai Guest
                 setLoggedIn('Guest');
                 hideLoginGate();
                 showApp();
                 return;
             }
             
-            // Ada user - verifikasi
             const username = document.getElementById('loginGateUsername').value.trim();
             const password = document.getElementById('loginGatePassword').value;
             
@@ -577,12 +602,10 @@
             const user = users.find(u => u.username === username && u.password === password);
             
             if (user) {
-                // Login sukses
                 setLoggedIn(user.username);
                 hideLoginGate();
                 showApp();
             } else {
-                // Login gagal
                 errorEl.textContent = '❌ Username atau password salah!';
                 errorEl.classList.remove('hidden');
                 card.classList.add('shake');
@@ -593,14 +616,12 @@
 
         function showApp() {
             document.getElementById('appContainer').classList.remove('hidden');
-            
             loadFiles();
             updateLoginButton();
             updateUserButton();
             renderScheduleList();
         }
 
-        // ==================== CHECK LOGIN ON LOAD ====================
         window.addEventListener('DOMContentLoaded', function() {
             if (isLoggedIn()) {
                 showApp();
@@ -620,7 +641,6 @@
         function closeUserModal() {
             document.getElementById('userModal').classList.add('hidden');
             document.getElementById('userModal').classList.remove('flex');
-            // Reset form
             document.getElementById('newUserName').value = '';
             document.getElementById('newUserPassword').value = '';
             document.getElementById('newUserPasswordConfirm').value = '';
@@ -678,43 +698,20 @@
             
             statusDiv.classList.remove('hidden');
             
-            // Validasi
-            if (!username) {
-                statusDiv.innerHTML = '<span class="text-red-400">❌ Username wajib diisi</span>';
-                return;
-            }
+            if (!username) { statusDiv.innerHTML = '<span class="text-red-400">❌ Username wajib diisi</span>'; return; }
+            if (username.length < 3) { statusDiv.innerHTML = '<span class="text-red-400">❌ Username minimal 3 karakter</span>'; return; }
+            if (!password) { statusDiv.innerHTML = '<span class="text-red-400">❌ Password wajib diisi</span>'; return; }
+            if (password.length < 4) { statusDiv.innerHTML = '<span class="text-red-400">❌ Password minimal 4 karakter</span>'; return; }
+            if (password !== passwordConfirm) { statusDiv.innerHTML = '<span class="text-red-400">❌ Konfirmasi password tidak cocok</span>'; return; }
             
-            if (username.length < 3) {
-                statusDiv.innerHTML = '<span class="text-red-400">❌ Username minimal 3 karakter</span>';
-                return;
-            }
-            
-            if (!password) {
-                statusDiv.innerHTML = '<span class="text-red-400">❌ Password wajib diisi</span>';
-                return;
-            }
-            
-            if (password.length < 4) {
-                statusDiv.innerHTML = '<span class="text-red-400">❌ Password minimal 4 karakter</span>';
-                return;
-            }
-            
-            if (password !== passwordConfirm) {
-                statusDiv.innerHTML = '<span class="text-red-400">❌ Konfirmasi password tidak cocok</span>';
-                return;
-            }
-            
-            // Cek duplikat
             const users = getUsers();
             if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) {
                 statusDiv.innerHTML = '<span class="text-red-400">❌ Username sudah digunakan</span>';
                 return;
             }
             
-            // Simpan user baru
             users.push({
                 username: username,
-                // ⚠️ SIMULASI - di production WAJIB hash dengan bcrypt
                 password: password,
                 createdAt: new Date().toISOString(),
             });
@@ -722,7 +719,6 @@
             
             statusDiv.innerHTML = '<span class="text-green-400">✅ User berhasil ditambahkan!</span>';
             
-            // Reset form
             document.getElementById('newUserName').value = '';
             document.getElementById('newUserPassword').value = '';
             document.getElementById('newUserPasswordConfirm').value = '';
@@ -739,7 +735,7 @@
             const user = users[idx];
             if (!user) return;
             
-            if (!confirm(`Hapus user "${user.username}"?\n\nUser ini tidak akan bisa login lagi.`)) return;
+            if (!confirm(`Hapus user "${user.username}"?`)) return;
             
             users.splice(idx, 1);
             saveUsers(users);
@@ -768,6 +764,7 @@
         let checkedVideos = [];
         let videoSchedules = JSON.parse(localStorage.getItem('videoSchedules') || '[]');
         let connectedAccounts = JSON.parse(localStorage.getItem('connectedAccounts') || '[]');
+        let renamingFile = null;
 
         // ==================== LOAD FILES ====================
         async function loadFiles() {
@@ -834,7 +831,7 @@
             renderVideoList();
         }
 
-        // ==================== RENDER VIDEO LIST ====================
+        // ==================== RENDER VIDEO LIST (ONE LINE LAYOUT) ====================
         function renderVideoList() {
             const container = document.getElementById('videoListContainer');
             const countBadge = document.getElementById('videoCountBadge');
@@ -865,36 +862,44 @@
                     ? 'bg-green-500/20 text-green-400' 
                     : 'bg-blue-500/20 text-blue-400';
                 
+                // Layout compact: semua info dalam 1 baris
                 return `
                     <div class="video-list-item ${isSelected ? 'selected' : ''} ${isChecked ? 'checked' : ''} 
-                                bg-gray-700/20 border border-gray-700/40 rounded-lg p-2.5 cursor-pointer">
-                        <div class="flex items-center gap-2">
+                                bg-gray-700/20 border border-gray-700/40 rounded-lg px-2 py-1.5 cursor-pointer"
+                         title="${file.displayName}">
+                        <div class="flex items-center gap-2 text-xs">
                             ${canBeChecked ? `
                                 <input type="checkbox" class="checkbox-custom" 
                                        ${isChecked ? 'checked' : ''}
                                        onclick="event.stopPropagation(); toggleCheck('${file.unique_id}')"/>
                             ` : '<div class="w-[16px]"></div>'}
                             
-                            <div class="flex-1 min-w-0" onclick='selectVideoByUniqueId("${file.unique_id}")'>
-                                <div class="flex items-center gap-2">
-                                    <h4 class="text-sm font-medium text-white truncate flex-1 min-w-0">${file.displayName}</h4>
-                                    <span class="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">${sizeMB} MB</span>
-                                </div>
-                                <div class="flex items-center gap-2 mt-1">
-                                    <span class="text-xs px-1.5 py-0.5 rounded ${statusClass}">${statusText}</span>
-                                    ${file.total_chunks ? `<span class="text-xs text-gray-500">${file.total_chunks} bagian</span>` : ''}
-                                    ${scheduleCount > 0 ? `<span class="text-xs text-blue-400">📅 ${scheduleCount}</span>` : ''}
-                                </div>
+                            <div class="flex-1 min-w-0 flex items-center gap-2" onclick='selectVideoByUniqueId("${file.unique_id}")'>
+                                <span class="text-xs font-medium text-white truncate flex-1 min-w-0">${file.displayName}</span>
+                                <span class="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">${sizeMB} MB</span>
+                                <span class="text-xs px-1.5 py-0.5 rounded ${statusClass} whitespace-nowrap flex-shrink-0">${statusText}</span>
+                                ${file.total_chunks ? `<span class="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">•${file.total_chunks}</span>` : ''}
+                                ${scheduleCount > 0 ? `<span class="text-xs text-blue-400 whitespace-nowrap flex-shrink-0" title="${scheduleCount} jadwal">📅</span>` : ''}
                             </div>
                             
-                            <button onclick='event.stopPropagation(); deleteVideoByUniqueId("${file.unique_id}")' 
-                                    class="delete-btn text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/20 flex-shrink-0"
-                                    title="Hapus video">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                </svg>
-                            </button>
+                            <div class="flex items-center gap-0.5 flex-shrink-0">
+                                <button onclick='event.stopPropagation(); openRenameModal("${file.unique_id}")' 
+                                        class="action-btn text-yellow-400 hover:text-yellow-300 p-1 rounded hover:bg-yellow-500/20"
+                                        title="Rename">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                    </svg>
+                                </button>
+                                <button onclick='event.stopPropagation(); deleteVideoByUniqueId("${file.unique_id}")' 
+                                        class="action-btn text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/20"
+                                        title="Hapus">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -1140,6 +1145,90 @@
             const firstTimeout = setTimeout(firstLoadFinish, 8000);
             firstVideo.onloadeddata = () => { clearTimeout(firstTimeout); firstLoadFinish(); };
             firstVideo.onerror = () => { clearTimeout(firstTimeout); firstLoadFinish(); };
+        }
+
+        // ==================== RENAME ====================
+        function openRenameModal(uniqueId) {
+            const file = allFiles.find(f => f.unique_id === uniqueId);
+            if (!file) return;
+            
+            if (file.type === 'ai') {
+                alert('⚠️ File hasil AI tidak bisa di-rename (otomatis dari sistem).');
+                return;
+            }
+            
+            renamingFile = file;
+            
+            document.getElementById('renameModal').classList.remove('hidden');
+            document.getElementById('renameModal').classList.add('flex');
+            document.getElementById('renameOldName').value = file.displayName;
+            document.getElementById('renameNewName').value = file.displayName.replace('.webm', '');
+            document.getElementById('renameStatus').classList.add('hidden');
+            
+            setTimeout(() => document.getElementById('renameNewName').focus(), 200);
+        }
+
+        function closeRenameModal() {
+            document.getElementById('renameModal').classList.add('hidden');
+            document.getElementById('renameModal').classList.remove('flex');
+            renamingFile = null;
+        }
+
+        async function submitRename() {
+            if (!renamingFile) return;
+            
+            const newName = document.getElementById('renameNewName').value.trim();
+            const statusDiv = document.getElementById('renameStatus');
+            
+            if (!newName) {
+                statusDiv.classList.remove('hidden');
+                statusDiv.innerHTML = '<span class="text-red-400">❌ Nama baru wajib diisi</span>';
+                return;
+            }
+            
+            statusDiv.classList.remove('hidden');
+            statusDiv.innerHTML = '<span class="text-blue-400">🔄 Mengubah nama... Mohon tunggu.</span>';
+            
+            // Dapatkan URL & pathname lama
+            let old_url, old_pathname;
+            
+            if (renamingFile.is_single) {
+                old_url = renamingFile.url;
+                old_pathname = renamingFile.pathname;
+            } else if (renamingFile.chunks && renamingFile.chunks.length > 0) {
+                // Untuk file potongan, kita rename chunk pertama sebagai penanda
+                // dan sisanya tetap (atau bisa juga copy ulang semua)
+                old_url = renamingFile.chunks[0].url;
+                old_pathname = renamingFile.chunks[0].pathname;
+            } else {
+                statusDiv.innerHTML = '<span class="text-red-400">❌ Data file tidak lengkap</span>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/rename-file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        old_url: old_url,
+                        old_pathname: old_pathname,
+                        new_name: newName,
+                    })
+                });
+                
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                
+                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil di-rename!</span>';
+                
+                setTimeout(() => {
+                    closeRenameModal();
+                    loadFiles();
+                }, 1500);
+                
+            } catch (error) {
+                statusDiv.innerHTML = `<span class="text-red-400">❌ ${error.message}</span>`;
+            }
         }
 
         // ==================== DELETE VIDEO ====================

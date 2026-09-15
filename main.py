@@ -3,6 +3,7 @@ import time
 from flask import Flask, render_template, jsonify, request
 from vercel.blob import put
 import vercel_blob
+import requests
 
 app = Flask(__name__)
 
@@ -184,6 +185,65 @@ def delete_file():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# ==================== RENAME FILE ====================
+@app.route('/api/rename-file', methods=['POST'])
+def rename_file():
+    """
+    Rename file di Vercel Blob.
+    Karena Vercel Blob tidak support rename langsung,
+    kita download file lama, upload dengan nama baru, lalu hapus yang lama.
+    """
+    try:
+        data = request.json
+        old_url = data.get('old_url')
+        old_pathname = data.get('old_pathname')
+        new_name = data.get('new_name', '').strip()
+        
+        if not old_url or not old_pathname or not new_name:
+            return jsonify({'error': 'Data tidak lengkap'}), 400
+        
+        # Bersihkan nama baru (hilangkan karakter berbahaya)
+        import re
+        safe_name = re.sub(r'[^\w\s\-\.]', '', new_name)
+        
+        # Pastikan ekstensi .webm
+        if not safe_name.endswith('.webm'):
+            safe_name = safe_name + '.webm'
+        
+        # Sama dengan nama lama? Skip
+        if safe_name == old_pathname:
+            return jsonify({'success': True, 'message': 'Nama sama, tidak berubah'})
+        
+        # Download file lama
+        file_response = requests.get(old_url)
+        if file_response.status_code != 200:
+            return jsonify({'error': f'Gagal download file lama: {file_response.status_code}'}), 500
+        
+        file_content = file_response.content
+        
+        # Upload dengan nama baru
+        result = put(
+            safe_name,
+            file_content,
+            access='public',
+            multipart=True
+        )
+        
+        # Hapus file lama
+        vercel_blob.delete(old_url)
+        
+        return jsonify({
+            'success': True,
+            'new_url': result.url,
+            'new_pathname': result.pathname,
+            'new_filename': safe_name,
+        })
+    
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 # ==================== SUBMIT TO AI (SIMULASI) ====================
 @app.route('/api/submit-to-ai', methods=['POST'])
 def submit_to_ai():
@@ -195,16 +255,14 @@ def submit_to_ai():
         is_single = data.get('is_single', False)
         single_url = data.get('single_url', '')
         
-        import requests as req_lib
-        
         if is_single:
             ai_filename = f"ai_edit_single_{int(time.time())}.webm"
-            file_data = req_lib.get(single_url).content
+            file_data = requests.get(single_url).content
             result = put(ai_filename, file_data, access='public', multipart=True)
         else:
             ai_filename = f"ai_edit_{session_id}.webm"
             if chunks:
-                file_data = req_lib.get(chunks[0]['url']).content
+                file_data = requests.get(chunks[0]['url']).content
                 result = put(ai_filename, file_data, access='public', multipart=True)
             else:
                 return jsonify({'error': 'Tidak ada chunk'}), 400
