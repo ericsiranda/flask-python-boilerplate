@@ -202,7 +202,7 @@
                 </div>
             </div>
 
-            <!-- KOLOM 2: Panel AI (muncul saat ada centang) -->
+            <!-- KOLOM 2: Panel AI -->
             <div id="aiEditColumn" class="col-span-1 md:col-span-3 bg-gray-800 rounded-2xl border border-purple-500/40 flex-col overflow-hidden hidden slide-in-right" style="max-height: calc(100vh - 90px);">
                 <div class="px-4 py-3 border-b border-purple-500/20 flex justify-between items-center bg-purple-500/5 flex-shrink-0">
                     <h2 class="font-bold text-purple-400 text-sm flex items-center gap-2">
@@ -1349,46 +1349,110 @@
             });
         }
 
+        // ==================== CUT VIDEO (DENGAN AUDIO TERJAGA) ====================
         async function cutVideo(file, chunkDurationSec, onProgress) {
             return new Promise(async (resolve, reject) => {
                 try {
                     const video = document.createElement('video');
                     video.src = URL.createObjectURL(file);
-                    video.muted = true;
-                    video.volume = 0;
                     video.playsInline = true;
+                    // PENTING: Jangan set muted = true.
+                    // Kita akan pakai silentGain di Web Audio API untuk mencegah suara keluar
+                    video.muted = false;
+                    video.volume = 1.0;
+                    
                     await new Promise((res, rej) => {
                         video.onloadedmetadata = res;
                         video.onerror = () => rej(new Error('Gagal memuat video'));
                     });
+                    
                     const totalDuration = video.duration;
                     const chunks = [];
                     let chunkIndex = 0;
-                    const stream = video.captureStream();
+                    
+                    // Set up video stream dari video element
+                    const videoStream = video.captureStream();
+                    
+                    // Set up Web Audio API untuk audio track
                     let audioTrack = null;
+                    let audioCtx = null;
+                    let sourceNode = null;
+                    let destNode = null;
+                    let silentGain = null;
+                    
                     try {
-                        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                        const source = audioCtx.createMediaElementSource(video);
-                        const dest = audioCtx.createMediaStreamDestination();
-                        source.connect(dest);
-                        audioTrack = dest.stream.getAudioTracks()[0];
-                    } catch(e) {}
-                    const tracks = [...stream.getVideoTracks()];
-                    if (audioTrack) tracks.push(audioTrack);
-                    const outputStream = new MediaStream(tracks);
+                        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        
+                        // Resume AudioContext (beberapa browser butuh ini)
+                        if (audioCtx.state === 'suspended') {
+                            await audioCtx.resume();
+                        }
+                        
+                        // Source dari video
+                        sourceNode = audioCtx.createMediaElementSource(video);
+                        
+                        // Destination untuk capture (ini yang direkam)
+                        destNode = audioCtx.createMediaStreamDestination();
+                        
+                        // Silent gain untuk cegah suara keluar ke speaker
+                        silentGain = audioCtx.createGain();
+                        silentGain.gain.value = 0;
+                        
+                        // Routing:
+                        // 1. source → dest (untuk rekaman) ← INI YANG PENTING
+                        sourceNode.connect(destNode);
+                        
+                        // 2. source → silentGain → speaker (tidak ada suara keluar)
+                        sourceNode.connect(silentGain);
+                        silentGain.connect(audioCtx.destination);
+                        
+                        audioTrack = destNode.stream.getAudioTracks()[0];
+                        
+                        if (audioTrack) {
+                            console.log('✅ Audio track berhasil dibuat untuk rekaman');
+                        } else {
+                            console.warn('⚠️ Audio track kosong');
+                        }
+                    } catch(e) {
+                        console.warn('Audio setup gagal:', e);
+                    }
+                    
+                    // Gabungkan video track + audio track
+                    const videoTracks = videoStream.getVideoTracks();
+                    const combinedTracks = [...videoTracks];
+                    if (audioTrack) {
+                        combinedTracks.push(audioTrack);
+                    }
+                    
+                    const outputStream = new MediaStream(combinedTracks);
+                    
                     let mimeType = 'video/webm;codecs=vp8,opus';
-                    if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+                    if (!MediaRecorder.isTypeSupported(mimeType)) {
+                        mimeType = 'video/webm';
+                    }
+                    
                     const recorder = new MediaRecorder(outputStream, {
-                        mimeType: mimeType, videoBitsPerSecond: 5000000, audioBitsPerSecond: 128000,
+                        mimeType: mimeType,
+                        videoBitsPerSecond: 5000000,
+                        audioBitsPerSecond: 128000,
                     });
+                    
                     let currentChunkChunks = [];
-                    recorder.ondataavailable = (e) => { if (e.data.size > 0) currentChunkChunks.push(e.data); };
+                    
+                    recorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) currentChunkChunks.push(e.data);
+                    };
+                    
                     recorder.onstop = () => {
                         const blob = new Blob(currentChunkChunks, { type: 'video/webm' });
                         chunks.push(blob);
                         currentChunkChunks = [];
                         chunkIndex++;
-                        if (onProgress) onProgress(Math.min(100, (video.currentTime / totalDuration) * 100), chunkIndex);
+                        
+                        if (onProgress) {
+                            onProgress(Math.min(100, (video.currentTime / totalDuration) * 100), chunkIndex);
+                        }
+                        
                         if (!video.ended && video.currentTime < totalDuration) {
                             setTimeout(() => {
                                 if (!video.ended) {
@@ -1399,13 +1463,26 @@
                                 }
                             }, 100);
                         } else {
+                            // Selesai - cleanup
                             URL.revokeObjectURL(video.src);
+                            
+                            // Tutup AudioContext untuk free memory
+                            if (audioCtx && audioCtx.state !== 'closed') {
+                                audioCtx.close().catch(() => {});
+                            }
+                            
                             resolve(chunks);
                         }
                     };
+                    
+                    // Mulai playback dan rekam
                     video.play();
                     recorder.start();
-                    setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, chunkDurationSec * 1000);
+                    
+                    setTimeout(() => {
+                        if (recorder.state === 'recording') recorder.stop();
+                    }, chunkDurationSec * 1000);
+                    
                 } catch (err) { reject(err); }
             });
         }
