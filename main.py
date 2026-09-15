@@ -1,6 +1,6 @@
 import os
 import time
-import json
+import re
 import bcrypt
 import psycopg2
 import psycopg2.extras
@@ -13,12 +13,50 @@ import requests as req_lib
 app = Flask(__name__)
 
 # ==================== DATABASE CONNECTION ====================
-def get_db():
+def build_candidate_urls():
     """
-    Koneksi ke Supabase Postgres dengan logging verbose.
+    Bangun daftar kandidat URL koneksi dengan sanitasi.
+    Return: list of tuples (key_name, sanitized_url)
     """
-    import re
+    candidates = []
     
+    # ---- 1. Ambil komponen ----
+    password = None
+    host = None
+    user = None
+    
+    for key in os.environ.keys():
+        if 'POSTGRES_PASSWORD' in key and not password:
+            password = os.environ.get(key)
+        if 'POSTGRES_HOST' in key and not host:
+            host = os.environ.get(key)
+        if 'POSTGRES_USER' in key and not user:
+            user = os.environ.get(key)
+    
+    # ---- 2. BANGUN URL POOLER (paling mungkin berhasil di Vercel) ----
+    # Format: postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
+    if password and host:
+        # Cari ref dari host: db.<ref>.supabase.co
+        m = re.match(r'db\.([a-z0-9]+)\.supabase\.co', host)
+        if m:
+            ref = m.group(1)
+            
+            # Coba berbagai region pooler
+            # Pooler host format: aws-0-<region>.pooler.supabase.com
+            pooler_regions = [
+                'us-east-1',       # dari error sebelumnya
+                'ap-southeast-1',  # Singapore
+                'ap-southeast-2',  # Sydney
+                'us-west-1',
+            ]
+            
+            for region in pooler_regions:
+                pooler_host = f"aws-0-{region}.pooler.supabase.com"
+                # PENTING: user = postgres.<ref>, port = 6543
+                url = f"postgresql://postgres.{ref}:{password}@{pooler_host}:6543/postgres"
+                candidates.append((f'pooler_{region}', url))
+    
+    # ---- 3. Ambil dari env var langsung (sanitize) ----
     priority_keys = [
         'DB_URL',
         'DATABASE_URL',
@@ -28,41 +66,88 @@ def get_db():
         'POSTGRES_URL',
     ]
     
-    db_url = None
-    used_key = None
-    
     for key in priority_keys:
         val = os.environ.get(key)
         if val and val.startswith('postgres'):
-            db_url = val
-            used_key = key
-            break
+            sanitized = sanitize_db_url(val)
+            candidates.append((key, sanitized))
     
-    if not db_url:
-        for key in sorted(os.environ.keys()):
-            if ('POSTGRES_URL' in key or 'DATABASE_URL' in key) and 'PRISMA' not in key:
-                val = os.environ.get(key)
-                if val and val.startswith('postgres'):
-                    db_url = val
-                    used_key = key
-                    break
+    # ---- 4. Fallback: direct connection (IPv6, mungkin gagal) ----
+    if password and host:
+        m = re.match(r'db\.([a-z0-9]+)\.supabase\.co', host)
+        if m:
+            ref = m.group(1)
+            url = f"postgresql://postgres:{password}@db.{ref}.supabase.co:5432/postgres?sslmode=require"
+            candidates.append(('direct_ipv6', url))
     
-    if not db_url:
-        print("⚠️ Tidak ada URL database di environment")
+    return candidates
+
+
+def sanitize_db_url(url):
+    """
+    Bersihkan URL dari parameter yang tidak dikenal psycopg2.
+    """
+    # Ganti postgres:// → postgresql://
+    if url.startswith('postgres://'):
+        url = url.replace('postgres://', 'postgresql://', 1)
+    
+    # Hapus parameter 'supa' dan 'pgbouncer' (tidak dikenal psycopg2)
+    url = re.sub(r'[?&]supa=[^&]*', '', url)
+    url = re.sub(r'[?&]pgbouncer=[^&]*', '', url)
+    
+    # Bersihkan ?& atau && yang tersisa
+    url = url.replace('?&', '?').replace('&&', '&')
+    
+    # Hapus ? atau & di akhir
+    url = re.sub(r'[?&]$', '', url)
+    
+    # Pastikan sslmode=require
+    if 'sslmode=' not in url:
+        separator = '&' if '?' in url else '?'
+        url = f"{url}{separator}sslmode=require"
+    
+    return url
+
+
+def get_db():
+    """
+    Koneksi ke Supabase Postgres.
+    Coba semua kandidat URL sampai berhasil.
+    """
+    candidates = build_candidate_urls()
+    
+    if not candidates:
+        print("⚠️ Tidak ada kandidat URL database")
         return None
     
-    try:
-        print(f"DB: mencoba {used_key}...")
-        print(f"DB: URL preview: {db_url[:60]}...")
-        conn = psycopg2.connect(db_url, sslmode='require', connect_timeout=10)
-        print(f"DB: ✅ berhasil dengan {used_key}")
-        return conn
-    except psycopg2.OperationalError as e:
-        print(f"DB: ❌ OperationalError: {str(e)[:200]}")
-        return None
-    except Exception as e:
-        print(f"DB: ❌ {type(e).__name__}: {str(e)[:200]}")
-        return None
+    for key, url in candidates:
+        try:
+            print(f"DB: mencoba {key}...")
+            print(f"DB: URL: {url[:80]}...")
+            
+            # Koneksi dengan timeout
+            conn = psycopg2.connect(url, connect_timeout=10)
+            
+            # Test dengan query sederhana
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.fetchone()
+            cur.close()
+            
+            print(f"DB: ✅ BERHASIL dengan {key}")
+            return conn
+            
+        except psycopg2.OperationalError as e:
+            error_msg = str(e)[:150].replace('\n', ' ')
+            print(f"DB: ❌ {key} gagal: {error_msg}")
+            continue
+        except Exception as e:
+            error_msg = str(e)[:150].replace('\n', ' ')
+            print(f"DB: ❌ {key} error: {error_msg}")
+            continue
+    
+    print("DB: ⚠️ Semua kandidat gagal")
+    return None
 
 
 def init_tables():
@@ -131,8 +216,6 @@ def index():
 @app.route('/api/debug-db', methods=['GET'])
 def debug_db():
     """Debug: cek env var dan coba koneksi dengan error detail."""
-    import traceback
-    
     relevant_keys = []
     for key in sorted(os.environ.keys()):
         if 'POSTGRES' in key or 'DATABASE' in key or key == 'DB_URL':
@@ -141,27 +224,24 @@ def debug_db():
                 'key': key,
                 'has_value': bool(val),
                 'starts_with_postgres': val.startswith('postgres') if val else False,
-                'preview': (val[:60] + '...') if len(val) > 60 else val
             })
     
+    # Ambil kandidat URL
+    candidates = build_candidate_urls()
+    sanitized_candidates = []
+    for key, url in candidates:
+        # Sensor password
+        safe_url = re.sub(r':([^:@]+)@', ':***@', url)
+        sanitized_candidates.append({
+            'key': key,
+            'url_preview': safe_url[:100]
+        })
+    
+    # Coba setiap kandidat
     attempts = []
-    
-    priority_keys = [
-        'DB_URL',
-        'DATABASE_URL',
-        'SUPABASE_POSTGRES_URL_NON_POOLING',
-        'POSTGRES_URL_NON_POOLING',
-        'SUPABASE_POSTGRES_URL',
-        'POSTGRES_URL',
-    ]
-    
-    for key in priority_keys:
-        val = os.environ.get(key)
-        if not val or not val.startswith('postgres'):
-            continue
-        
+    for key, url in candidates:
         try:
-            conn = psycopg2.connect(val, sslmode='require', connect_timeout=10)
+            conn = psycopg2.connect(url, connect_timeout=10)
             cur = conn.cursor()
             cur.execute("SELECT version()")
             version = cur.fetchone()[0]
@@ -171,29 +251,31 @@ def debug_db():
             attempts.append({
                 'key': key,
                 'status': 'success',
-                'postgres_version': version[:80]
+                'postgres_version': version[:100]
             })
             
             return jsonify({
                 'env_vars': relevant_keys,
+                'candidates': sanitized_candidates,
                 'connection_attempts': attempts,
                 'connection': {
                     'status': 'success',
                     'used_key': key,
-                    'postgres_version': version[:80]
+                    'postgres_version': version[:100]
                 }
             })
-        
         except Exception as e:
+            error_msg = str(e)[:200].replace('\n', ' ')
             attempts.append({
                 'key': key,
                 'status': 'failed',
                 'error_type': type(e).__name__,
-                'error_message': str(e)[:250]
+                'error_message': error_msg
             })
     
     return jsonify({
         'env_vars': relevant_keys,
+        'candidates': sanitized_candidates,
         'connection_attempts': attempts,
         'connection': {
             'status': 'all_failed',
@@ -591,7 +673,6 @@ def rename_file():
         old_url, old_pathname, new_name = data.get('old_url'), data.get('old_pathname'), data.get('new_name', '').strip()
         if not old_url or not old_pathname or not new_name:
             return jsonify({'error': 'Data tidak lengkap'}), 400
-        import re
         safe_name = re.sub(r'[^\w\s\-\.]', '', new_name)
         if not safe_name.endswith('.webm'): safe_name += '.webm'
         if safe_name == old_pathname: return jsonify({'success': True})
