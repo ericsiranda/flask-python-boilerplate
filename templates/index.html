@@ -9,7 +9,6 @@
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
         
         .chunk-loading-pulse { animation: chunkPulse 1.5s ease-in-out infinite; }
         @keyframes chunkPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
@@ -39,20 +38,15 @@
             transition: all 0.2s;
             flex-shrink: 0;
         }
-        .checkbox-custom:checked {
-            background: #a855f7;
-            border-color: #a855f7;
-        }
+        .checkbox-custom:checked { background: #a855f7; border-color: #a855f7; }
         .checkbox-custom:checked::after {
             content: '✓';
             position: absolute;
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             color: white;
             font-size: 11px;
             font-weight: bold;
-            line-height: 1;
         }
         
         .slide-in-right { animation: slideInRight 0.3s ease-out; }
@@ -87,7 +81,7 @@
 </head>
 <body class="bg-gray-900 text-white min-h-screen font-sans">
 
-    <!-- ==================== LOGIN GATE ==================== -->
+    <!-- LOGIN GATE -->
     <div id="loginGate" class="fixed inset-0 bg-gray-900 z-[100] hidden items-center justify-center p-4 modal-backdrop">
         <div id="loginCard" class="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-sm overflow-hidden login-pop shadow-2xl">
             <div class="p-6 border-b border-gray-700 text-center">
@@ -101,7 +95,7 @@
             </div>
             
             <div class="p-6 space-y-4">
-                <div id="loginGateInfo" class="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-center">
+                <div class="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-center">
                     <p class="text-xs text-blue-300">
                         <span id="loginGateMessage">⏳ Memuat...</span>
                     </p>
@@ -134,7 +128,7 @@
         </div>
     </div>
 
-    <!-- ==================== APP CONTAINER ==================== -->
+    <!-- APP CONTAINER -->
     <div id="appContainer" class="hidden">
 
         <nav class="bg-gray-800 border-b border-gray-700 px-4 py-3 flex justify-between items-center sticky top-0 z-40">
@@ -151,14 +145,12 @@
             </div>
             <div class="flex items-center gap-2 flex-wrap">
                 <button onclick="openLoginModal()" 
-                        id="loginBtn"
                         class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-semibold py-2 px-3 rounded-lg flex items-center gap-2">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
                     <span id="loginBtnText" class="hidden sm:inline">Login Medsos</span>
                 </button>
                 
                 <button onclick="openUserModal()" 
-                        id="userBtn"
                         class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2 px-3 rounded-lg flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
@@ -377,7 +369,7 @@
                     <div>
                         <p class="text-xs font-medium text-gray-400 mb-2">✅ Akun Terhubung:</p>
                         <div id="connectedAccounts" class="space-y-2">
-                            <p class="text-xs text-gray-500 italic">Belum ada akun terhubung</p>
+                            <p class="text-xs text-gray-500 italic">Memuat...</p>
                         </div>
                     </div>
                     
@@ -423,7 +415,7 @@
                     
                     <div id="userStatusInfo" class="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
                         <p class="text-xs text-emerald-300">
-                            <span id="userStatusText">💡 Memuat...</span>
+                            <span id="userStatusText">⏳ Memuat...</span>
                         </p>
                     </div>
                     
@@ -463,7 +455,7 @@
                             
                             <div class="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
                                 <p class="text-xs text-amber-300">
-                                    💾 User disimpan di <strong>database server</strong> (Vercel KV).
+                                    💾 User disimpan di <strong>Supabase Postgres</strong>.
                                 </p>
                             </div>
                             
@@ -483,19 +475,17 @@
     </div>
 
     <script>
-        // ==================== USER MANAGEMENT (via API) ====================
+        // ==================== SESSION ====================
         const SESSION_KEY = 'app_user_session';
         const CURRENT_USER_KEY = 'app_current_user';
 
         function isLoggedIn() {
             return sessionStorage.getItem(SESSION_KEY) === 'true';
         }
-
         function setLoggedIn(username) {
             sessionStorage.setItem(SESSION_KEY, 'true');
             sessionStorage.setItem(CURRENT_USER_KEY, username);
         }
-
         function logoutUser() {
             if (!confirm('Yakin ingin logout?')) return;
             sessionStorage.removeItem(SESSION_KEY);
@@ -503,6 +493,7 @@
             location.reload();
         }
 
+        // ==================== USER API ====================
         async function fetchHasUsers() {
             try {
                 const res = await fetch('/api/users/has-any');
@@ -518,9 +509,7 @@
                 const res = await fetch('/api/users/list');
                 const data = await res.json();
                 return data.success ? data.users : [];
-            } catch(e) {
-                return [];
-            }
+            } catch(e) { return []; }
         }
 
         // ==================== LOGIN GATE ====================
@@ -535,7 +524,6 @@
             gate.classList.remove('hidden');
             gate.classList.add('flex');
             
-            // Default state
             msgEl.textContent = '⏳ Memeriksa database...';
             btn.disabled = true;
             btn.style.opacity = '0.5';
@@ -546,13 +534,13 @@
             btn.style.opacity = '1';
             
             if (!status.dbAvailable) {
-                msgEl.innerHTML = '⚠️ <strong>Database tidak tersedia.</strong> Hubungkan Vercel KV untuk mengaktifkan login.';
+                msgEl.innerHTML = '⚠️ <strong>Database tidak tersedia.</strong> Hubungkan Supabase untuk login.';
                 usernameWrap.classList.add('hidden');
                 passwordWrap.classList.add('hidden');
                 btnText.textContent = '🔓 Masuk (Offline)';
                 btn.dataset.mode = 'offline';
             } else if (!status.hasUsers) {
-                msgEl.innerHTML = '👋 <strong>Belum ada user terdaftar.</strong> Klik Masuk untuk mulai (mode guest).';
+                msgEl.innerHTML = '👋 <strong>Belum ada user terdaftar.</strong> Klik Masuk untuk mulai.';
                 usernameWrap.classList.add('hidden');
                 passwordWrap.classList.add('hidden');
                 btnText.textContent = '🔓 Masuk (Guest)';
@@ -563,15 +551,13 @@
                 passwordWrap.classList.remove('hidden');
                 btnText.textContent = '🔓 Masuk';
                 btn.dataset.mode = 'login';
-                
                 setTimeout(() => document.getElementById('loginGateUsername').focus(), 300);
             }
         }
 
         function hideLoginGate() {
-            const gate = document.getElementById('loginGate');
-            gate.classList.add('hidden');
-            gate.classList.remove('flex');
+            document.getElementById('loginGate').classList.add('hidden');
+            document.getElementById('loginGate').classList.remove('flex');
         }
 
         function toggleGatePassword() {
@@ -587,7 +573,6 @@
             
             errorEl.classList.add('hidden');
             
-            // Mode offline atau guest → langsung masuk
             if (mode === 'offline' || mode === 'guest') {
                 setLoggedIn('Guest');
                 hideLoginGate();
@@ -595,23 +580,12 @@
                 return;
             }
             
-            // Mode login → verifikasi ke API
             const username = document.getElementById('loginGateUsername').value.trim();
             const password = document.getElementById('loginGatePassword').value;
             
-            if (!username) {
-                errorEl.textContent = '❌ Username wajib diisi!';
-                errorEl.classList.remove('hidden');
-                return;
-            }
+            if (!username) { errorEl.textContent = '❌ Username wajib diisi!'; errorEl.classList.remove('hidden'); return; }
+            if (!password) { errorEl.textContent = '❌ Password wajib diisi!'; errorEl.classList.remove('hidden'); return; }
             
-            if (!password) {
-                errorEl.textContent = '❌ Password wajib diisi!';
-                errorEl.classList.remove('hidden');
-                return;
-            }
-            
-            // Disable button sementara
             btn.disabled = true;
             btn.style.opacity = '0.5';
             btn.querySelector('span').textContent = '⏳ Memverifikasi...';
@@ -622,7 +596,6 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
-                
                 const data = await res.json();
                 
                 if (res.ok && data.success) {
@@ -646,12 +619,12 @@
             }
         }
 
-        function showApp() {
+        async function showApp() {
             document.getElementById('appContainer').classList.remove('hidden');
-            loadFiles();
-            updateLoginButton();
-            updateUserButton();
-            renderScheduleList();
+            await loadFiles();
+            await updateUserButton();
+            await renderScheduleList();
+            await renderConnectedAccounts();
         }
 
         window.addEventListener('DOMContentLoaded', function() {
@@ -687,7 +660,6 @@
         async function refreshUserList() {
             const container = document.getElementById('userList');
             container.innerHTML = '<p class="text-xs text-gray-500 italic">Memuat...</p>';
-            
             const users = await fetchUsersList();
             
             if (users.length === 0) {
@@ -703,7 +675,7 @@
                         </div>
                         <div>
                             <p class="text-xs font-medium text-white">${u.username}</p>
-                            <p class="text-xs text-gray-400">Ditambahkan: ${u.createdAt ? new Date(u.createdAt).toLocaleDateString('id-ID') : '-'}</p>
+                            <p class="text-xs text-gray-400">${u.createdAt ? new Date(u.createdAt).toLocaleDateString('id-ID') : '-'}</p>
                         </div>
                     </div>
                     <button onclick='deleteUser("${u.username}")' class="text-xs text-red-400 hover:underline">Hapus</button>
@@ -714,18 +686,17 @@
         async function updateUserStatusInfo() {
             const textEl = document.getElementById('userStatusText');
             const infoEl = document.getElementById('userStatusInfo');
-            
             const status = await fetchHasUsers();
             
             if (!status.dbAvailable) {
                 infoEl.className = 'bg-red-500/10 border border-red-500/20 rounded-lg p-3';
-                textEl.innerHTML = '⚠️ <strong>Database tidak tersedia.</strong> Hubungkan Vercel KV di dashboard Vercel.';
+                textEl.innerHTML = '⚠️ Database tidak tersedia.';
             } else if (status.hasUsers) {
                 infoEl.className = 'bg-blue-500/10 border border-blue-500/20 rounded-lg p-3';
-                textEl.innerHTML = `🔒 <strong>${status.count} user terdaftar.</strong> Login <strong>wajib</strong> menggunakan username & password.`;
+                textEl.innerHTML = `🔒 ${status.count} user terdaftar. Login wajib password.`;
             } else {
                 infoEl.className = 'bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3';
-                textEl.innerHTML = '💡 Belum ada user. Login Gate akan <strong>bisa langsung masuk</strong> tanpa password.';
+                textEl.innerHTML = '💡 Belum ada user. Login bisa langsung masuk.';
             }
         }
 
@@ -737,13 +708,11 @@
             
             statusDiv.classList.remove('hidden');
             
-            if (!username) { statusDiv.innerHTML = '<span class="text-red-400">❌ Username wajib diisi</span>'; return; }
-            if (username.length < 3) { statusDiv.innerHTML = '<span class="text-red-400">❌ Username minimal 3 karakter</span>'; return; }
-            if (!password) { statusDiv.innerHTML = '<span class="text-red-400">❌ Password wajib diisi</span>'; return; }
-            if (password.length < 4) { statusDiv.innerHTML = '<span class="text-red-400">❌ Password minimal 4 karakter</span>'; return; }
+            if (!username || username.length < 3) { statusDiv.innerHTML = '<span class="text-red-400">❌ Username minimal 3 karakter</span>'; return; }
+            if (!password || password.length < 4) { statusDiv.innerHTML = '<span class="text-red-400">❌ Password minimal 4 karakter</span>'; return; }
             if (password !== passwordConfirm) { statusDiv.innerHTML = '<span class="text-red-400">❌ Konfirmasi password tidak cocok</span>'; return; }
             
-            statusDiv.innerHTML = '<span class="text-blue-400">💾 Menyimpan ke database...</span>';
+            statusDiv.innerHTML = '<span class="text-blue-400">💾 Menyimpan...</span>';
             
             try {
                 const res = await fetch('/api/users/add', {
@@ -751,23 +720,19 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
-                
                 const data = await res.json();
                 
                 if (res.ok && data.success) {
-                    statusDiv.innerHTML = '<span class="text-green-400">✅ User berhasil ditambahkan ke database!</span>';
-                    
+                    statusDiv.innerHTML = '<span class="text-green-400">✅ User berhasil ditambahkan!</span>';
                     document.getElementById('newUserName').value = '';
                     document.getElementById('newUserPassword').value = '';
                     document.getElementById('newUserPasswordConfirm').value = '';
-                    
                     await refreshUserList();
                     await updateUserStatusInfo();
                     await updateUserButton();
-                    
                     setTimeout(() => statusDiv.classList.add('hidden'), 3000);
                 } else {
-                    statusDiv.innerHTML = `<span class="text-red-400">❌ ${data.error || 'Gagal menambah user'}</span>`;
+                    statusDiv.innerHTML = `<span class="text-red-400">❌ ${data.error}</span>`;
                 }
             } catch(e) {
                 statusDiv.innerHTML = `<span class="text-red-400">❌ Error: ${e.message}</span>`;
@@ -775,38 +740,28 @@
         }
 
         async function deleteUser(username) {
-            if (!confirm(`Hapus user "${username}"?\n\nUser tidak akan bisa login lagi.`)) return;
-            
+            if (!confirm(`Hapus user "${username}"?`)) return;
             try {
                 const res = await fetch('/api/users/delete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username })
                 });
-                
                 const data = await res.json();
-                
                 if (res.ok && data.success) {
                     await refreshUserList();
                     await updateUserStatusInfo();
                     await updateUserButton();
                 } else {
-                    alert('❌ ' + (data.error || 'Gagal menghapus'));
+                    alert('❌ ' + (data.error || 'Gagal'));
                 }
-            } catch(e) {
-                alert('❌ Error: ' + e.message);
-            }
+            } catch(e) { alert('❌ ' + e.message); }
         }
 
         async function updateUserButton() {
             const btnText = document.getElementById('userBtnText');
             const status = await fetchHasUsers();
-            
-            if (status.count > 0) {
-                btnText.textContent = `Kelola User (${status.count})`;
-            } else {
-                btnText.textContent = 'Kelola User';
-            }
+            btnText.textContent = status.count > 0 ? `Kelola User (${status.count})` : 'Kelola User';
         }
 
         // ==================== GLOBAL STATE ====================
@@ -815,8 +770,6 @@
         let currentFilter = 'all';
         let selectedVideo = null;
         let checkedVideos = [];
-        let videoSchedules = JSON.parse(localStorage.getItem('videoSchedules') || '[]');
-        let connectedAccounts = JSON.parse(localStorage.getItem('connectedAccounts') || '[]');
         let renamingFile = null;
 
         // ==================== LOAD FILES ====================
@@ -827,25 +780,19 @@
             try {
                 const response = await fetch('/api/list-files-grouped');
                 const data = await response.json();
-                
                 if (!response.ok) throw new Error(data.error || 'Gagal');
                 
                 allFiles = [];
-                
                 data.files.forEach(function(file) {
                     allFiles.push({
-                        ...file,
-                        type: 'raw',
+                        ...file, type: 'raw',
                         displayName: file.is_single ? file.pathname : file.pathname.replace('.webm', ''),
                         displayStatus: 'Mentah',
                         unique_id: `raw_${file.session_id || file.pathname}`,
                     });
-                    
                     if (file.ai_result) {
                         allFiles.push({
-                            ...file,
-                            type: 'ai',
-                            url: file.ai_result.url,
+                            ...file, type: 'ai', url: file.ai_result.url,
                             displayName: `AI: ${file.pathname.replace('.webm', '')}`,
                             displayStatus: 'AI',
                             ai_timestamp: file.ai_result.uploadedAt || new Date().toISOString(),
@@ -853,43 +800,31 @@
                         });
                     }
                 });
-                
                 applyFilter();
-                populateVideoDropdown();
+                await populateVideoDropdown();
             } catch (error) {
                 container.innerHTML = `<div class="text-center text-red-400 italic p-4 text-sm">Error: ${error.message}</div>`;
             }
         }
 
-        // ==================== FILTER ====================
         function setFilter(filter) {
             currentFilter = filter;
             ['all', 'raw', 'ai'].forEach(f => {
                 const btn = document.getElementById(`filter-${f}`);
-                if (f === filter) {
-                    btn.className = 'flex-1 py-2 px-3 text-blue-400 border-b-2 border-blue-400 font-medium';
-                } else {
-                    btn.className = 'flex-1 py-2 px-3 text-gray-400 hover:text-white';
-                }
+                if (f === filter) btn.className = 'flex-1 py-2 px-3 text-blue-400 border-b-2 border-blue-400 font-medium';
+                else btn.className = 'flex-1 py-2 px-3 text-gray-400 hover:text-white';
             });
             applyFilter();
         }
 
         function applyFilter() {
-            if (currentFilter === 'all') {
-                filteredFiles = allFiles;
-            } else {
-                filteredFiles = allFiles.filter(f => f.type === currentFilter);
-            }
+            filteredFiles = currentFilter === 'all' ? allFiles : allFiles.filter(f => f.type === currentFilter);
             renderVideoList();
         }
 
-        // ==================== RENDER VIDEO LIST ====================
         function renderVideoList() {
             const container = document.getElementById('videoListContainer');
-            const countBadge = document.getElementById('videoCountBadge');
-            
-            countBadge.textContent = filteredFiles.length;
+            document.getElementById('videoCountBadge').textContent = filteredFiles.length;
             
             if (filteredFiles.length === 0) {
                 container.innerHTML = '<div class="text-center text-gray-500 italic p-4 text-sm">Belum ada video.</div>';
@@ -897,7 +832,6 @@
             }
             
             container.innerHTML = filteredFiles.map((file) => {
-                const scheduleCount = videoSchedules.filter(s => s.session_id === file.session_id).length;
                 const sizeMB = (file.size / 1024 / 1024).toFixed(2);
                 const isSelected = selectedVideo && selectedVideo.unique_id === file.unique_id;
                 const isChecked = checkedVideos.some(v => v.unique_id === file.unique_id);
@@ -910,10 +844,7 @@
                         statusText = `AI • ${d.toLocaleDateString('id-ID', {day: '2-digit', month: 'short'})}`;
                     } catch(e) { statusText = 'AI'; }
                 }
-                
-                const statusClass = file.type === 'ai' 
-                    ? 'bg-green-500/20 text-green-400' 
-                    : 'bg-blue-500/20 text-blue-400';
+                const statusClass = file.type === 'ai' ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400';
                 
                 return `
                     <div class="video-list-item ${isSelected ? 'selected' : ''} ${isChecked ? 'checked' : ''} 
@@ -931,21 +862,18 @@
                                 <span class="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">${sizeMB} MB</span>
                                 <span class="text-xs px-1.5 py-0.5 rounded ${statusClass} whitespace-nowrap flex-shrink-0">${statusText}</span>
                                 ${file.total_chunks ? `<span class="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">•${file.total_chunks}</span>` : ''}
-                                ${scheduleCount > 0 ? `<span class="text-xs text-blue-400 whitespace-nowrap flex-shrink-0">📅</span>` : ''}
                             </div>
                             
                             <div class="flex items-center gap-0.5 flex-shrink-0">
                                 <button onclick='event.stopPropagation(); openRenameModal("${file.unique_id}")' 
-                                        class="action-btn text-yellow-400 hover:text-yellow-300 p-1 rounded hover:bg-yellow-500/20"
-                                        title="Rename">
+                                        class="action-btn text-yellow-400 hover:text-yellow-300 p-1 rounded hover:bg-yellow-500/20" title="Rename">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                                               d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                     </svg>
                                 </button>
                                 <button onclick='event.stopPropagation(); deleteVideoByUniqueId("${file.unique_id}")' 
-                                        class="action-btn text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/20"
-                                        title="Hapus">
+                                        class="action-btn text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/20" title="Hapus">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                                               d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -958,11 +886,9 @@
             }).join('');
         }
 
-        // ==================== GRID LAYOUT ====================
         function updateGridLayout() {
             const mainGrid = document.getElementById('mainGrid');
             const aiColumn = document.getElementById('aiEditColumn');
-            
             if (checkedVideos.length > 0) {
                 mainGrid.style.gridTemplateColumns = '3fr 3fr 6fr';
                 aiColumn.classList.remove('hidden');
@@ -974,18 +900,12 @@
             }
         }
 
-        // ==================== CHECK VIDEO ====================
         function toggleCheck(uniqueId) {
             const file = allFiles.find(f => f.unique_id === uniqueId);
             if (!file || file.type !== 'raw') return;
-            
             const idx = checkedVideos.findIndex(v => v.unique_id === uniqueId);
-            if (idx >= 0) {
-                checkedVideos.splice(idx, 1);
-            } else {
-                checkedVideos.push(file);
-            }
-            
+            if (idx >= 0) checkedVideos.splice(idx, 1);
+            else checkedVideos.push(file);
             updateCheckedUI();
             renderVideoList();
             updateGridLayout();
@@ -1001,11 +921,8 @@
         function updateCheckedUI() {
             const countBadge = document.getElementById('checkedCountBadge');
             const listEl = document.getElementById('checkedVideosList');
-            
             if (checkedVideos.length === 0) return;
-            
             countBadge.textContent = checkedVideos.length;
-            
             listEl.innerHTML = checkedVideos.map(v => `
                 <div class="flex items-center gap-2">
                     <span class="text-purple-400">•</span>
@@ -1015,24 +932,19 @@
             `).join('');
         }
 
-        // ==================== SELECT VIDEO ====================
         function selectVideoByUniqueId(uniqueId) {
             const file = allFiles.find(f => f.unique_id === uniqueId);
             if (!file) return;
-            
             selectedVideo = file;
             renderVideoList();
             showPreview(file);
-            
             const badge = document.getElementById('previewBadge');
             badge.className = `text-xs px-2 py-1 rounded-full ${file.type === 'ai' ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'}`;
             badge.textContent = file.type === 'ai' ? '✅ Hasil AI' : '📹 Video Mentah';
         }
 
-        // ==================== SHOW PREVIEW ====================
         function showPreview(file) {
             const container = document.getElementById('rawVideoContainer');
-            
             if (!file.is_single && file.type === 'raw' && file.chunks) {
                 previewGrouped(file.chunks, container);
             } else {
@@ -1043,7 +955,6 @@
             }
         }
 
-        // ==================== PREVIEW GROUPED ====================
         function previewGrouped(chunks, container) {
             const chunkStatus = chunks.map(() => 'pending');
             
@@ -1053,8 +964,7 @@
                         <video id="groupedVideo" controls playsinline preload="auto" 
                                class="w-full h-full object-contain bg-black" style="min-height: 200px;"></video>
                         
-                        <div id="firstLoadOverlay" 
-                             class="absolute inset-0 bg-gray-900/95 flex flex-col items-center justify-center p-4 z-10">
+                        <div id="firstLoadOverlay" class="absolute inset-0 bg-gray-900/95 flex flex-col items-center justify-center p-4 z-10">
                             <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500/30 border-t-blue-500 mb-4"></div>
                             <div class="bg-yellow-500/20 border border-yellow-500/40 rounded-lg p-3 max-w-xs flex items-start gap-2 mb-3">
                                 <svg class="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
@@ -1091,7 +1001,6 @@
             
             let currentIndex = 0;
             let loadedCount = 0;
-            
             video.controls = true;
             
             const updateLoadedProgress = () => {
@@ -1102,12 +1011,10 @@
             const preloadOneChunk = (index) => {
                 if (chunkStatus[index] === 'ready' || chunkStatus[index] === 'loading') return;
                 chunkStatus[index] = 'loading';
-                
                 const tempVideo = document.createElement('video');
                 tempVideo.preload = 'auto';
                 tempVideo.muted = true;
                 tempVideo.src = chunks[index].url;
-                
                 const finish = () => {
                     if (chunkStatus[index] !== 'ready') {
                         chunkStatus[index] = 'ready';
@@ -1115,7 +1022,6 @@
                         updateLoadedProgress();
                     }
                 };
-                
                 const timeout = setTimeout(finish, 10000);
                 tempVideo.onloadeddata = () => { clearTimeout(timeout); finish(); };
                 tempVideo.onerror = () => { clearTimeout(timeout); finish(); };
@@ -1132,7 +1038,7 @@
                 video.src = chunks[index].url;
                 video.load();
                 video.onloadedmetadata = () => { video.controls = true; };
-                video.play().catch(e => console.warn('Autoplay diblokir:', e));
+                video.play().catch(e => console.warn('Autoplay:', e));
             };
             
             const playChunk = (index) => {
@@ -1141,14 +1047,11 @@
                     statusIndicator.classList.add('hidden');
                     return;
                 }
-                
                 currentIndex = index;
                 currentChunkLabel.textContent = index + 1;
-                
                 if (chunkStatus[index] !== 'ready') {
                     statusIndicator.classList.remove('hidden');
                     statusIndicator.textContent = `⏳ Memuat potongan ${index + 1}...`;
-                    
                     const waitForReady = setInterval(() => {
                         if (chunkStatus[index] === 'ready') {
                             clearInterval(waitForReady);
@@ -1163,9 +1066,7 @@
             };
             
             video.addEventListener('ended', () => {
-                if (currentIndex + 1 < chunks.length) {
-                    playChunk(currentIndex + 1);
-                }
+                if (currentIndex + 1 < chunks.length) playChunk(currentIndex + 1);
             });
             
             const hideFirstOverlay = () => {
@@ -1184,7 +1085,6 @@
             firstVideo.preload = 'auto';
             firstVideo.muted = true;
             firstVideo.src = chunks[0].url;
-            
             const firstLoadFinish = () => {
                 if (chunkStatus[0] !== 'ready') {
                     chunkStatus[0] = 'ready';
@@ -1193,7 +1093,6 @@
                     hideFirstOverlay();
                 }
             };
-            
             const firstTimeout = setTimeout(firstLoadFinish, 8000);
             firstVideo.onloadeddata = () => { clearTimeout(firstTimeout); firstLoadFinish(); };
             firstVideo.onerror = () => { clearTimeout(firstTimeout); firstLoadFinish(); };
@@ -1203,20 +1102,13 @@
         function openRenameModal(uniqueId) {
             const file = allFiles.find(f => f.unique_id === uniqueId);
             if (!file) return;
-            
-            if (file.type === 'ai') {
-                alert('⚠️ File hasil AI tidak bisa di-rename.');
-                return;
-            }
-            
+            if (file.type === 'ai') { alert('⚠️ File hasil AI tidak bisa di-rename.'); return; }
             renamingFile = file;
-            
             document.getElementById('renameModal').classList.remove('hidden');
             document.getElementById('renameModal').classList.add('flex');
             document.getElementById('renameOldName').value = file.displayName;
             document.getElementById('renameNewName').value = file.displayName.replace('.webm', '');
             document.getElementById('renameStatus').classList.add('hidden');
-            
             setTimeout(() => document.getElementById('renameNewName').focus(), 200);
         }
 
@@ -1228,21 +1120,17 @@
 
         async function submitRename() {
             if (!renamingFile) return;
-            
             const newName = document.getElementById('renameNewName').value.trim();
             const statusDiv = document.getElementById('renameStatus');
-            
             if (!newName) {
                 statusDiv.classList.remove('hidden');
-                statusDiv.innerHTML = '<span class="text-red-400">❌ Nama baru wajib diisi</span>';
+                statusDiv.innerHTML = '<span class="text-red-400">❌ Nama wajib</span>';
                 return;
             }
-            
             statusDiv.classList.remove('hidden');
-            statusDiv.innerHTML = '<span class="text-blue-400">🔄 Mengubah nama...</span>';
+            statusDiv.innerHTML = '<span class="text-blue-400">🔄 Rename...</span>';
             
             let old_url, old_pathname;
-            
             if (renamingFile.is_single) {
                 old_url = renamingFile.url;
                 old_pathname = renamingFile.pathname;
@@ -1250,7 +1138,7 @@
                 old_url = renamingFile.chunks[0].url;
                 old_pathname = renamingFile.chunks[0].pathname;
             } else {
-                statusDiv.innerHTML = '<span class="text-red-400">❌ Data file tidak lengkap</span>';
+                statusDiv.innerHTML = '<span class="text-red-400">❌ Data tidak lengkap</span>';
                 return;
             }
             
@@ -1258,23 +1146,12 @@
                 const response = await fetch('/api/rename-file', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        old_url: old_url,
-                        old_pathname: old_pathname,
-                        new_name: newName,
-                    })
+                    body: JSON.stringify({ old_url, old_pathname, new_name: newName })
                 });
-                
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
-                
-                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil di-rename!</span>';
-                
-                setTimeout(() => {
-                    closeRenameModal();
-                    loadFiles();
-                }, 1500);
-                
+                statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil!</span>';
+                setTimeout(() => { closeRenameModal(); loadFiles(); }, 1500);
             } catch (error) {
                 statusDiv.innerHTML = `<span class="text-red-400">❌ ${error.message}</span>`;
             }
@@ -1284,17 +1161,15 @@
         async function deleteVideoByUniqueId(uniqueId) {
             const file = allFiles.find(f => f.unique_id === uniqueId);
             if (!file) return;
-            
             if (!confirm(`Yakin ingin menghapus "${file.displayName}"?`)) return;
             
             try {
                 if (file.is_single || file.type === 'ai') {
-                    const response = await fetch('/api/delete-file', {
+                    await fetch('/api/delete-file', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ url: file.url })
                     });
-                    if (!response.ok) throw new Error('Gagal hapus');
                 } else if (file.chunks) {
                     for (const chunk of file.chunks) {
                         await fetch('/api/delete-file', {
@@ -1304,12 +1179,7 @@
                         });
                     }
                 }
-                
-                videoSchedules = videoSchedules.filter(s => s.session_id !== file.session_id);
-                localStorage.setItem('videoSchedules', JSON.stringify(videoSchedules));
-                
                 checkedVideos = checkedVideos.filter(v => v.unique_id !== uniqueId);
-                
                 if (selectedVideo && selectedVideo.unique_id === uniqueId) {
                     selectedVideo = null;
                     document.getElementById('rawVideoContainer').innerHTML = `
@@ -1318,18 +1188,16 @@
                     document.getElementById('previewBadge').className = 'text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-400';
                     document.getElementById('previewBadge').textContent = 'Belum ada video';
                 }
-                
                 updateCheckedUI();
                 updateGridLayout();
-                renderScheduleList();
+                await renderScheduleList();
                 loadFiles();
-                
             } catch (error) {
                 alert(`❌ Gagal hapus: ${error.message}`);
             }
         }
 
-        // ==================== UPLOAD MODAL ====================
+        // ==================== UPLOAD ====================
         function openUploadModal() {
             document.getElementById('uploadModal').classList.remove('hidden');
             document.getElementById('uploadModal').classList.add('flex');
@@ -1348,9 +1216,7 @@
         function checkAndUpload() {
             const file = document.getElementById('uploadInput').files[0];
             if (!file) { alert('Pilih file dulu!'); return; }
-            
             const sizeMB = file.size / 1024 / 1024;
-            
             if (sizeMB > 4.5) {
                 document.getElementById('uploadMethodChoice').classList.remove('hidden');
                 document.getElementById('uploadDirectBtn').classList.add('hidden');
@@ -1377,27 +1243,22 @@
                     statusDiv.innerHTML = '<span class="text-blue-400">🗜️ Mengompres...</span>';
                     const compressedBlob = await compressVideo(file, (percent) => {
                         progressBar.style.width = (percent * 0.5).toFixed(0) + '%';
-                        statusDiv.innerHTML = `<span class="text-blue-400">🗜️ Kompresi ${percent.toFixed(0)}%</span>`;
+                        statusDiv.innerHTML = `<span class="text-blue-400">🗜️ ${percent.toFixed(0)}%</span>`;
                     });
-                    
                     const compressedSizeMB = compressedBlob.size / 1024 / 1024;
                     if (compressedSizeMB > 4) {
                         statusDiv.innerHTML = `<span class="text-red-400">❌ Hasil ${compressedSizeMB.toFixed(2)} MB. Coba "Potong".</span>`;
                         return;
                     }
-                    
                     const newFile = new File([compressedBlob], file.name.replace(/\.[^.]+$/, '.webm'), { type: 'video/webm' });
                     await uploadSingleFile(newFile);
-                    
                 } else if (method === 'cut') {
-                    statusDiv.innerHTML = '<span class="text-purple-400">✂️ Memotong... (muted)</span>';
+                    statusDiv.innerHTML = '<span class="text-purple-400">✂️ Memotong...</span>';
                     const sessionId = Date.now().toString(36);
-                    
                     const chunks = await cutVideo(file, 10, (percent, idx) => {
                         progressBar.style.width = (percent * 0.5).toFixed(0) + '%';
-                        statusDiv.innerHTML = `<span class="text-purple-400">✂️ Memotong ${percent.toFixed(0)}% (bagian ${idx})</span>`;
+                        statusDiv.innerHTML = `<span class="text-purple-400">✂️ ${percent.toFixed(0)}% (bagian ${idx})</span>`;
                     });
-                    
                     let uploadedCount = 0;
                     for (let i = 0; i < chunks.length; i++) {
                         const chunkFile = new File([chunks[i]], `cut_${sessionId}_${i}.webm`, { type: 'video/webm' });
@@ -1405,19 +1266,16 @@
                         formData.append('video', chunkFile);
                         formData.append('session_id', sessionId);
                         formData.append('chunk_index', i);
-                        
                         await fetch('/api/upload-chunk', { method: 'POST', body: formData });
                         uploadedCount++;
                         progressBar.style.width = (50 + (uploadedCount / chunks.length) * 50).toFixed(0) + '%';
                         statusDiv.innerHTML = `<span class="text-blue-400">📤 Upload ${uploadedCount}/${chunks.length}</span>`;
                     }
-                    
                     await fetch('/api/finalize-cut', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ session_id: sessionId, total_chunks: chunks.length })
                     });
-                    
                 } else {
                     await uploadSingleFile(file);
                 }
@@ -1425,12 +1283,7 @@
                 progressBar.style.width = '100%';
                 progressBar.style.background = '#10b981';
                 statusDiv.innerHTML = '<span class="text-green-400">✅ Berhasil!</span>';
-                
-                setTimeout(() => {
-                    closeUploadModal();
-                    loadFiles();
-                }, 1500);
-                
+                setTimeout(() => { closeUploadModal(); loadFiles(); }, 1500);
             } catch (error) {
                 statusDiv.innerHTML = `<span class="text-red-400">❌ ${error.message}</span>`;
             }
@@ -1444,7 +1297,6 @@
             if (!response.ok) throw new Error(data.error);
         }
 
-        // ==================== KOMPRES ====================
         async function compressVideo(file, onProgress) {
             return new Promise(async (resolve, reject) => {
                 try {
@@ -1452,19 +1304,16 @@
                     video.src = URL.createObjectURL(file);
                     video.muted = true;
                     video.playsInline = true;
-                    
                     await new Promise((res, rej) => {
                         video.onloadedmetadata = res;
                         video.onerror = () => rej(new Error('Gagal memuat video'));
                     });
-
                     const canvas = document.createElement('canvas');
                     const targetWidth = 480;
                     const scale = Math.min(1, targetWidth / video.videoWidth);
                     canvas.width = Math.round(video.videoWidth * scale);
                     canvas.height = Math.round(video.videoHeight * scale);
                     const ctx = canvas.getContext('2d');
-
                     const canvasStream = canvas.captureStream(20);
                     let audioTrack = null;
                     try {
@@ -1474,20 +1323,14 @@
                         source.connect(dest);
                         audioTrack = dest.stream.getAudioTracks()[0];
                     } catch(e) {}
-
                     const tracks = [...canvasStream.getVideoTracks()];
                     if (audioTrack) tracks.push(audioTrack);
                     const outputStream = new MediaStream(tracks);
-                    
                     let mimeType = 'video/webm;codecs=vp8,opus';
                     if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
-
                     const recorder = new MediaRecorder(outputStream, {
-                        mimeType: mimeType,
-                        videoBitsPerSecond: 400000,
-                        audioBitsPerSecond: 64000,
+                        mimeType: mimeType, videoBitsPerSecond: 400000, audioBitsPerSecond: 64000,
                     });
-
                     const chunks = [];
                     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
                     recorder.onstop = () => {
@@ -1495,21 +1338,15 @@
                         URL.revokeObjectURL(video.src);
                         resolve(blob);
                     };
-
                     video.play();
                     recorder.start(1000);
-
                     const drawFrame = () => {
                         if (video.paused || video.ended) {
-                            setTimeout(() => {
-                                if (recorder.state !== 'inactive') recorder.stop();
-                            }, 500);
+                            setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, 500);
                             return;
                         }
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        if (onProgress && video.duration) {
-                            onProgress((video.currentTime / video.duration) * 100);
-                        }
+                        if (onProgress && video.duration) onProgress((video.currentTime / video.duration) * 100);
                         requestAnimationFrame(drawFrame);
                     };
                     drawFrame();
@@ -1517,7 +1354,6 @@
             });
         }
 
-        // ==================== POTONG ====================
         async function cutVideo(file, chunkDurationSec, onProgress) {
             return new Promise(async (resolve, reject) => {
                 try {
@@ -1526,17 +1362,14 @@
                     video.muted = true;
                     video.volume = 0;
                     video.playsInline = true;
-                    
                     await new Promise((res, rej) => {
                         video.onloadedmetadata = res;
                         video.onerror = () => rej(new Error('Gagal memuat video'));
                     });
-
                     const totalDuration = video.duration;
                     const chunks = [];
                     let chunkIndex = 0;
                     const stream = video.captureStream();
-                    
                     let audioTrack = null;
                     try {
                         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1545,31 +1378,22 @@
                         source.connect(dest);
                         audioTrack = dest.stream.getAudioTracks()[0];
                     } catch(e) {}
-
                     const tracks = [...stream.getVideoTracks()];
                     if (audioTrack) tracks.push(audioTrack);
                     const outputStream = new MediaStream(tracks);
-                    
                     let mimeType = 'video/webm;codecs=vp8,opus';
                     if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
-
                     const recorder = new MediaRecorder(outputStream, {
-                        mimeType: mimeType,
-                        videoBitsPerSecond: 5000000,
-                        audioBitsPerSecond: 128000,
+                        mimeType: mimeType, videoBitsPerSecond: 5000000, audioBitsPerSecond: 128000,
                     });
-
                     let currentChunkChunks = [];
                     recorder.ondataavailable = (e) => { if (e.data.size > 0) currentChunkChunks.push(e.data); };
-                    
                     recorder.onstop = () => {
                         const blob = new Blob(currentChunkChunks, { type: 'video/webm' });
                         chunks.push(blob);
                         currentChunkChunks = [];
                         chunkIndex++;
-                        
                         if (onProgress) onProgress(Math.min(100, (video.currentTime / totalDuration) * 100), chunkIndex);
-                        
                         if (!video.ended && video.currentTime < totalDuration) {
                             setTimeout(() => {
                                 if (!video.ended) {
@@ -1584,50 +1408,23 @@
                             resolve(chunks);
                         }
                     };
-
                     video.play();
                     recorder.start();
-                    
-                    setTimeout(() => {
-                        if (recorder.state === 'recording') recorder.stop();
-                    }, chunkDurationSec * 1000);
+                    setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, chunkDurationSec * 1000);
                 } catch (err) { reject(err); }
             });
         }
 
-        // ==================== SCHEDULE ====================
-        function populateVideoDropdown() {
-            const select = document.getElementById('scheduleVideoSelect');
-            select.innerHTML = '<option value="">- Pilih video -</option>';
-            
-            allFiles.forEach(file => {
-                const opt = document.createElement('option');
-                opt.value = file.unique_id;
-                opt.textContent = `${file.displayName} (${file.type === 'ai' ? 'AI' : 'Mentah'})`;
-                select.appendChild(opt);
-            });
-            
-            const platformSelect = document.getElementById('schedulePlatform');
-            platformSelect.innerHTML = '<option value="">- Pilih -</option>';
-            
-            if (connectedAccounts.length > 0) {
-                connectedAccounts.forEach(acc => {
-                    const opt = document.createElement('option');
-                    opt.value = `${acc.platform}:${acc.username}`;
-                    opt.textContent = `${getPlatformIcon(acc.platform)} ${acc.platform} - ${acc.username}`;
-                    platformSelect.appendChild(opt);
-                });
-            } else {
-                platformSelect.innerHTML = '<option value="">- Belum ada akun -</option>';
-            }
+        // ==================== SCHEDULE (via Database) ====================
+        async function loadSchedules() {
+            try {
+                const res = await fetch('/api/schedules/list');
+                const data = await res.json();
+                return data.success ? data.schedules : [];
+            } catch(e) { return []; }
         }
 
-        function getPlatformIcon(platform) {
-            const icons = { instagram: '📷', tiktok: '🎵', youtube: '▶️', facebook: '👤' };
-            return icons[platform] || '🔗';
-        }
-
-        function saveSchedule() {
+        async function saveSchedule() {
             const videoId = document.getElementById('scheduleVideoSelect').value;
             const time = document.getElementById('scheduleTime').value;
             const platform = document.getElementById('schedulePlatform').value;
@@ -1639,53 +1436,49 @@
             
             const video = allFiles.find(f => f.unique_id === videoId);
             if (!video) { alert('Video tidak ditemukan!'); return; }
-            
             const [platformName, accountUsername] = platform.split(':');
             
-            videoSchedules.push({
-                id: Date.now().toString(36),
-                session_id: video.session_id || video.pathname,
-                video_name: video.displayName,
-                video_url: video.url,
-                video_type: video.type,
-                time: time,
-                platform: platformName,
-                account: accountUsername,
-                caption: caption,
-                created_at: new Date().toISOString(),
-            });
-            
-            localStorage.setItem('videoSchedules', JSON.stringify(videoSchedules));
-            
-            document.getElementById('scheduleTime').value = '';
-            document.getElementById('scheduleCaption').value = '';
-            
-            renderScheduleList();
-            renderVideoList();
-            alert('✅ Jadwal tersimpan!');
+            try {
+                const res = await fetch('/api/schedules/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: video.session_id || video.pathname,
+                        video_name: video.displayName,
+                        video_url: video.url,
+                        time: time,
+                        platform: platformName,
+                        account: accountUsername,
+                        caption: caption,
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error);
+                document.getElementById('scheduleTime').value = '';
+                document.getElementById('scheduleCaption').value = '';
+                await renderScheduleList();
+                renderVideoList();
+                alert('✅ Jadwal tersimpan!');
+            } catch(e) {
+                alert('❌ Gagal: ' + e.message);
+            }
         }
 
-        function renderScheduleList() {
+        async function renderScheduleList() {
             const container = document.getElementById('scheduleList');
+            const schedules = await loadSchedules();
             
-            if (videoSchedules.length === 0) {
-                container.innerHTML = '';
-                return;
-            }
-            
-            const sorted = [...videoSchedules].sort((a, b) => new Date(a.time) - new Date(b.time));
+            if (schedules.length === 0) { container.innerHTML = ''; return; }
             
             container.innerHTML = `
-                <p class="text-xs font-medium text-gray-400 mb-2 mt-3">📅 Jadwal Tersimpan (${sorted.length}):</p>
-                ${sorted.map(s => {
+                <p class="text-xs font-medium text-gray-400 mb-2 mt-3">📅 Jadwal Tersimpan (${schedules.length}):</p>
+                ${schedules.map(s => {
                     let timeStr = s.time;
                     try {
                         const d = new Date(s.time);
                         timeStr = d.toLocaleString('id-ID', {day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'});
                     } catch(e) {}
-                    
                     const isPast = new Date(s.time) < new Date();
-                    
                     return `
                         <div class="bg-gray-700/50 border ${isPast ? 'border-gray-600/50 opacity-60' : 'border-blue-500/30'} rounded-lg p-2">
                             <div class="flex justify-between items-start gap-2">
@@ -1703,37 +1496,66 @@
             `;
         }
 
-        function deleteSchedule(id) {
+        async function deleteSchedule(id) {
             if (!confirm('Hapus jadwal ini?')) return;
-            videoSchedules = videoSchedules.filter(s => s.id !== id);
-            localStorage.setItem('videoSchedules', JSON.stringify(videoSchedules));
-            renderScheduleList();
-            renderVideoList();
+            try {
+                const res = await fetch('/api/schedules/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id })
+                });
+                if (!res.ok) throw new Error('Gagal hapus');
+                await renderScheduleList();
+                renderVideoList();
+            } catch(e) { alert('❌ ' + e.message); }
+        }
+
+        function getPlatformIcon(platform) {
+            const icons = { instagram: '📷', tiktok: '🎵', youtube: '▶️', facebook: '👤' };
+            return icons[platform] || '🔗';
+        }
+
+        async function populateVideoDropdown() {
+            const select = document.getElementById('scheduleVideoSelect');
+            select.innerHTML = '<option value="">- Pilih video -</option>';
+            allFiles.forEach(file => {
+                const opt = document.createElement('option');
+                opt.value = file.unique_id;
+                opt.textContent = `${file.displayName} (${file.type === 'ai' ? 'AI' : 'Mentah'})`;
+                select.appendChild(opt);
+            });
+            
+            const platformSelect = document.getElementById('schedulePlatform');
+            platformSelect.innerHTML = '<option value="">- Pilih -</option>';
+            
+            const accounts = await loadMedsosAccounts();
+            if (accounts.length > 0) {
+                accounts.forEach(acc => {
+                    const opt = document.createElement('option');
+                    opt.value = `${acc.platform}:${acc.username}`;
+                    opt.textContent = `${getPlatformIcon(acc.platform)} ${acc.platform} - ${acc.username}`;
+                    platformSelect.appendChild(opt);
+                });
+            } else {
+                platformSelect.innerHTML = '<option value="">- Belum ada akun -</option>';
+            }
         }
 
         // ==================== SUBMIT TO AI ====================
         async function submitToAI() {
-            if (checkedVideos.length === 0) {
-                alert('Centang video dulu!');
-                return;
-            }
-            
+            if (checkedVideos.length === 0) { alert('Centang video dulu!'); return; }
             const prompt = document.getElementById('promptInput').value.trim();
             if (!prompt) { alert('Isi prompt dulu!'); return; }
             
-            const totalSize = checkedVideos.reduce((sum, v) => sum + (v.size || 0), 0);
-            const totalMB = (totalSize / 1024 / 1024).toFixed(2);
-            
-            if (!confirm(`Kirim ${checkedVideos.length} video (${totalMB} MB) ke AI?`)) return;
+            if (!confirm(`Kirim ${checkedVideos.length} video ke AI?`)) return;
             
             const aiColumn = document.getElementById('aiEditColumn');
             const originalHTML = aiColumn.innerHTML;
-            
             aiColumn.innerHTML = `
                 <div class="text-center p-6 flex items-center justify-center h-full">
                     <div>
                         <div class="animate-spin rounded-full h-10 w-10 border-4 border-purple-500/30 border-t-purple-500 mx-auto mb-3"></div>
-                        <p class="text-sm text-purple-400 font-medium">Memproses ${checkedVideos.length} video...</p>
+                        <p class="text-sm text-purple-400 font-medium">Memproses...</p>
                     </div>
                 </div>
             `;
@@ -1741,28 +1563,20 @@
             try {
                 let successCount = 0;
                 for (const video of checkedVideos) {
-                    const payload = {
-                        prompt: prompt,
-                        is_single: video.is_single,
-                        single_url: video.url || '',
-                        session_id: video.session_id,
-                        chunks: video.chunks || [],
-                        pathname: video.pathname,
-                    };
-                    
                     const response = await fetch('/api/submit-to-ai', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
+                        body: JSON.stringify({
+                            prompt, is_single: video.is_single,
+                            single_url: video.url || '', session_id: video.session_id,
+                            chunks: video.chunks || [], pathname: video.pathname,
+                        })
                     });
-                    
                     if (response.ok) successCount++;
                 }
-                
-                alert(`✅ ${successCount} dari ${checkedVideos.length} video berhasil diproses AI!`);
+                alert(`✅ ${successCount} dari ${checkedVideos.length} video diproses!`);
                 clearChecked();
                 loadFiles();
-                
             } catch (error) {
                 alert(`❌ Error: ${error.message}`);
                 aiColumn.innerHTML = originalHTML;
@@ -1786,15 +1600,24 @@
             input.type = input.type === 'password' ? 'text' : 'password';
         }
 
-        function renderConnectedAccounts() {
+        async function loadMedsosAccounts() {
+            try {
+                const res = await fetch('/api/medsos/list');
+                const data = await res.json();
+                return data.success ? data.accounts : [];
+            } catch(e) { return []; }
+        }
+
+        async function renderConnectedAccounts() {
             const container = document.getElementById('connectedAccounts');
+            const accounts = await loadMedsosAccounts();
             
-            if (connectedAccounts.length === 0) {
+            if (accounts.length === 0) {
                 container.innerHTML = '<p class="text-xs text-gray-500 italic">Belum ada akun terhubung</p>';
                 return;
             }
             
-            container.innerHTML = connectedAccounts.map((acc, idx) => `
+            container.innerHTML = accounts.map(acc => `
                 <div class="flex justify-between items-center bg-gray-700/50 rounded-lg p-2">
                     <div class="flex items-center gap-2">
                         <span class="text-lg">${getPlatformIcon(acc.platform)}</span>
@@ -1805,19 +1628,24 @@
                     </div>
                     <div class="flex items-center gap-2">
                         <span class="text-xs text-green-400">✅</span>
-                        <button onclick='disconnectAccount(${idx})' class="text-xs text-red-400 hover:underline">Putus</button>
+                        <button onclick='disconnectAccount("${acc.platform}", "${acc.username}")' class="text-xs text-red-400 hover:underline">Putus</button>
                     </div>
                 </div>
             `).join('');
         }
 
-        function disconnectAccount(idx) {
-            if (!confirm(`Putuskan akun ${connectedAccounts[idx].username}?`)) return;
-            connectedAccounts.splice(idx, 1);
-            localStorage.setItem('connectedAccounts', JSON.stringify(connectedAccounts));
-            renderConnectedAccounts();
-            updateLoginButton();
-            populateVideoDropdown();
+        async function disconnectAccount(platform, username) {
+            if (!confirm(`Putuskan akun ${username}?`)) return;
+            try {
+                const res = await fetch('/api/medsos/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ platform, username })
+                });
+                if (!res.ok) throw new Error('Gagal');
+                await renderConnectedAccounts();
+                await populateVideoDropdown();
+            } catch(e) { alert('❌ ' + e.message); }
         }
 
         async function connectAccount() {
@@ -1828,55 +1656,32 @@
             
             if (!username) { alert('Isi username!'); return; }
             if (!password) { alert('Isi password!'); return; }
+            if (password.length < 4) { alert('Password minimal 4 karakter!'); return; }
             
             statusDiv.classList.remove('hidden');
-            statusDiv.innerHTML = '<span class="text-blue-400">🔄 Membuka halaman login ' + platform + '...</span>';
-            
-            await new Promise(r => setTimeout(r, 1000));
-            statusDiv.innerHTML = '<span class="text-blue-400">🔐 Verifikasi kredensial...</span>';
-            await new Promise(r => setTimeout(r, 1500));
-            statusDiv.innerHTML = '<span class="text-blue-400">🔌 Mengecek koneksi...</span>';
+            statusDiv.innerHTML = '<span class="text-blue-400">🔄 Mengecek koneksi...</span>';
             await new Promise(r => setTimeout(r, 1500));
             
-            const exists = connectedAccounts.find(a => a.platform === platform && a.username === username);
-            if (exists) {
-                statusDiv.innerHTML = '<span class="text-yellow-400">⚠️ Akun sudah terhubung</span>';
-                setTimeout(() => statusDiv.classList.add('hidden'), 3000);
-                return;
-            }
-            
-            const success = password.length >= 4;
-            
-            if (success) {
-                connectedAccounts.push({
-                    platform,
-                    username,
-                    connectedAt: new Date().toISOString(),
-                    token: btoa(`${platform}:${username}:${Date.now()}`),
+            try {
+                const res = await fetch('/api/medsos/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ platform, username, password })
                 });
+                const data = await res.json();
                 
-                localStorage.setItem('connectedAccounts', JSON.stringify(connectedAccounts));
-                
-                statusDiv.innerHTML = '<span class="text-green-400">✅ Koneksi berhasil!</span>';
-                document.getElementById('loginUsername').value = '';
-                document.getElementById('loginPassword').value = '';
-                
-                renderConnectedAccounts();
-                updateLoginButton();
-                populateVideoDropdown();
-                
-                setTimeout(() => statusDiv.classList.add('hidden'), 3000);
-            } else {
-                statusDiv.innerHTML = '<span class="text-red-400">❌ Gagal terhubung.</span>';
-            }
-        }
-
-        function updateLoginButton() {
-            const btnText = document.getElementById('loginBtnText');
-            if (connectedAccounts.length > 0) {
-                btnText.textContent = `${connectedAccounts.length} Akun`;
-            } else {
-                btnText.textContent = 'Login Medsos';
+                if (res.ok && data.success) {
+                    statusDiv.innerHTML = '<span class="text-green-400">✅ Akun tersimpan!</span>';
+                    document.getElementById('loginUsername').value = '';
+                    document.getElementById('loginPassword').value = '';
+                    await renderConnectedAccounts();
+                    await populateVideoDropdown();
+                    setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+                } else {
+                    statusDiv.innerHTML = `<span class="text-red-400">❌ ${data.error || 'Gagal'}</span>`;
+                }
+            } catch(e) {
+                statusDiv.innerHTML = `<span class="text-red-400">❌ ${e.message}</span>`;
             }
         }
     </script>

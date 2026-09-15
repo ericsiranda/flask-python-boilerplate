@@ -2,7 +2,8 @@ import os
 import time
 import json
 import bcrypt
-import redis
+import psycopg2
+import psycopg2.extras
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from vercel.blob import put
@@ -11,51 +12,175 @@ import requests as req_lib
 
 app = Flask(__name__)
 
-# ==================== REDIS (VERCEL KV) ====================
-def get_redis():
-    """Koneksi ke Vercel KV via Redis URL."""
-    # Vercel KV menyediakan beberapa env var, coba semua
-    redis_url = (
-        os.environ.get('KV_URL') or 
-        os.environ.get('REDIS_URL') or
-        os.environ.get('KV_REST_API_URL')
-    )
+# ==================== DATABASE CONNECTION ====================
+def get_db():
+    """
+    Koneksi ke Supabase Postgres.
+    Mendukung berbagai nama environment variable.
+    """
+    db_url = None
     
-    if not redis_url:
-        print("⚠️ Tidak ada KV_URL / REDIS_URL di environment")
+    # Prioritas: nama env var yang mungkin
+    priority_keys = [
+        'SUPABASE_POSTGRES_URL',
+        'POSTGRES_URL',
+        'DATABASE_URL',
+    ]
+    
+    for key in priority_keys:
+        val = os.environ.get(key)
+        if val and val.startswith('postgres'):
+            db_url = val
+            print(f"DB: menggunakan {key}")
+            break
+    
+    # Fallback: cari env var apapun yang mengandung POSTGRES_URL / DATABASE_URL
+    if not db_url:
+        for key in os.environ.keys():
+            if ('POSTGRES_URL' in key or 'DATABASE_URL' in key) and 'PRISMA' not in key and 'NON_POOLING' not in key:
+                val = os.environ.get(key)
+                if val and val.startswith('postgres'):
+                    db_url = val
+                    print(f"DB: fallback ke {key}")
+                    break
+    
+    # Jika masih tidak ada, coba bikin dari komponen
+    if not db_url:
+        supabase_url = None
+        for key in os.environ.keys():
+            if 'SUPABASE_URL' in key:
+                supabase_url = os.environ.get(key)
+                break
+        
+        postgres_password = os.environ.get('SUPABASE_POSTGRES_PASSWORD')
+        postgres_host = os.environ.get('SUPABASE_POSTGRES_HOST')
+        
+        if postgres_host and postgres_password:
+            # Format: postgres://postgres.<project_ref>:<password>@<host>:5432/postgres
+            db_url = f"postgres://postgres:{postgres_password}@{postgres_host}:5432/postgres?sslmode=require"
+            print(f"DB: dibangun dari komponen")
+    
+    if not db_url:
+        print("⚠️ Tidak ada POSTGRES_URL")
         return None
     
     try:
-        # Decode responses=True agar string otomatis (tidak bytes)
-        return redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
+        conn = psycopg2.connect(db_url, sslmode='require', connect_timeout=10)
+        return conn
     except Exception as e:
-        print(f"⚠️ Gagal connect Redis: {e}")
+        print(f"⚠️ Gagal connect Postgres: {e}")
         return None
+
+
+def init_tables():
+    """Buat tabel jika belum ada."""
+    conn = get_db()
+    if not conn:
+        return False, "Database tidak tersedia"
+    
+    try:
+        cur = conn.cursor()
+        
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(100) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS schedules (
+                id SERIAL PRIMARY KEY,
+                session_id VARCHAR(100),
+                video_name VARCHAR(255),
+                video_url TEXT,
+                time VARCHAR(50),
+                platform VARCHAR(50),
+                account VARCHAR(100),
+                caption TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS medsos_accounts (
+                id SERIAL PRIMARY KEY,
+                platform VARCHAR(50) NOT NULL,
+                username VARCHAR(100) NOT NULL,
+                connected_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(platform, username)
+            )
+        """)
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True, None
+    except Exception as e:
+        print(f"Init tables error: {e}")
+        try:
+            conn.rollback()
+            conn.close()
+        except:
+            pass
+        return False, str(e)
 
 
 @app.route('/')
 def index():
+    init_tables()
     return render_template('index.html')
 
-# ==================== USER MANAGEMENT ====================
 
-@app.route('/api/users/has-any', methods=['GET'])
-def has_any_user():
-    """Cek apakah ada user terdaftar (untuk login gate)."""
-    try:
-        r = get_redis()
-        if not r:
-            # Fallback: anggap tidak ada user jika DB tidak tersedia
-            return jsonify({'success': True, 'has_users': False, 'count': 0, 'db_available': False})
-        
-        count = r.scard('users')
+# ==================== DEBUG ====================
+@app.route('/api/debug-db', methods=['GET'])
+def debug_db():
+    """Cek status database."""
+    db_url = None
+    found_key = None
+    
+    for key in os.environ.keys():
+        if ('POSTGRES_URL' in key or 'DATABASE_URL' in key) and 'PRISMA' not in key:
+            val = os.environ.get(key)
+            if val and val.startswith('postgres'):
+                db_url = val
+                found_key = key
+                break
+    
+    if not db_url:
         return jsonify({
-            'success': True, 
-            'has_users': count > 0, 
-            'count': count,
-            'db_available': True
+            'db_available': False,
+            'error': 'Tidak ada POSTGRES_URL',
+            'env_keys_containing_postgres': [k for k in os.environ.keys() if 'POSTGRES' in k or 'DATABASE' in k]
         })
     
+    try:
+        conn = psycopg2.connect(db_url, sslmode='require', connect_timeout=10)
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        cur.close()
+        conn.close()
+        return jsonify({'db_available': True, 'env_key_used': found_key, 'connection': 'success'})
+    except Exception as e:
+        return jsonify({'db_available': False, 'env_key_used': found_key, 'error': str(e)})
+
+
+# ==================== USER MANAGEMENT ====================
+@app.route('/api/users/has-any', methods=['GET'])
+def has_any_user():
+    try:
+        init_tables()
+        conn = get_db()
+        if not conn:
+            return jsonify({'success': True, 'has_users': False, 'count': 0, 'db_available': False})
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM users")
+        count = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'has_users': count > 0, 'count': count, 'db_available': True})
     except Exception as e:
         print(f"Error has_any_user: {e}")
         return jsonify({'success': True, 'has_users': False, 'count': 0, 'db_available': False})
@@ -63,74 +188,51 @@ def has_any_user():
 
 @app.route('/api/users/list', methods=['GET'])
 def list_users():
-    """Ambil daftar user (tanpa password)."""
     try:
-        r = get_redis()
-        if not r:
+        conn = get_db()
+        if not conn:
             return jsonify({'error': 'Database tidak tersedia'}), 500
-        
-        user_ids = r.smembers('users')
-        users = []
-        
-        for uid in user_ids:
-            user_data = r.hgetall(f'user:{uid}')
-            if user_data and user_data.get('username'):
-                users.append({
-                    'username': user_data.get('username'),
-                    'createdAt': user_data.get('createdAt', ''),
-                })
-        
-        users.sort(key=lambda u: u.get('createdAt', ''))
-        
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT username, created_at FROM users ORDER BY created_at ASC")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        users = [{'username': r['username'], 'createdAt': r['created_at'].isoformat() if r['created_at'] else ''} for r in rows]
         return jsonify({'success': True, 'users': users})
-    
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/users/add', methods=['POST'])
 def add_user():
-    """Tambah user baru."""
     try:
         data = request.json
         username = (data.get('username') or '').strip()
         password = data.get('password') or ''
         
-        # Validasi
         if not username or len(username) < 3:
             return jsonify({'error': 'Username minimal 3 karakter'}), 400
-        
         if not password or len(password) < 4:
             return jsonify({'error': 'Password minimal 4 karakter'}), 400
         
-        r = get_redis()
-        if not r:
-            return jsonify({'error': 'Database tidak tersedia. Hubungi admin.'}), 500
+        init_tables()
+        conn = get_db()
+        if not conn:
+            return jsonify({'error': 'Database tidak tersedia'}), 500
         
-        username_lower = username.lower()
-        
-        # Cek duplikat
-        if r.sismember('usernames', username_lower):
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
             return jsonify({'error': 'Username sudah digunakan'}), 400
         
-        # Hash password dengan bcrypt
-        password_hash = bcrypt.hashpw(
-            password.encode('utf-8'), 
-            bcrypt.gensalt()
-        ).decode('utf-8')
-        
-        # Simpan ke Redis
-        r.hset(f'user:{username_lower}', mapping={
-            'username': username,
-            'password_hash': password_hash,
-            'createdAt': datetime.utcnow().isoformat(),
-        })
-        
-        r.sadd('users', username_lower)
-        r.sadd('usernames', username_lower)
-        
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        cur.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (username, password_hash))
+        conn.commit()
+        cur.close()
+        conn.close()
         return jsonify({'success': True, 'message': 'User berhasil ditambahkan'})
-    
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -139,109 +241,232 @@ def add_user():
 
 @app.route('/api/users/login', methods=['POST'])
 def login_user():
-    """Verifikasi login user."""
     try:
         data = request.json
-        username = (data.get('username') or '').strip().lower()
+        username = (data.get('username') or '').strip()
         password = data.get('password') or ''
         
         if not username or not password:
             return jsonify({'error': 'Username & password wajib diisi'}), 400
         
-        r = get_redis()
-        if not r:
+        conn = get_db()
+        if not conn:
             return jsonify({'error': 'Database tidak tersedia'}), 500
         
-        user_data = r.hgetall(f'user:{username}')
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT username, password_hash FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
         
-        if not user_data:
+        if not row:
+            return jsonify({'error': 'Username atau password salah'}), 401
+        if not bcrypt.checkpw(password.encode('utf-8'), row['password_hash'].encode('utf-8')):
             return jsonify({'error': 'Username atau password salah'}), 401
         
-        password_hash = user_data.get('password_hash', '')
-        
-        if not password_hash:
-            return jsonify({'error': 'Data user rusak'}), 500
-        
-        # Verifikasi bcrypt
-        try:
-            valid = bcrypt.checkpw(
-                password.encode('utf-8'), 
-                password_hash.encode('utf-8')
-            )
-        except Exception as e:
-            print(f"Bcrypt error: {e}")
-            return jsonify({'error': 'Verifikasi gagal'}), 500
-        
-        if not valid:
-            return jsonify({'error': 'Username atau password salah'}), 401
-        
-        return jsonify({
-            'success': True,
-            'user': {
-                'username': user_data.get('username'),
-                'createdAt': user_data.get('createdAt', ''),
-            }
-        })
-    
+        return jsonify({'success': True, 'user': {'username': row['username']}})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/users/delete', methods=['POST'])
 def delete_user():
-    """Hapus user."""
     try:
         data = request.json
-        username = (data.get('username') or '').strip().lower()
-        
+        username = (data.get('username') or '').strip()
         if not username:
-            return jsonify({'error': 'Username wajib diisi'}), 400
+            return jsonify({'error': 'Username wajib'}), 400
         
-        r = get_redis()
-        if not r:
+        conn = get_db()
+        if not conn:
             return jsonify({'error': 'Database tidak tersedia'}), 500
-        
-        if not r.sismember('usernames', username):
-            return jsonify({'error': 'User tidak ditemukan'}), 404
-        
-        r.delete(f'user:{username}')
-        r.srem('users', username)
-        r.srem('usernames', username)
-        
-        return jsonify({'success': True, 'message': 'User berhasil dihapus'})
-    
+        cur = conn.cursor()
+        cur.execute("DELETE FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
-# ==================== UPLOAD ====================
+# ==================== SCHEDULE ====================
+@app.route('/api/schedules/list', methods=['GET'])
+def list_schedules():
+    try:
+        init_tables()
+        conn = get_db()
+        if not conn:
+            return jsonify({'error': 'Database tidak tersedia'}), 500
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM schedules ORDER BY time ASC")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        schedules = []
+        for r in rows:
+            schedules.append({
+                'id': r['id'],
+                'session_id': r['session_id'] or '',
+                'video_name': r['video_name'] or '',
+                'video_url': r['video_url'] or '',
+                'time': r['time'] or '',
+                'platform': r['platform'] or '',
+                'account': r['account'] or '',
+                'caption': r['caption'] or '',
+            })
+        return jsonify({'success': True, 'schedules': schedules})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/schedules/add', methods=['POST'])
+def add_schedule():
+    try:
+        data = request.json
+        init_tables()
+        conn = get_db()
+        if not conn:
+            return jsonify({'error': 'Database tidak tersedia'}), 500
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO schedules (session_id, video_name, video_url, time, platform, account, caption)
+            VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+        """, (
+            data.get('session_id', ''),
+            data.get('video_name', ''),
+            data.get('video_url', ''),
+            data.get('time', ''),
+            data.get('platform', ''),
+            data.get('account', ''),
+            data.get('caption', ''),
+        ))
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'id': new_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/schedules/delete', methods=['POST'])
+def delete_schedule():
+    try:
+        data = request.json
+        schedule_id = data.get('id')
+        if not schedule_id:
+            return jsonify({'error': 'ID wajib'}), 400
+        
+        conn = get_db()
+        if not conn:
+            return jsonify({'error': 'Database tidak tersedia'}), 500
+        cur = conn.cursor()
+        cur.execute("DELETE FROM schedules WHERE id = %s", (schedule_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== MEDSOS ACCOUNTS ====================
+@app.route('/api/medsos/list', methods=['GET'])
+def list_medsos():
+    try:
+        init_tables()
+        conn = get_db()
+        if not conn:
+            return jsonify({'error': 'Database tidak tersedia'}), 500
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT platform, username, connected_at FROM medsos_accounts ORDER BY connected_at ASC")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        accounts = []
+        for r in rows:
+            accounts.append({
+                'platform': r['platform'],
+                'username': r['username'],
+                'connectedAt': r['connected_at'].isoformat() if r['connected_at'] else '',
+            })
+        return jsonify({'success': True, 'accounts': accounts})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/medsos/add', methods=['POST'])
+def add_medsos():
+    try:
+        data = request.json
+        platform = data.get('platform', '')
+        username = data.get('username', '')
+        
+        if not platform or not username:
+            return jsonify({'error': 'Data tidak lengkap'}), 400
+        
+        init_tables()
+        conn = get_db()
+        if not conn:
+            return jsonify({'error': 'Database tidak tersedia'}), 500
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id FROM medsos_accounts WHERE platform = %s AND LOWER(username) = LOWER(%s)",
+            (platform, username)
+        )
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({'error': 'Akun sudah terhubung'}), 400
+        
+        cur.execute("INSERT INTO medsos_accounts (platform, username) VALUES (%s, %s)", (platform, username))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/medsos/delete', methods=['POST'])
+def delete_medsos():
+    try:
+        data = request.json
+        platform = data.get('platform', '')
+        username = data.get('username', '')
+        if not platform or not username:
+            return jsonify({'error': 'Data tidak lengkap'}), 400
+        
+        conn = get_db()
+        if not conn:
+            return jsonify({'error': 'Database tidak tersedia'}), 500
+        cur = conn.cursor()
+        cur.execute(
+            "DELETE FROM medsos_accounts WHERE platform = %s AND LOWER(username) = LOWER(%s)",
+            (platform, username)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== BLOB VIDEO ====================
 @app.route('/api/upload', methods=['POST'])
 def upload_video():
     try:
         if 'video' not in request.files:
             return jsonify({'error': 'Tidak ada file video'}), 400
-        
         file = request.files['video']
         if file.filename == '':
             return jsonify({'error': 'Nama file kosong'}), 400
-        
         file_content = file.read()
-        
-        result = put(
-            file.filename,
-            file_content,
-            access='public',
-            multipart=True
-        )
-        
-        return jsonify({
-            'success': True,
-            'url': result.url,
-            'pathname': result.pathname,
-            'filename': file.filename,
-            'size': len(file_content)
-        })
-    
+        result = put(file.filename, file_content, access='public', multipart=True)
+        return jsonify({'success': True, 'url': result.url, 'pathname': result.pathname,
+                       'filename': file.filename, 'size': len(file_content)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -251,126 +476,64 @@ def upload_chunk():
     try:
         if 'video' not in request.files:
             return jsonify({'error': 'Tidak ada file video'}), 400
-        
         file = request.files['video']
         session_id = request.form.get('session_id', 'default')
         chunk_index = int(request.form.get('chunk_index', 0))
-        
         file_content = file.read()
         chunk_filename = f"cut_{session_id}_{chunk_index:03d}.webm"
-        
-        result = put(
-            chunk_filename,
-            file_content,
-            access='public',
-            multipart=True
-        )
-        
-        return jsonify({
-            'success': True,
-            'url': result.url,
-            'pathname': result.pathname,
-            'chunk_index': chunk_index,
-            'size': len(file_content)
-        })
-    
+        result = put(chunk_filename, file_content, access='public', multipart=True)
+        return jsonify({'success': True, 'url': result.url, 'pathname': result.pathname,
+                       'chunk_index': chunk_index, 'size': len(file_content)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/finalize-cut', methods=['POST'])
 def finalize_cut():
-    try:
-        data = request.json
-        return jsonify({
-            'success': True,
-            'session_id': data.get('session_id'),
-            'total_chunks': data.get('total_chunks')
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    return jsonify({'success': True})
 
 
 @app.route('/api/list-files-grouped', methods=['GET'])
 def list_files_grouped():
     try:
         files = vercel_blob.list()
-        
-        sessions = {}
-        singles = []
-        ai_edits = []
+        sessions, singles, ai_edits = {}, [], []
         
         for item in files.get('blobs', []):
             pathname = item.get('pathname', '')
-            
             if pathname.startswith('ai_edit_'):
-                ai_edits.append({
-                    'pathname': pathname,
-                    'url': item.get('url'),
-                    'size': item.get('size', 0),
-                    'session_id': pathname.replace('ai_edit_', '').replace('.webm', ''),
-                    'uploadedAt': item.get('uploadedAt'),
-                })
+                ai_edits.append({'pathname': pathname, 'url': item.get('url'),
+                                'size': item.get('size', 0), 'uploadedAt': item.get('uploadedAt'),
+                                'session_id': pathname.replace('ai_edit_', '').replace('.webm', '')})
                 continue
-            
             if pathname.startswith('cut_') and pathname.endswith('.webm'):
                 parts = pathname.replace('.webm', '').split('_')
                 if len(parts) >= 3:
-                    session_id = parts[1]
-                    try:
-                        chunk_index = int(parts[2])
-                    except ValueError:
-                        continue
-                    
-                    if session_id not in sessions:
-                        sessions[session_id] = {
-                            'session_id': session_id,
-                            'chunks': [],
-                            'total_size': 0,
-                            'total_chunks': 0,
-                        }
-                    
-                    sessions[session_id]['chunks'].append({
-                        'pathname': pathname,
-                        'url': item.get('url'),
-                        'size': item.get('size', 0),
-                        'index': chunk_index,
-                    })
-                    sessions[session_id]['total_size'] += item.get('size', 0)
-                    sessions[session_id]['total_chunks'] += 1
+                    sid = parts[1]
+                    try: idx = int(parts[2])
+                    except: continue
+                    if sid not in sessions:
+                        sessions[sid] = {'session_id': sid, 'chunks': [], 'total_size': 0, 'total_chunks': 0}
+                    sessions[sid]['chunks'].append({'pathname': pathname, 'url': item.get('url'),
+                                                    'size': item.get('size', 0), 'index': idx})
+                    sessions[sid]['total_size'] += item.get('size', 0)
+                    sessions[sid]['total_chunks'] += 1
             else:
-                singles.append({
-                    'pathname': pathname,
-                    'url': item.get('url'),
-                    'size': item.get('size', 0),
-                    'is_single': True,
-                    'uploadedAt': item.get('uploadedAt'),
-                })
+                singles.append({'pathname': pathname, 'url': item.get('url'),
+                               'size': item.get('size', 0), 'is_single': True})
         
-        for sid in sessions:
-            sessions[sid]['chunks'].sort(key=lambda x: x['index'])
-        
-        ai_edit_map = {edit['session_id']: edit for edit in ai_edits}
+        for sid in sessions: sessions[sid]['chunks'].sort(key=lambda x: x['index'])
+        ai_edit_map = {e['session_id']: e for e in ai_edits}
         
         result = []
-        for sid, session in sessions.items():
-            has_ai_edit = sid in ai_edit_map
-            result.append({
-                'pathname': f"video_utuh_{sid}.webm",
-                'url': session['chunks'][0]['url'],
-                'size': session['total_size'],
-                'is_single': False,
-                'session_id': sid,
-                'chunks': session['chunks'],
-                'total_chunks': session['total_chunks'],
-                'ai_status': 'done' if has_ai_edit else 'idle',
-                'ai_result': ai_edit_map.get(sid),
-            })
-        
+        for sid, s in sessions.items():
+            has_ai = sid in ai_edit_map
+            result.append({'pathname': f"video_utuh_{sid}.webm", 'url': s['chunks'][0]['url'],
+                          'size': s['total_size'], 'is_single': False, 'session_id': sid,
+                          'chunks': s['chunks'], 'total_chunks': s['total_chunks'],
+                          'ai_status': 'done' if has_ai else 'idle', 'ai_result': ai_edit_map.get(sid)})
         result.extend(singles)
-        
         return jsonify({'success': True, 'files': result})
-    
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -378,11 +541,8 @@ def list_files_grouped():
 @app.route('/api/delete-file', methods=['POST'])
 def delete_file():
     try:
-        data = request.json
-        url = data.get('url')
-        if not url:
-            return jsonify({'error': 'URL tidak diberikan'}), 400
-        
+        url = request.json.get('url')
+        if not url: return jsonify({'error': 'URL tidak diberikan'}), 400
         vercel_blob.delete(url)
         return jsonify({'success': True})
     except Exception as e:
@@ -393,44 +553,19 @@ def delete_file():
 def rename_file():
     try:
         data = request.json
-        old_url = data.get('old_url')
-        old_pathname = data.get('old_pathname')
-        new_name = (data.get('new_name') or '').strip()
-        
+        old_url, old_pathname, new_name = data.get('old_url'), data.get('old_pathname'), data.get('new_name', '').strip()
         if not old_url or not old_pathname or not new_name:
             return jsonify({'error': 'Data tidak lengkap'}), 400
-        
         import re
         safe_name = re.sub(r'[^\w\s\-\.]', '', new_name)
-        
-        if not safe_name.endswith('.webm'):
-            safe_name = safe_name + '.webm'
-        
-        if safe_name == old_pathname:
-            return jsonify({'success': True, 'message': 'Nama sama, tidak berubah'})
-        
-        file_response = req_lib.get(old_url)
-        if file_response.status_code != 200:
-            return jsonify({'error': f'Gagal download: {file_response.status_code}'}), 500
-        
-        result = put(
-            safe_name,
-            file_response.content,
-            access='public',
-            multipart=True
-        )
-        
+        if not safe_name.endswith('.webm'): safe_name += '.webm'
+        if safe_name == old_pathname: return jsonify({'success': True})
+        resp = req_lib.get(old_url)
+        if resp.status_code != 200: return jsonify({'error': 'Gagal download'}), 500
+        result = put(safe_name, resp.content, access='public', multipart=True)
         vercel_blob.delete(old_url)
-        
-        return jsonify({
-            'success': True,
-            'new_url': result.url,
-            'new_pathname': result.pathname,
-        })
-    
+        return jsonify({'success': True, 'new_url': result.url})
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -455,35 +590,8 @@ def submit_to_ai():
             else:
                 return jsonify({'error': 'Tidak ada chunk'}), 400
         
-        return jsonify({
-            'success': True,
-            'ai_result': {
-                'pathname': result.pathname,
-                'url': result.url,
-                'session_id': session_id,
-            }
-        })
-    
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/reset-ai', methods=['POST'])
-def reset_ai():
-    try:
-        files = vercel_blob.list()
-        deleted = 0
-        
-        for item in files.get('blobs', []):
-            pathname = item.get('pathname', '')
-            if pathname.startswith('ai_edit_'):
-                vercel_blob.delete(item.get('url'))
-                deleted += 1
-        
-        return jsonify({'success': True, 'deleted': deleted})
-    
+        return jsonify({'success': True, 'ai_result': {
+            'pathname': result.pathname, 'url': result.url, 'session_id': session_id}})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

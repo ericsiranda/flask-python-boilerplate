@@ -7,7 +7,7 @@ dependencies = [
     "gunicorn~=23.0.0",
     "vercel",
     "vercel_blob",
-    "redis",
+    "psycopg2-binary",
     "bcrypt",
 ]
 
