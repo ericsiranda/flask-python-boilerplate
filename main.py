@@ -16,59 +16,70 @@ app = Flask(__name__)
 def get_db():
     """
     Koneksi ke Supabase Postgres.
-    Mendukung berbagai nama environment variable.
+    Mencari environment variable dalam urutan prioritas.
     """
-    db_url = None
+    import re
     
-    # Prioritas: nama env var yang mungkin
+    # Prioritas pencarian env var (dari paling spesifik)
     priority_keys = [
+        'DB_URL',                    # ← Nama baru kita buat
+        'DATABASE_URL',              # ← Backup kita
+        'SUPABASE_POSTGRES_URL_NON_POOLING',
+        'POSTGRES_URL_NON_POOLING',
         'SUPABASE_POSTGRES_URL',
         'POSTGRES_URL',
-        'DATABASE_URL',
     ]
     
+    db_url = None
+    used_key = None
+    
+    # Cari berdasarkan prioritas
     for key in priority_keys:
         val = os.environ.get(key)
         if val and val.startswith('postgres'):
             db_url = val
-            print(f"DB: menggunakan {key}")
+            used_key = key
             break
     
-    # Fallback: cari env var apapun yang mengandung POSTGRES_URL / DATABASE_URL
+    # Fallback: cari env var apapun yang mengandung POSTGRES_URL/DATABASE_URL
     if not db_url:
-        for key in os.environ.keys():
-            if ('POSTGRES_URL' in key or 'DATABASE_URL' in key) and 'PRISMA' not in key and 'NON_POOLING' not in key:
+        for key in sorted(os.environ.keys()):
+            if ('POSTGRES_URL' in key or 'DATABASE_URL' in key) and 'PRISMA' not in key:
                 val = os.environ.get(key)
                 if val and val.startswith('postgres'):
                     db_url = val
-                    print(f"DB: fallback ke {key}")
+                    used_key = key
                     break
     
-    # Jika masih tidak ada, coba bikin dari komponen
+    # Fallback: bangun dari komponen (HOST + PASSWORD)
     if not db_url:
-        supabase_url = None
+        host = None
+        password = None
         for key in os.environ.keys():
-            if 'SUPABASE_URL' in key:
-                supabase_url = os.environ.get(key)
-                break
+            if 'POSTGRES_HOST' in key and not host:
+                host = os.environ.get(key)
+            if 'POSTGRES_PASSWORD' in key and not password:
+                password = os.environ.get(key)
         
-        postgres_password = os.environ.get('SUPABASE_POSTGRES_PASSWORD')
-        postgres_host = os.environ.get('SUPABASE_POSTGRES_HOST')
-        
-        if postgres_host and postgres_password:
-            # Format: postgres://postgres.<project_ref>:<password>@<host>:5432/postgres
-            db_url = f"postgres://postgres:{postgres_password}@{postgres_host}:5432/postgres?sslmode=require"
-            print(f"DB: dibangun dari komponen")
+        if host and password:
+            m = re.match(r'db\.([a-z0-9]+)\.supabase\.co', host)
+            if m:
+                ref = m.group(1)
+                db_url = f"postgres://postgres:{password}@db.{ref}.supabase.co:5432/postgres?sslmode=require"
+                used_key = 'constructed_from_components'
     
     if not db_url:
-        print("⚠️ Tidak ada POSTGRES_URL")
+        print("⚠️ Tidak ada POSTGRES_URL/DATABASE_URL/DB_URL di environment")
         return None
     
     try:
+        print(f"DB: mencoba {used_key}...")
         conn = psycopg2.connect(db_url, sslmode='require', connect_timeout=10)
+        print(f"DB: ✅ berhasil dengan {used_key}")
         return conn
     except Exception as e:
-        print(f"⚠️ Gagal connect Postgres: {e}")
+        error_msg = str(e)[:150]
+        print(f"DB: ❌ {used_key} gagal: {error_msg}")
         return None
 
 
@@ -137,34 +148,51 @@ def index():
 # ==================== DEBUG ====================
 @app.route('/api/debug-db', methods=['GET'])
 def debug_db():
-    """Cek status database."""
-    db_url = None
-    found_key = None
+    """Debug: cek env var dan koneksi."""
+    import re
     
-    for key in os.environ.keys():
-        if ('POSTGRES_URL' in key or 'DATABASE_URL' in key) and 'PRISMA' not in key:
-            val = os.environ.get(key)
-            if val and val.startswith('postgres'):
-                db_url = val
-                found_key = key
-                break
+    # Kumpulkan info env var yang relevan
+    relevant_keys = []
+    for key in sorted(os.environ.keys()):
+        if 'POSTGRES' in key or 'DATABASE' in key or key == 'DB_URL':
+            val = os.environ.get(key, '')
+            relevant_keys.append({
+                'key': key,
+                'has_value': bool(val),
+                'starts_with_postgres': val.startswith('postgres') if val else False,
+                'preview': (val[:50] + '...') if len(val) > 50 else val
+            })
     
-    if not db_url:
-        return jsonify({
-            'db_available': False,
-            'error': 'Tidak ada POSTGRES_URL',
-            'env_keys_containing_postgres': [k for k in os.environ.keys() if 'POSTGRES' in k or 'DATABASE' in k]
-        })
+    # Coba koneksi
+    result = {
+        'env_vars': relevant_keys,
+        'connection': None,
+    }
     
     try:
-        conn = psycopg2.connect(db_url, sslmode='require', connect_timeout=10)
-        cur = conn.cursor()
-        cur.execute("SELECT 1")
-        cur.close()
-        conn.close()
-        return jsonify({'db_available': True, 'env_key_used': found_key, 'connection': 'success'})
+        conn = get_db()
+        if conn:
+            cur = conn.cursor()
+            cur.execute("SELECT version()")
+            version = cur.fetchone()[0]
+            cur.close()
+            conn.close()
+            result['connection'] = {
+                'status': 'success',
+                'postgres_version': version[:80]
+            }
+        else:
+            result['connection'] = {
+                'status': 'failed',
+                'error': 'get_db() mengembalikan None'
+            }
     except Exception as e:
-        return jsonify({'db_available': False, 'env_key_used': found_key, 'error': str(e)})
+        result['connection'] = {
+            'status': 'exception',
+            'error': str(e)[:200]
+        }
+    
+    return jsonify(result)
 
 
 # ==================== USER MANAGEMENT ====================
