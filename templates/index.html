@@ -1373,22 +1373,27 @@
         // ==================== KONVERSI WEBM → MP4 (UMD) ====================
 async function convertToMp4(webmBlob) {
     try {
-        console.log('🎬 Memuat FFmpeg (single thread)...');
+        console.log('🎬 Memuat FFmpeg (dengan custom worker)...');
 
-        // Gunakan versi ESM dari @ffmpeg/ffmpeg
         const { FFmpeg } = await import('https://esm.sh/@ffmpeg/ffmpeg@0.12.10');
         const { toBlobURL, fetchFile } = await import('https://esm.sh/@ffmpeg/util@0.12.1');
 
         const ffmpeg = new FFmpeg();
         ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
 
-        console.log('📦 Memuat core FFmpeg (single thread)...');
-        // Gunakan core-st (single thread) - tidak butuh SharedArrayBuffer
-        const coreBaseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/umd';
+        console.log('📦 Memuat core FFmpeg...');
+        // Gunakan core versi UMD agar lebih stabil
+        const coreBaseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+
+        // Tentukan lokasi file worker.js yang sudah Anda salin ke folder public
+        // Ganti '/ffmpeg/worker.js' sesuai dengan lokasi file di proyek Anda
+        const workerURL = '/ffmpeg/worker.js'; 
 
         await ffmpeg.load({
             coreURL: await toBlobURL(`${coreBaseURL}/ffmpeg-core.js`, 'text/javascript'),
             wasmURL: await toBlobURL(`${coreBaseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+            // Ini adalah kunci perbaikannya:
+            classWorkerURL: workerURL,
         });
 
         console.log('✅ FFmpeg siap');
