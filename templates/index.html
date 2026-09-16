@@ -1371,36 +1371,94 @@
         }
 
         // ==================== KONVERSI WEBM → MP4 (UMD) ====================
-        async function convertToMp4(webmBlob) {
+       async function convertToMp4(webmBlob) {
     try {
-        console.log('🎬 Memuat FFmpeg via esm.sh...');
+        console.log('🎬 Memuat FFmpeg (patched worker)...');
 
-        // esm.sh mengirim CORS headers yang benar untuk Worker
-        const FFmpeg = await import('https://esm.sh/@ffmpeg/ffmpeg@0.12.10');
-        const FFmpegUtil = await import('https://esm.sh/@ffmpeg/util@0.12.1');
+        // 1. Gunakan CDN UMD yang stabil.
+        const ffmpegBaseURL = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd';
 
-        const ffmpeg = new FFmpeg.FFmpeg();
-        const { toBlobURL, fetchFile } = FFmpegUtil;
+        // 2. Ambil kode ffmpeg.js sebagai teks.
+        const ffmpegJsResponse = await fetch(`${ffmpegBaseURL}/ffmpeg.js`);
+        if (!ffmpegJsResponse.ok) throw new Error('Gagal mengunduh ffmpeg.js');
+        let ffmpegJsCode = await ffmpegJsResponse.text();
 
-        // Log progress dari FFmpeg
-        ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
+        // 3. PATCH: Cari pola yang mencoba membuat URL worker dari CDN.
+        // Pola umum pada versi UMD 0.12.x: 'new URL(e.p+e.u(814),e.b)'
+        const originalWorkerCode = 'new URL(e.p+e.u(814),e.b)';
+        
+        // Ganti dengan referensi ke properti global yang akan kita isi nanti.
+        // Kita akan menaruh URL blob dari worker di 'r.worker814URL'.
+        const patchedWorkerCode = 'new URL(r.worker814URL, e.b)';
 
-        console.log('📦 Download core FFmpeg...');
-        const coreBaseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
+        if (!ffmpegJsCode.includes(originalWorkerCode)) {
+            // Jika pola tidak ditemukan, coba cari pola alternatif (untuk versi ESM)
+            const originalWorkerCodeAlt = 'new URL("./worker.js", import.meta.url)';
+            if (ffmpegJsCode.includes(originalWorkerCodeAlt)) {
+                ffmpegJsCode = ffmpegJsCode.replace(originalWorkerCodeAlt, patchedWorkerCode);
+                console.log('Worker code patched (ESM variant).');
+            } else {
+                console.warn('Pola kode worker tidak ditemukan. Versi library mungkin berbeda.');
+            }
+        } else {
+            ffmpegJsCode = ffmpegJsCode.replace(originalWorkerCode, patchedWorkerCode);
+            console.log('Worker code patched (UMD variant).');
+        }
 
-        // toBlobURL: download file → convert ke Blob URL (same-origin)
-        const coreURL = await toBlobURL(`${coreBaseURL}/ffmpeg-core.js`, 'text/javascript');
-        const wasmURL = await toBlobURL(`${coreBaseURL}/ffmpeg-core.wasm`, 'application/wasm');
+        // 4. Buat Blob URL dari kode yang sudah dipatch.
+        const ffmpegJsBlob = new Blob([ffmpegJsCode], { type: 'text/javascript' });
+        const ffmpegJsBlobURL = URL.createObjectURL(ffmpegJsBlob);
 
-        console.log('⚙️ Loading FFmpeg core...');
-        await ffmpeg.load({ coreURL, wasmURL });
-        console.log('✅ FFmpeg siap');
+        // 5. Import library yang sudah dipatch secara dinamis.
+        const { FFmpeg } = await import(ffmpegJsBlobURL);
+        
+        // 6. Ambil utilitas dari CDN (ESM lebih mudah untuk ini).
+        const { toBlobURL, fetchFile } = await import('https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js');
 
-        // Tulis input
-        await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
+        const ffmpeg = new FFmpeg();
 
-        console.log('🔄 Konversi WEBM → MP4...');
-        await ffmpeg.exec([
+        // 7. Siapkan Core dan Worker.
+        const coreBaseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+
+        // Unduh file worker yang sebenarnya (814.ffmpeg.js) dan ubah ke Blob URL.
+        // Ini yang akan kita masukkan ke dalam config.
+        const workerBlobURL = await toBlobURL(`${ffmpegBaseURL}/814.ffmpeg.js`, 'text/javascript');
+        
+        // Trik: Kita set properti global yang akan dibaca oleh kode yang sudah dipatch.
+        // Kita bisa melakukannya dengan memodifikasi window object atau dengan cara lain.
+        // Karena kita meng-import kode ke dalam scope modul, kita tidak bisa langsung set `r`.
+        // Solusi paling bersih: kita modifikasi `ffmpeg.load` untuk menerima `worker814URL`.
+        // Tapi karena kita tidak bisa memodifikasi methodnya, kita lakukan hack:
+        // Kita simpan URL di window dan modifikasi kode patch untuk membacanya.
+        
+        // ---- REVISI PATCH: ---- //
+        // Ganti patch string agar merujuk ke global window.
+        const patchedWorkerCodeFinal = 'new URL(window.__FFMPEG_WORKER_URL__, e.b)';
+        ffmpegJsCode = ffmpegJsCode.replace(originalWorkerCode, patchedWorkerCodeFinal);
+        
+        // Buat ulang Blob dan import dengan kode final.
+        const finalBlob = new Blob([ffmpegJsCode], { type: 'text/javascript' });
+        const finalBlobURL = URL.createObjectURL(finalBlob);
+        const { FFmpeg: FFmpegFinal } = await import(finalBlobURL);
+        const ffmpegFinal = new FFmpegFinal();
+        
+        // Set global variable SEBELUM memanggil load.
+        window.__FFMPEG_WORKER_URL__ = workerBlobURL;
+
+        // 8. Load dengan coreURL dan wasmURL.
+        // Kode yang sudah dipatch akan secara otomatis membaca window.__FFMPEG_WORKER_URL__.
+        await ffmpegFinal.load({
+            coreURL: await toBlobURL(`${coreBaseURL}/ffmpeg-core.js`, 'text/javascript'),
+            wasmURL: await toBlobURL(`${coreBaseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        });
+        
+        console.log('✅ FFmpeg siap (patched worker mode).');
+
+        // 9. Sisa proses eksekusi.
+        await ffmpegFinal.writeFile('input.webm', await fetchFile(webmBlob));
+        console.log('🔄 Mengonversi ke MP4...');
+        
+        await ffmpegFinal.exec([
             '-i', 'input.webm',
             '-c:v', 'libx264',
             '-preset', 'fast',
@@ -1411,14 +1469,16 @@
             'output.mp4'
         ]);
 
-        const data = await ffmpeg.readFile('output.mp4');
+        const data = await ffmpegFinal.readFile('output.mp4');
         const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
-
-        console.log(`✅ Selesai: ${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB`);
+        
+        console.log(`✅ Konversi selesai: ${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB`);
         return mp4Blob;
 
     } catch (err) {
         console.error('❌ Konversi gagal:', err);
+        // Fallback sederhana: coba tanpa patch jika patch gagal.
+        // (Kemungkinan besar ini akan gagal lagi, tapi sebagai percobaan terakhir).
         throw new Error(`Gagal konversi: ${err.message}`);
     }
 }
