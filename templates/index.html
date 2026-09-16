@@ -1842,70 +1842,97 @@
         }
 
         // ==================== SUBMIT TO AI ====================
-        async function submitToAI() {
-            const prompt = document.getElementById('promptInput').value.trim();
-            if (!prompt) { alert('Isi prompt dulu!'); return; }
-            if (checkedVideos.length === 0) { alert('Centang media dulu!'); return; }
+async function submitToAI() {
+    const prompt = document.getElementById('promptInput').value.trim();
+    if (!prompt) { alert('Isi prompt dulu!'); return; }
+    if (checkedVideos.length === 0) { alert('Centang media dulu!'); return; }
 
-            const media = checkedVideos[0];
-            
-            // Auto-detect: jika gambar, panggil submitImageToAI
-            if (media.media_type === 'image') {
-                return submitImageToAI();
-            }
+    const media = checkedVideos[0];
+    
+    // Auto-detect: jika gambar, panggil submitImageToAI
+    if (media.media_type === 'image') {
+        return submitImageToAI();
+    }
 
-            // Video: proses seperti sebelumnya
-            openAIResultModal('video');
-            setAIResultLoading(true);
+    // Video: proses upload dulu ke Vercel Blob
+    openAIResultModal('video');
+    setAIResultLoading(true);
 
-            const submitBtn = document.getElementById('submitAIButton');
-            const originalBtnHTML = submitBtn.innerHTML;
-            submitBtn.disabled = true;
-            submitBtn.style.opacity = '0.5';
-            submitBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div><span>Memproses...</span>';
+    const submitBtn = document.getElementById('submitAIButton');
+    const originalBtnHTML = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.5';
+    submitBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div><span>Memproses...</span>';
 
-            try {
-                let videoUrl = media.url;
-                if (!media.is_single && media.chunks && media.chunks.length > 0) {
-                    videoUrl = media.chunks[0].url;
-                }
-                if (!videoUrl) throw new Error('URL video tidak ditemukan!');
-
-                document.getElementById('aiResultLoading').innerHTML = `
-                    <div class="spinner mx-auto mb-4"></div>
-                    <p class="text-purple-400 font-medium">📤 Mengirim video ke AI...</p>
-                `;
-
-                const response = await fetch('/api/edit-video', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        prompt: prompt,
-                        image_url: videoUrl
-                    })
-                });
-
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Gagal generate video');
-
-                setAIResultLoading(false);
-                document.getElementById('aiResultContent').classList.remove('hidden');
-                document.getElementById('aiResultLabel').textContent = '🎬 Video Hasil Generate:';
-                document.getElementById('aiResultText').innerHTML = `
-                    <video src="${data.video_url}" controls class="w-full rounded-lg"></video>
-                    <p class="text-xs text-gray-400 mt-2">Video berhasil di-generate dengan Agnes AI.</p>
-                `;
-
-            } catch (error) {
-                console.error('Submit AI error:', error);
-                setAIResultLoading(false);
-                setAIResultError(error.message);
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.style.opacity = '1';
-                submitBtn.innerHTML = originalBtnHTML;
-            }
+    try {
+        // Ambil URL video dari media
+        let videoUrl = media.url;
+        if (!media.is_single && media.chunks && media.chunks.length > 0) {
+            videoUrl = media.chunks[0].url;
         }
+        if (!videoUrl) throw new Error('URL video tidak ditemukan!');
+
+        // ✅ LANGKAH BARU: Upload video ke Vercel Blob untuk dapat URL publik
+        document.getElementById('aiResultLoading').innerHTML = `
+            <div class="spinner mx-auto mb-4"></div>
+            <p class="text-purple-400 font-medium">📤 Mengunggah video ke server...</p>
+        `;
+
+        // Download video dari blob URL
+        const videoResponse = await fetch(videoUrl);
+        if (!videoResponse.ok) throw new Error('Gagal mengunduh video');
+        const videoBlob = await videoResponse.blob();
+        const videoFile = new File([videoBlob], 'input_video.mp4', { type: 'video/mp4' });
+
+        // Upload ke Vercel Blob
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', videoFile);
+        const uploadRes = await fetch('/api/upload-media', { 
+            method: 'POST', 
+            body: uploadFormData 
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.error || 'Gagal upload video');
+        
+        const publicVideoUrl = uploadData.url;
+        console.log('✅ Video terupload:', publicVideoUrl);
+
+        // ✅ Kirim URL publik ke Agnes AI
+        document.getElementById('aiResultLoading').innerHTML = `
+            <div class="spinner mx-auto mb-4"></div>
+            <p class="text-purple-400 font-medium">📤 Mengirim video ke AI...</p>
+        `;
+
+        const response = await fetch('/api/edit-video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: prompt,
+                image_url: publicVideoUrl  // Kirim URL publik
+            })
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Gagal generate video');
+
+        setAIResultLoading(false);
+        document.getElementById('aiResultContent').classList.remove('hidden');
+        document.getElementById('aiResultLabel').textContent = '🎬 Video Hasil Generate:';
+        document.getElementById('aiResultText').innerHTML = `
+            <video src="${data.video_url}" controls class="w-full rounded-lg"></video>
+            <p class="text-xs text-gray-400 mt-2">Video berhasil di-generate dengan Agnes AI.</p>
+        `;
+
+    } catch (error) {
+        console.error('Submit AI error:', error);
+        setAIResultLoading(false);
+        setAIResultError(error.message);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.innerHTML = originalBtnHTML;
+    }
+}
 
         async function submitImageToAI() {
             const prompt = document.getElementById('promptInput').value.trim();
