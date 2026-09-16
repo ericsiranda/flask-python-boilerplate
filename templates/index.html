@@ -6,8 +6,8 @@
     <title>Project IGIKI - Manajemen Medsos</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FFmpeg.wasm UMD -->
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
-    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
     <style>
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
@@ -1372,57 +1372,68 @@
 
         // ==================== KONVERSI WEBM → MP4 (UMD) ====================
         async function convertToMp4(webmBlob) {
-            try {
-                console.log('🎬 Memuat FFmpeg...');
-                
-                if (!window.FFmpegWASM && !window.FFmpeg) {
-                    await loadScript('https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js');
-                    await loadScript('https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js');
-                }
-
-                const FFmpegWASM = window.FFmpegWASM || window.FFmpeg;
-                const FFmpegUtil = window.FFmpegUtil;
-                
-                if (!FFmpegWASM || !FFmpegWASM.FFmpeg) {
-                    throw new Error('FFmpeg tidak berhasil dimuat');
-                }
-
-                const ffmpeg = new FFmpegWASM.FFmpeg();
-                
-                const coreBaseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-                await ffmpeg.load({
-                    coreURL: `${coreBaseURL}/ffmpeg-core.js`,
-                    wasmURL: `${coreBaseURL}/ffmpeg-core.wasm`,
-                });
-                
-                console.log('✅ FFmpeg siap');
-
-                const { fetchFile } = FFmpegUtil;
-                await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
-
-                console.log('🔄 Mengonversi ke MP4...');
-                await ffmpeg.exec([
-                    '-i', 'input.webm',
-                    '-c:v', 'libx264',
-                    '-preset', 'fast',
-                    '-crf', '23',
-                    '-c:a', 'aac',
-                    '-b:a', '128k',
-                    '-movflags', '+faststart',
-                    'output.mp4'
-                ]);
-
-                const data = await ffmpeg.readFile('output.mp4');
-                const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
-                
-                console.log(`✅ Konversi selesai: ${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB`);
-                return mp4Blob;
-
-            } catch (err) {
-                console.error('❌ Konversi gagal:', err);
-                throw new Error(`Gagal konversi: ${err.message}`);
-            }
+    try {
+        console.log('🎬 Memuat FFmpeg...');
+        
+        // Pastikan library sudah dimuat
+        if (!window.FFmpegWASM && !window.FFmpeg) {
+            await loadScript('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js');
+            await loadScript('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js');
         }
+
+        const FFmpegWASM = window.FFmpegWASM || window.FFmpeg;
+        const FFmpegUtil = window.FFmpegUtil;
+        
+        if (!FFmpegWASM || !FFmpegWASM.FFmpeg) {
+            throw new Error('FFmpeg tidak berhasil dimuat');
+        }
+        if (!FFmpegUtil || !FFmpegUtil.toBlobURL) {
+            throw new Error('FFmpegUtil.toBlobURL tidak tersedia');
+        }
+
+        const ffmpeg = new FFmpegWASM.FFmpeg();
+        
+        // ✅ KUNCI UTAMA: gunakan toBlobURL untuk bypass CORS
+        const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
+        const coreURL = await FFmpegUtil.toBlobURL(
+            `${baseURL}/ffmpeg-core.js`, 
+            'text/javascript'
+        );
+        const wasmURL = await FFmpegUtil.toBlobURL(
+            `${baseURL}/ffmpeg-core.wasm`, 
+            'application/wasm'
+        );
+        
+        await ffmpeg.load({ coreURL, wasmURL });
+        
+        console.log('✅ FFmpeg siap (single-thread mode)');
+
+        const { fetchFile } = FFmpegUtil;
+        await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
+
+        console.log('🔄 Mengonversi ke MP4...');
+        await ffmpeg.exec([
+            '-i', 'input.webm',
+            '-c:v', 'libx264',
+            '-preset', 'fast',
+            '-crf', '23',
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            '-movflags', '+faststart',
+            'output.mp4'
+        ]);
+
+        const data = await ffmpeg.readFile('output.mp4');
+        const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
+        
+        console.log(`✅ Konversi selesai: ${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB`);
+        return mp4Blob;
+
+    } catch (err) {
+        console.error('❌ Konversi gagal:', err);
+        throw new Error(`Gagal konversi: ${err.message}`);
+    }
+}
 
         function loadScript(src) {
             return new Promise((resolve, reject) => {
