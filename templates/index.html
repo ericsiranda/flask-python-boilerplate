@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Project IGIKI - Manajemen Medsos</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FFmpeg dimuat dinamis di dalam fungsi convertToMp4 -->
+    <!-- FFmpeg.wasm UMD -->
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
     <style>
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
@@ -426,7 +428,7 @@
         </div>
     </div>
 
-    <script type="module">
+    <script>
         // ==================== SESSION ====================
         const SESSION_KEY = 'app_user_session';
         const CURRENT_USER_KEY = 'app_current_user';
@@ -1368,25 +1370,34 @@
             });
         }
 
-        // ==================== KONVERSI WEBM → MP4 (SINGLE-THREADED) ====================
+        // ==================== KONVERSI WEBM → MP4 (UMD) ====================
         async function convertToMp4(webmBlob) {
             try {
-                console.log('🎬 Memuat FFmpeg (single-threaded)...');
+                console.log('🎬 Memuat FFmpeg...');
                 
-                const { FFmpeg } = await import('https://esm.sh/@ffmpeg/ffmpeg@0.12.10');
-                const { toBlobURL, fetchFile } = await import('https://esm.sh/@ffmpeg/util@0.12.1');
+                if (!window.FFmpegWASM && !window.FFmpeg) {
+                    await loadScript('https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js');
+                    await loadScript('https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js');
+                }
+
+                const FFmpegWASM = window.FFmpegWASM || window.FFmpeg;
+                const FFmpegUtil = window.FFmpegUtil;
                 
-                const ffmpeg = new FFmpeg();
+                if (!FFmpegWASM || !FFmpegWASM.FFmpeg) {
+                    throw new Error('FFmpeg tidak berhasil dimuat');
+                }
+
+                const ffmpeg = new FFmpegWASM.FFmpeg();
                 
-                // Load core single-threaded (TIDAK butuh SharedArrayBuffer)
-                const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+                const coreBaseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
                 await ffmpeg.load({
-                    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-                    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+                    coreURL: `${coreBaseURL}/ffmpeg-core.js`,
+                    wasmURL: `${coreBaseURL}/ffmpeg-core.wasm`,
                 });
                 
                 console.log('✅ FFmpeg siap');
 
+                const { fetchFile } = FFmpegUtil;
                 await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
 
                 console.log('🔄 Mengonversi ke MP4...');
@@ -1411,6 +1422,17 @@
                 console.error('❌ Konversi gagal:', err);
                 throw new Error(`Gagal konversi: ${err.message}`);
             }
+        }
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = () => reject(new Error(`Gagal memuat: ${src}`));
+                document.head.appendChild(script);
+            });
         }
 
         // ==================== SCHEDULE ====================
@@ -1539,7 +1561,7 @@
             }
         }
 
-        // ==================== SUBMIT TO AI (AGNES) ====================
+        // ==================== SUBMIT TO AI ====================
         async function submitToAI() {
             const prompt = document.getElementById('promptInput').value.trim();
             if (!prompt) { alert('Isi prompt dulu!'); return; }
@@ -1557,7 +1579,6 @@
             submitBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div><span>Memproses...</span>';
 
             try {
-                // ===== LANGKAH 1: UNDUH VIDEO =====
                 let videoUrl = video.url;
                 if (!video.is_single && video.chunks && video.chunks.length > 0) {
                     videoUrl = video.chunks[0].url;
@@ -1574,7 +1595,6 @@
                 const videoBlob = await videoResponse.blob();
                 console.log(`✅ Video terunduh: ${(videoBlob.size / 1024 / 1024).toFixed(2)} MB`);
 
-                // ===== LANGKAH 2: KONVERSI KE MP4 =====
                 document.getElementById('aiResultLoading').innerHTML = `
                     <div class="spinner mx-auto mb-4"></div>
                     <p class="text-purple-400 font-medium">🔄 Mengonversi video ke MP4 (H.264)...</p>
@@ -1584,7 +1604,6 @@
                 const mp4Blob = await convertToMp4(videoBlob);
                 const mp4File = new File([mp4Blob], 'video_converted.mp4', { type: 'video/mp4' });
 
-                // ===== LANGKAH 3: UPLOAD MP4 =====
                 document.getElementById('aiResultLoading').innerHTML = `
                     <div class="spinner mx-auto mb-4"></div>
                     <p class="text-purple-400 font-medium">📤 Mengunggah video MP4...</p>
@@ -1597,7 +1616,6 @@
                 if (!uploadRes.ok) throw new Error(uploadData.error || 'Gagal upload MP4');
                 console.log('✅ Video MP4 terupload:', uploadData.url);
 
-                // ===== LANGKAH 4: KIRIM KE AGNES =====
                 document.getElementById('aiResultLoading').innerHTML = `
                     <div class="spinner mx-auto mb-4"></div>
                     <p class="text-purple-400 font-medium">🤖 Menunggu Agnes AI memproses video...</p>
@@ -1616,7 +1634,6 @@
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Gagal generate video');
 
-                // ===== LANGKAH 5: TAMPILKAN HASIL =====
                 setAIResultLoading(false);
                 document.getElementById('aiResultContent').classList.remove('hidden');
                 document.getElementById('aiResultText').innerHTML = `
@@ -1761,7 +1778,7 @@
             }
         }
 
-        // ==================== EXPOSE KE GLOBAL (untuk onclick di HTML) ====================
+        // Expose ke global scope
         window.logoutUser = logoutUser;
         window.attemptLogin = attemptLogin;
         window.toggleGatePassword = toggleGatePassword;
