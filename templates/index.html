@@ -86,7 +86,6 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* Combo box dropdown */
         .combo-panel {
             max-height: 280px;
             overflow-y: auto;
@@ -224,16 +223,16 @@
                 </div>
                 <div class="p-3 space-y-3 flex-1 overflow-y-auto">
                     <div class="bg-purple-500/10 border border-purple-500/20 rounded-lg p-2">
-                        <p class="text-xs text-purple-300 mb-1.5 font-medium">📋 Video yang akan diedit:</p>
+                        <p class="text-xs text-purple-300 mb-1.5 font-medium">📋 Media yang akan diedit:</p>
                         <div id="checkedVideosList" class="text-xs text-white space-y-1"></div>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-400 mb-1">Prompt / Instruksi Edit</label>
-                        <textarea id="promptInput" rows="5" placeholder="Contoh:&#10;- Buat cinematic dengan warna hangat&#10;- Potong jadi 60 detik" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-sm text-white outline-none resize-none"></textarea>
+                        <textarea id="promptInput" rows="5" placeholder="Contoh:&#10;- Buat cinematic dengan warna hangat&#10;- Ubah background jadi pantai" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-sm text-white outline-none resize-none"></textarea>
                     </div>
                     <button onclick="submitToAI()" id="submitAIButton" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        <span>Kirim ke AI</span>
+                        <span id="submitAILabel">Kirim ke AI</span>
                     </button>
                 </div>
             </div>
@@ -250,7 +249,7 @@
                     </div>
                 </div>
 
-                <!-- JADWAL POSTING DENGAN COMBO BOX MULTI-MEDIA -->
+                <!-- JADWAL POSTING -->
                 <div class="bg-gray-800 rounded-2xl border border-blue-500/40 p-3 sm:p-4">
                     <div class="flex items-center gap-2 mb-3">
                         <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -263,7 +262,7 @@
                             <label class="block text-xs font-medium text-gray-400 mb-1">🎬 Pilih Video</label>
                             <button type="button" onclick="toggleCombo('video')" 
                                     class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-left text-xs text-white flex justify-between items-center hover:border-blue-500 transition">
-                                <span id="comboVideoLabel" class="truncate">Pilih video...</span>
+                                <span id="comboVideoLabel" class="truncate text-gray-400">Pilih video...</span>
                                 <svg id="comboVideoArrow" class="w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
                             <div id="comboVideoPanel" class="hidden absolute z-30 mt-1 w-full bg-gray-700 border border-gray-600 rounded-lg shadow-2xl combo-panel">
@@ -283,7 +282,7 @@
                             <label class="block text-xs font-medium text-gray-400 mb-1">🖼️ Pilih Gambar</label>
                             <button type="button" onclick="toggleCombo('image')" 
                                     class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-left text-xs text-white flex justify-between items-center hover:border-pink-500 transition">
-                                <span id="comboImageLabel" class="truncate">Pilih gambar...</span>
+                                <span id="comboImageLabel" class="truncate text-gray-400">Pilih gambar...</span>
                                 <svg id="comboImageArrow" class="w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
                             <div id="comboImagePanel" class="hidden absolute z-30 mt-1 w-full bg-gray-700 border border-gray-600 rounded-lg shadow-2xl combo-panel">
@@ -353,19 +352,19 @@
                 <div class="p-4 border-b border-purple-500/20 flex justify-between items-center bg-purple-500/5">
                     <h3 class="font-bold text-purple-400 flex items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
-                        Hasil Video AI
+                        <span id="aiResultModalTitle">Hasil AI</span>
                     </h3>
                     <button onclick="closeAIResultModal()" class="text-gray-400 hover:text-white">✕</button>
                 </div>
                 <div class="p-4 max-h-[70vh] overflow-y-auto">
                     <div id="aiResultLoading" class="text-center py-8">
                         <div class="spinner mx-auto mb-4"></div>
-                        <p class="text-purple-400 font-medium">AI sedang membuat video...</p>
+                        <p class="text-purple-400 font-medium">AI sedang memproses...</p>
                         <p class="text-gray-500 text-xs mt-2">Proses ini bisa memakan waktu 1-3 menit</p>
                     </div>
                     <div id="aiResultContent" class="hidden">
                         <div class="bg-gray-900/50 border border-gray-700 rounded-lg p-4 mb-4">
-                            <p class="text-xs text-gray-400 mb-2">🎬 Video Hasil Generate:</p>
+                            <p id="aiResultLabel" class="text-xs text-gray-400 mb-2">🎬 Hasil Generate:</p>
                             <div id="aiResultText" class="text-sm text-white"></div>
                         </div>
                         <div class="flex gap-2">
@@ -376,7 +375,7 @@
                     </div>
                     <div id="aiResultError" class="hidden">
                         <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-                            <p class="text-red-400 text-sm font-medium mb-2">❌ Gagal generate video</p>
+                            <p class="text-red-400 text-sm font-medium mb-2">❌ Gagal generate</p>
                             <p id="aiResultErrorText" class="text-gray-400 text-xs"></p>
                         </div>
                         <button onclick="closeAIResultModal()" class="w-full mt-4 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2.5 rounded-lg text-sm">
@@ -887,7 +886,9 @@
                 const sizeMB = (file.size / 1024 / 1024).toFixed(2);
                 const isSelected = selectedVideo && selectedVideo.unique_id === file.unique_id;
                 const isChecked = checkedVideos.some(v => v.unique_id === file.unique_id);
-                const canBeChecked = file.type === 'raw' && file.media_type === 'video';
+                // Checkbox aktif untuk video mentah DAN gambar mentah
+                const canBeChecked = (file.type === 'raw' && file.media_type === 'video') || 
+                                     (file.type === 'image');
 
                 let icon = '📹';
                 let statusClass = 'bg-blue-500/20 text-blue-400';
@@ -943,7 +944,12 @@
 
         function toggleCheck(uniqueId) {
             const file = allFiles.find(f => f.unique_id === uniqueId);
-            if (!file || file.type !== 'raw' || file.media_type !== 'video') return;
+            if (!file) return;
+            // Bisa dicentang: video mentah ATAU gambar mentah
+            const canCheck = (file.type === 'raw' && file.media_type === 'video') || 
+                             (file.type === 'image');
+            if (!canCheck) return;
+            
             const idx = checkedVideos.findIndex(v => v.unique_id === uniqueId);
             if (idx >= 0) checkedVideos.splice(idx, 1);
             else checkedVideos.push(file);
@@ -966,17 +972,26 @@
             if (!listEl) return;
 
             if (checkedVideos.length === 0) {
-                listEl.innerHTML = '<span class="text-gray-500 italic">Belum ada video terpilih</span>';
-                return;
+                listEl.innerHTML = '<span class="text-gray-500 italic">Belum ada media terpilih</span>';
+            } else {
+                listEl.innerHTML = checkedVideos.map(v => `
+                    <div class="flex items-center gap-2">
+                        <span class="text-purple-400">${v.media_type === 'image' ? '🖼️' : '📹'}</span>
+                        <span class="truncate">${v.displayName}</span>
+                        <span class="text-gray-500 ml-auto flex-shrink-0 text-xs">${(v.size / 1024 / 1024).toFixed(1)} MB</span>
+                    </div>
+                `).join('');
             }
 
-            listEl.innerHTML = checkedVideos.map(v => `
-                <div class="flex items-center gap-2">
-                    <span class="text-purple-400">•</span>
-                    <span class="truncate">${v.displayName}</span>
-                    <span class="text-gray-500 ml-auto flex-shrink-0 text-xs">${(v.size / 1024 / 1024).toFixed(1)} MB</span>
-                </div>
-            `).join('');
+            // Update label tombol
+            const submitLabel = document.getElementById('submitAILabel');
+            if (submitLabel) {
+                const hasImage = checkedVideos.some(v => v.media_type === 'image');
+                const hasVideo = checkedVideos.some(v => v.media_type === 'video');
+                if (hasImage && !hasVideo) submitLabel.textContent = 'Kirim Gambar ke AI';
+                else if (hasVideo && !hasImage) submitLabel.textContent = 'Kirim Video ke AI';
+                else submitLabel.textContent = 'Kirim ke AI';
+            }
         }
 
         function selectVideoByUniqueId(uniqueId) {
@@ -1140,12 +1155,12 @@
         function openRenameModal(uniqueId) {
             const file = allFiles.find(f => f.unique_id === uniqueId);
             if (!file) return;
-            if (file.type !== 'raw') { alert('⚠️ File hasil AI tidak bisa di-rename.'); return; }
+            if (file.type !== 'raw' && file.type !== 'image') { alert('⚠️ File hasil AI tidak bisa di-rename.'); return; }
             renamingFile = file;
             document.getElementById('renameModal').classList.remove('hidden');
             document.getElementById('renameModal').classList.add('flex');
             document.getElementById('renameOldName').value = file.displayName;
-            document.getElementById('renameNewName').value = file.displayName.replace(/\.(webm|mp4)$/, '');
+            document.getElementById('renameNewName').value = file.displayName.replace(/\.(webm|mp4|jpg|jpeg|png|gif|webp|bmp)$/i, '');
             document.getElementById('renameStatus').classList.add('hidden');
             setTimeout(() => document.getElementById('renameNewName').focus(), 200);
         }
@@ -1201,7 +1216,7 @@
             if (!confirm(`Yakin ingin menghapus "${file.displayName}"?`)) return;
 
             try {
-                if (file.is_single || file.type !== 'raw') {
+                if (file.is_single || (file.type !== 'raw' && file.type !== 'image')) {
                     await fetch('/api/delete-file', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1215,6 +1230,13 @@
                             body: JSON.stringify({ url: chunk.url })
                         });
                     }
+                } else {
+                    // Gambar mentah (single file)
+                    await fetch('/api/delete-file', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: file.url })
+                    });
                 }
                 checkedVideos = checkedVideos.filter(v => v.unique_id !== uniqueId);
                 if (selectedVideo && selectedVideo.unique_id === uniqueId) {
@@ -1471,7 +1493,8 @@
                     const outputStream = new MediaStream(combinedTracks);
 
                     let mimeType = 'video/webm;codecs=vp8,opus';
-                    if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+                    if (!MediaTypeSupported(mimeType)) mimeType = 'video/webm';
+                    function MediaTypeSupported(t) { return MediaRecorder.isTypeSupported(t); }
 
                     const recorder = new MediaRecorder(outputStream, {
                         mimeType: mimeType, videoBitsPerSecond: 5000000, audioBitsPerSecond: 128000,
@@ -1507,7 +1530,7 @@
             });
         }
 
-        // ==================== COMBO BOX DROPDOWN ====================
+        // ==================== COMBO BOX ====================
         function toggleCombo(type) {
             const panel = document.getElementById(`combo${type.charAt(0).toUpperCase() + type.slice(1)}Panel`);
             const arrow = document.getElementById(`combo${type.charAt(0).toUpperCase() + type.slice(1)}Arrow`);
@@ -1573,7 +1596,7 @@
             }
         }
 
-        // ==================== SCHEDULE MULTI-MEDIA ====================
+        // ==================== SCHEDULE ====================
         async function loadSchedules() {
             try {
                 const res = await fetch('/api/schedules/list');
@@ -1623,7 +1646,6 @@
         }
 
         async function populateMediaDropdowns() {
-            // === Video ===
             const videoList = document.getElementById('comboVideoList');
             const videoFiles = allFiles.filter(f => f.media_type === 'video');
 
@@ -1651,7 +1673,6 @@
                 }).join('');
             }
 
-            // === Gambar ===
             const imageList = document.getElementById('comboImageList');
             const imageFiles = allFiles.filter(f => f.media_type === 'image');
 
@@ -1679,10 +1700,8 @@
                 }).join('');
             }
 
-            // Update label button
             updateComboLabels();
 
-            // Platform dropdown
             const platformSelect = document.getElementById('schedulePlatform');
             const currentVal = platformSelect.value;
             platformSelect.innerHTML = '<option value="">- Pilih -</option>';
@@ -1826,10 +1845,17 @@
         async function submitToAI() {
             const prompt = document.getElementById('promptInput').value.trim();
             if (!prompt) { alert('Isi prompt dulu!'); return; }
-            if (checkedVideos.length === 0) { alert('Centang video dulu!'); return; }
+            if (checkedVideos.length === 0) { alert('Centang media dulu!'); return; }
 
-            const video = checkedVideos[0];
-            openAIResultModal();
+            const media = checkedVideos[0];
+            
+            // Auto-detect: jika gambar, panggil submitImageToAI
+            if (media.media_type === 'image') {
+                return submitImageToAI();
+            }
+
+            // Video: proses seperti sebelumnya
+            openAIResultModal('video');
             setAIResultLoading(true);
 
             const submitBtn = document.getElementById('submitAIButton');
@@ -1839,15 +1865,15 @@
             submitBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div><span>Memproses...</span>';
 
             try {
-                let videoUrl = video.url;
-                if (!video.is_single && video.chunks && video.chunks.length > 0) {
-                    videoUrl = video.chunks[0].url;
+                let videoUrl = media.url;
+                if (!media.is_single && media.chunks && media.chunks.length > 0) {
+                    videoUrl = media.chunks[0].url;
                 }
                 if (!videoUrl) throw new Error('URL video tidak ditemukan!');
 
                 document.getElementById('aiResultLoading').innerHTML = `
                     <div class="spinner mx-auto mb-4"></div>
-                    <p class="text-purple-400 font-medium">📤 Mengirim ke AI...</p>
+                    <p class="text-purple-400 font-medium">📤 Mengirim video ke AI...</p>
                 `;
 
                 const response = await fetch('/api/edit-video', {
@@ -1864,6 +1890,7 @@
 
                 setAIResultLoading(false);
                 document.getElementById('aiResultContent').classList.remove('hidden');
+                document.getElementById('aiResultLabel').textContent = '🎬 Video Hasil Generate:';
                 document.getElementById('aiResultText').innerHTML = `
                     <video src="${data.video_url}" controls class="w-full rounded-lg"></video>
                     <p class="text-xs text-gray-400 mt-2">Video berhasil di-generate dengan Agnes AI.</p>
@@ -1880,12 +1907,66 @@
             }
         }
 
-        function openAIResultModal() {
+        async function submitImageToAI() {
+            const prompt = document.getElementById('promptInput').value.trim();
+            if (!prompt) { alert('Isi prompt dulu!'); return; }
+
+            const image = checkedVideos[0];
+
+            openAIResultModal('image');
+            setAIResultLoading(true);
+
+            const submitBtn = document.getElementById('submitAIButton');
+            const originalBtnHTML = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.5';
+            submitBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div><span>Memproses...</span>';
+
+            try {
+                document.getElementById('aiResultLoading').innerHTML = `
+                    <div class="spinner mx-auto mb-4"></div>
+                    <p class="text-purple-400 font-medium">📤 Mengirim gambar ke AI...</p>
+                `;
+
+                const response = await fetch('/api/edit-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        image_url: image.url
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Gagal generate gambar');
+
+                setAIResultLoading(false);
+                document.getElementById('aiResultContent').classList.remove('hidden');
+                document.getElementById('aiResultLabel').textContent = '🖼️ Gambar Hasil Generate:';
+                document.getElementById('aiResultText').innerHTML = `
+                    <img src="${data.image_url}" class="w-full rounded-lg"/>
+                    <p class="text-xs text-gray-400 mt-2">Gambar berhasil di-generate dengan Agnes AI.</p>
+                `;
+
+            } catch (error) {
+                console.error('Submit Image AI error:', error);
+                setAIResultLoading(false);
+                setAIResultError(error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+                submitBtn.innerHTML = originalBtnHTML;
+            }
+        }
+
+        function openAIResultModal(type) {
             document.getElementById('aiResultModal').classList.remove('hidden');
             document.getElementById('aiResultModal').classList.add('flex');
             document.getElementById('aiResultContent').classList.add('hidden');
             document.getElementById('aiResultError').classList.add('hidden');
             document.getElementById('aiResultLoading').classList.remove('hidden');
+            document.getElementById('aiResultModalTitle').textContent = type === 'image' ? 'Hasil Gambar AI' : 'Hasil Video AI';
+            document.getElementById('aiResultLabel').textContent = type === 'image' ? '🖼️ Gambar Hasil Generate:' : '🎬 Video Hasil Generate:';
         }
 
         function closeAIResultModal() {

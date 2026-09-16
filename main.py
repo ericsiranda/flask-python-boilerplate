@@ -80,7 +80,6 @@ def init_tables():
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
-        # Migration: tambah kolom baru kalau belum ada
         try:
             cur.execute("ALTER TABLE schedules ADD COLUMN IF NOT EXISTS videos_json TEXT DEFAULT '[]'")
             cur.execute("ALTER TABLE schedules ADD COLUMN IF NOT EXISTS images_json TEXT DEFAULT '[]'")
@@ -251,6 +250,91 @@ def edit_video_agnes():
         return jsonify({'error': 'Gagal terhubung ke Agnes API'}), 503
     except Exception as e:
         print(f"❌ Agnes AI Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== AGNES AI IMAGE EDITING ====================
+@app.route('/api/edit-image', methods=['POST'])
+def edit_image_agnes():
+    data = request.json
+    prompt = data.get('prompt')
+    image_url = data.get('image_url')
+
+    if not prompt:
+        return jsonify({'error': 'Prompt wajib disediakan'}), 400
+    if not image_url:
+        return jsonify({'error': 'Image URL wajib disediakan'}), 400
+
+    agnes_api_key = os.environ.get('AGNES_API_KEY')
+    if not agnes_api_key:
+        return jsonify({'error': 'AGNES_API_KEY belum di-set'}), 500
+
+    try:
+        print(f"🖼️ Generating image dengan Agnes AI...")
+        print(f"Prompt: {prompt[:80]}...")
+        print(f"Image URL: {image_url[:80]}...")
+
+        url = "https://apihub.agnes-ai.com/v1/images/generations"
+
+        payload = {
+            "model": "agnes-image-2.1-flash",
+            "prompt": prompt,
+            "size": "1024x1024",
+            "extra_body": {
+                "image": [image_url],
+                "response_format": "url"
+            }
+        }
+
+        headers = {
+            "Authorization": f"Bearer {agnes_api_key}",
+            "Content-Type": "application/json"
+        }
+
+        res = req_lib.post(url, headers=headers, json=payload, timeout=120)
+        res_data = res.json()
+        print(f"Agnes image response: {res_data}")
+
+        if not res.ok:
+            return jsonify({'error': f'Agnes AI error: {res_data}'}), 500
+
+        image_result_url = None
+        if res_data.get('data') and len(res_data['data']) > 0:
+            image_result_url = res_data['data'][0].get('url')
+
+        if not image_result_url:
+            return jsonify({'error': f'URL gambar tidak ditemukan: {res_data}'}), 500
+
+        print(f"✅ Gambar hasil: {image_result_url}")
+        print("📥 Mengunduh gambar...")
+
+        img_download = req_lib.get(image_result_url, timeout=60)
+        if img_download.status_code != 200:
+            return jsonify({'error': f'Gagal download: {img_download.status_code}'}), 500
+
+        image_bytes = img_download.content
+        print(f"✅ Gambar diunduh: {len(image_bytes)} bytes")
+
+        filename = f"ai_edit_image_{int(time.time())}.png"
+        print(f"📤 Upload ke Vercel Blob: {filename}...")
+
+        blob_result = put(filename, image_bytes, access='public', multipart=True)
+        print(f"✅ Selesai: {blob_result.url}")
+
+        return jsonify({
+            'success': True,
+            'image_url': blob_result.url,
+            'pathname': blob_result.pathname
+        })
+
+    except req_lib.exceptions.Timeout:
+        return jsonify({'error': 'Timeout saat menghubungi Agnes API'}), 504
+    except req_lib.exceptions.ConnectionError:
+        return jsonify({'error': 'Gagal terhubung ke Agnes API'}), 503
+    except Exception as e:
+        print(f"❌ Agnes Image Error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
@@ -565,7 +649,6 @@ def delete_medsos():
 # ==================== BLOB UPLOAD (VIDEO + GAMBAR AUTO-DETECT) ====================
 @app.route('/api/upload-media', methods=['POST'])
 def upload_media():
-    """Upload video ATAU gambar, auto-detect tipe berdasarkan ekstensi."""
     try:
         file = request.files.get('file')
         if not file or file.filename == '':
@@ -608,7 +691,6 @@ def upload_media():
 
 @app.route('/api/upload', methods=['POST'])
 def upload_video_legacy():
-    """Legacy endpoint untuk upload video (kompatibilitas)."""
     try:
         if 'video' not in request.files:
             return jsonify({'error': 'Tidak ada file video'}), 400
@@ -634,7 +716,6 @@ def upload_video_legacy():
 
 @app.route('/api/upload-image', methods=['POST'])
 def upload_image():
-    """Legacy endpoint untuk upload gambar."""
     try:
         if 'image' not in request.files:
             return jsonify({'error': 'Tidak ada file gambar'}), 400
@@ -683,7 +764,7 @@ def finalize_cut():
     return jsonify({'success': True})
 
 
-# ==================== LIST FILES (VIDEO + GAMBAR, MENTAH + AI) ====================
+# ==================== LIST FILES ====================
 @app.route('/api/list-files-grouped', methods=['GET'])
 def list_files_grouped():
     try:
@@ -725,7 +806,7 @@ def list_files_grouped():
                 }
                 continue
 
-            # === CHUNK VIDEO (hasil potong) ===
+            # === CHUNK VIDEO ===
             if pathname.startswith('cut_') and is_video:
                 parts = pathname.rsplit('.', 1)[0].split('_')
                 if len(parts) >= 3:
@@ -741,7 +822,7 @@ def list_files_grouped():
                     sessions[sid]['total_chunks'] += 1
                 continue
 
-            # === FILE BIASA (video/gambar mentah) ===
+            # === FILE BIASA ===
             if is_video:
                 videos_raw.append({
                     'pathname': pathname, 'url': url, 'size': size,
@@ -755,7 +836,6 @@ def list_files_grouped():
                     'uploadedAt': uploaded_at
                 })
 
-        # Susun video yang di-group
         for sid in sessions:
             sessions[sid]['chunks'].sort(key=lambda x: x['index'])
 
@@ -778,7 +858,6 @@ def list_files_grouped():
 
         videos_final.extend(videos_raw)
 
-        # Video AI sebagai entri terpisah
         videos_ai = []
         for sid, ai in video_ai_edits.items():
             videos_ai.append({
@@ -792,7 +871,6 @@ def list_files_grouped():
                 'uploadedAt': ai['uploadedAt']
             })
 
-        # Gambar AI sebagai entri terpisah
         images_ai = []
         for ai in image_ai_edits:
             images_ai.append({
