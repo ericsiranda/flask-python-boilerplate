@@ -100,6 +100,36 @@ def init_tables():
         return False, str(e)
 
 
+# ==================== SANITIZE FILENAME HELPER ====================
+def sanitize_filename(original_name, default_ext='mp4'):
+    """
+    Sanitasi nama file agar aman untuk URL (hilangkan spasi dan karakter khusus).
+    """
+    if not original_name:
+        return f"video_{int(time.time())}.{default_ext}"
+
+    # Pisahkan ekstensi
+    if '.' in original_name:
+        base, ext = original_name.rsplit('.', 1)
+    else:
+        base, ext = original_name, default_ext
+
+    # Ganti karakter tidak aman dengan underscore
+    safe_base = re.sub(r'[^\w\-]', '_', base)
+    # Hilangkan double underscore
+    safe_base = re.sub(r'_+', '_', safe_base)
+    # Hilangkan underscore di awal/akhir
+    safe_base = safe_base.strip('_')
+    # Batasi panjang
+    safe_base = safe_base[:50] if safe_base else 'video'
+
+    # Batasi ekstensi
+    safe_ext = re.sub(r'[^\w]', '', ext)[:10] or default_ext
+
+    # Tambahkan timestamp agar unik
+    return f"{safe_base}_{int(time.time())}.{safe_ext}"
+
+
 # ==================== AGNES AI VIDEO GENERATION ====================
 @app.route('/api/edit-video', methods=['POST'])
 def edit_video_agnes():
@@ -117,6 +147,7 @@ def edit_video_agnes():
     try:
         print(f"🎬 Generating video dengan Agnes AI...")
         print(f"Prompt: {prompt[:80]}...")
+        print(f"Image URL: {image_url[:80] if image_url else 'None'}...")
 
         submit_url = "https://apihub.agnes-ai.com/v1/videos"
 
@@ -176,7 +207,10 @@ def edit_video_agnes():
                     print("✅ Video selesai diproses")
                     break
                 elif status == 'failed':
-                    return jsonify({'error': f'Agnes AI gagal: {result_data}'}), 500
+                    error_detail = result_data.get('error', {})
+                    return jsonify({
+                        'error': f"Agnes AI gagal: {error_detail.get('message', str(error_detail))}"
+                    }), 500
 
             except Exception as poll_error:
                 print(f"⚠️ Polling error: {poll_error}")
@@ -533,11 +567,28 @@ def upload_video():
         file = request.files['video']
         if file.filename == '':
             return jsonify({'error': 'Nama file kosong'}), 400
+
+        # SANITASI NAMA FILE
+        safe_name = sanitize_filename(file.filename, 'mp4')
+        print(f"📝 Nama asli: {file.filename}")
+        print(f"📝 Nama aman: {safe_name}")
+
         file_content = file.read()
-        result = put(file.filename, file_content, access='public', multipart=True)
-        return jsonify({'success': True, 'url': result.url, 'pathname': result.pathname,
-                       'filename': file.filename, 'size': len(file_content)})
+        result = put(safe_name, file_content, access='public', multipart=True)
+
+        print(f"✅ Upload selesai: {result.url}")
+
+        return jsonify({
+            'success': True,
+            'url': result.url,
+            'pathname': result.pathname,
+            'filename': safe_name,
+            'size': len(file_content)
+        })
     except Exception as e:
+        print(f"❌ Upload error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -549,8 +600,11 @@ def upload_chunk():
         file = request.files['video']
         session_id = request.form.get('session_id', 'default')
         chunk_index = int(request.form.get('chunk_index', 0))
+
+        safe_session_id = re.sub(r'[^\w]', '_', str(session_id))[:30] or 'session'
+
         file_content = file.read()
-        chunk_filename = f"cut_{session_id}_{chunk_index:03d}.webm"
+        chunk_filename = f"cut_{safe_session_id}_{chunk_index:03d}.webm"
         result = put(chunk_filename, file_content, access='public', multipart=True)
         return jsonify({'success': True, 'url': result.url, 'pathname': result.pathname,
                        'chunk_index': chunk_index, 'size': len(file_content)})
@@ -626,9 +680,13 @@ def rename_file():
         old_url, old_pathname, new_name = data.get('old_url'), data.get('old_pathname'), data.get('new_name', '').strip()
         if not old_url or not old_pathname or not new_name:
             return jsonify({'error': 'Data tidak lengkap'}), 400
-        safe_name = re.sub(r'[^\w\s\-\.]', '', new_name)
+
+        # SANITASI NAMA BARU
+        safe_name = sanitize_filename(new_name, 'webm')
         if not safe_name.endswith('.webm'): safe_name += '.webm'
+
         if safe_name == old_pathname: return jsonify({'success': True})
+
         resp = req_lib.get(old_url)
         if resp.status_code != 200: return jsonify({'error': 'Gagal download'}), 500
         result = put(safe_name, resp.content, access='public', multipart=True)
