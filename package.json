@@ -1,0 +1,8 @@
+{
+  "name": "flask-video-tools",
+  "version": "1.0.0",
+  "description": "NPM dependencies for FFmpeg processing",
+  "dependencies": {
+    "ffmpeg-fix": "^1.0.0"
+  }
+}
