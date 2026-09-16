@@ -9,12 +9,12 @@
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
-        
+
         .chunk-loading-pulse { animation: chunkPulse 1.5s ease-in-out infinite; }
         @keyframes chunkPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        
+
         .modal-backdrop { backdrop-filter: blur(6px); }
-        
+
         .video-list-item { transition: all 0.15s ease; }
         .video-list-item:hover { background: rgba(55, 65, 81, 0.5); }
         .video-list-item.selected {
@@ -25,7 +25,7 @@
             background: linear-gradient(to right, rgba(168, 85, 247, 0.12), transparent);
             border-left: 3px solid #a855f7;
         }
-        
+
         .checkbox-custom {
             appearance: none;
             -webkit-appearance: none;
@@ -48,13 +48,13 @@
             font-size: 11px;
             font-weight: bold;
         }
-        
+
         .slide-in-right { animation: slideInRight 0.3s ease-out; }
         @keyframes slideInRight {
             from { opacity: 0; transform: translateX(-15px); }
             to { opacity: 1; transform: translateX(0); }
         }
-        
+
         .video-list-item .action-btn {
             opacity: 0;
             transition: opacity 0.2s ease;
@@ -62,13 +62,13 @@
         .video-list-item:hover .action-btn { opacity: 1; }
         .video-list-item.selected .action-btn,
         .video-list-item.checked .action-btn { opacity: 1; }
-        
+
         .login-pop { animation: loginPop 0.4s ease-out; }
         @keyframes loginPop {
             0% { opacity: 0; transform: scale(0.9); }
             100% { opacity: 1; transform: scale(1); }
         }
-        
+
         .shake { animation: shake 0.4s ease; }
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
@@ -155,7 +155,7 @@
         </nav>
 
         <main id="mainGrid" class="max-w-[1600px] mx-auto p-3 sm:p-4 grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4" style="min-height: calc(100vh - 60px);">
-            <!-- KOLOM 1: Video List -->
+            <!-- KOLOM 1 -->
             <div id="videoListColumn" class="col-span-1 md:col-span-5 bg-gray-800 rounded-2xl border border-gray-700 flex flex-col overflow-hidden" style="max-height: 50vh; min-height: 300px;">
                 <div class="px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-700 flex justify-between items-center gap-2 flex-shrink-0">
                     <h2 class="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
@@ -179,7 +179,7 @@
                 </div>
             </div>
 
-            <!-- KOLOM 2: Panel AI -->
+            <!-- KOLOM 2 -->
             <div id="aiEditColumn" class="col-span-1 md:col-span-3 bg-gray-800 rounded-2xl border border-purple-500/40 flex-col overflow-hidden hidden slide-in-right" style="max-height: calc(100vh - 90px);">
                 <div class="px-4 py-3 border-b border-purple-500/20 flex justify-between items-center bg-purple-500/5 flex-shrink-0">
                     <h2 class="font-bold text-purple-400 text-sm flex items-center gap-2">
@@ -205,7 +205,7 @@
                 </div>
             </div>
 
-            <!-- KOLOM 3: Preview & Schedule -->
+            <!-- KOLOM 3 -->
             <div id="rightColumn" class="col-span-1 md:col-span-7 space-y-3 sm:space-y-4">
                 <div class="bg-gray-800 rounded-2xl border border-gray-700 p-3 sm:p-4">
                     <div class="flex justify-between items-center mb-3">
@@ -283,25 +283,22 @@
                 <div class="p-4 border-b border-purple-500/20 flex justify-between items-center bg-purple-500/5">
                     <h3 class="font-bold text-purple-400 flex items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
-                        Hasil Analisis AI
+                        Hasil Video AI
                     </h3>
                     <button onclick="closeAIResultModal()" class="text-gray-400 hover:text-white">✕</button>
                 </div>
                 <div class="p-4 max-h-[70vh] overflow-y-auto">
                     <div id="aiResultLoading" class="text-center py-8">
                         <div class="spinner mx-auto mb-4"></div>
-                        <p class="text-purple-400 font-medium">AI sedang menganalisis video...</p>
-                        <p class="text-gray-500 text-xs mt-2">Mohon tunggu, proses ini bisa memakan waktu hingga 30 detik</p>
+                        <p class="text-purple-400 font-medium">AI sedang membuat video...</p>
+                        <p class="text-gray-500 text-xs mt-2">Proses ini bisa memakan waktu 1-3 menit</p>
                     </div>
                     <div id="aiResultContent" class="hidden">
                         <div class="bg-gray-900/50 border border-gray-700 rounded-lg p-4 mb-4">
-                            <p class="text-xs text-gray-400 mb-2">📋 Analisis:</p>
-                            <div id="aiResultText" class="text-sm text-white whitespace-pre-wrap leading-relaxed"></div>
+                            <p class="text-xs text-gray-400 mb-2">🎬 Video Hasil Generate:</p>
+                            <div id="aiResultText" class="text-sm text-white"></div>
                         </div>
                         <div class="flex gap-2">
-                            <button onclick="copyAIResult()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2.5 rounded-lg text-sm">
-                                📋 Copy Hasil
-                            </button>
                             <button onclick="closeAIResultModal()" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 rounded-lg text-sm">
                                 ✅ Selesai
                             </button>
@@ -309,7 +306,7 @@
                     </div>
                     <div id="aiResultError" class="hidden">
                         <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-                            <p class="text-red-400 text-sm font-medium mb-2">❌ Gagal menganalisis video</p>
+                            <p class="text-red-400 text-sm font-medium mb-2">❌ Gagal generate video</p>
                             <p id="aiResultErrorText" class="text-gray-400 text-xs"></p>
                         </div>
                         <button onclick="closeAIResultModal()" class="w-full mt-4 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2.5 rounded-lg text-sm">
@@ -445,7 +442,6 @@
             location.reload();
         }
 
-        // ==================== USER API ====================
         async function fetchHasUsers() {
             try {
                 const res = await fetch('/api/users/has-any');
@@ -565,7 +561,6 @@
             if (isLoggedIn()) { showApp(); } else { showLoginGate(); }
         });
 
-        // ==================== SCHEDULE TIME DEFAULT ====================
         function setDefaultScheduleTime() {
             const el = document.getElementById('scheduleTime');
             if (!el) return;
@@ -714,9 +709,7 @@
         let selectedVideo = null;
         let checkedVideos = [];
         let renamingFile = null;
-        let lastAIResult = '';
 
-        // ==================== LOAD FILES ====================
         async function loadFiles() {
             const container = document.getElementById('videoListContainer');
             container.innerHTML = '<div class="text-center text-gray-500 italic p-4 text-xs">Memuat data...</div>';
@@ -819,7 +812,6 @@
             }).join('');
         }
 
-        // ==================== GRID LAYOUT ====================
         function updateGridLayout() {
             const aiColumn = document.getElementById('aiEditColumn');
             if (!aiColumn) return;
@@ -1033,7 +1025,6 @@
             firstVideo.onerror = () => { clearTimeout(firstTimeout); firstLoadFinish(); };
         }
 
-        // ==================== RENAME ====================
         function openRenameModal(uniqueId) {
             const file = allFiles.find(f => f.unique_id === uniqueId);
             if (!file) return;
@@ -1092,7 +1083,6 @@
             }
         }
 
-        // ==================== DELETE VIDEO ====================
         async function deleteVideoByUniqueId(uniqueId) {
             const file = allFiles.find(f => f.unique_id === uniqueId);
             if (!file) return;
@@ -1132,7 +1122,6 @@
             }
         }
 
-        // ==================== UPLOAD ====================
         function openUploadModal() {
             document.getElementById('uploadModal').classList.remove('hidden');
             document.getElementById('uploadModal').classList.add('flex');
@@ -1177,7 +1166,6 @@
             try {
                 preWarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 if (preWarmAudioCtx.state === 'suspended') await preWarmAudioCtx.resume();
-                console.log('🔊 AudioContext pre-warmed:', preWarmAudioCtx.state);
             } catch(e) { console.warn('Pre-warm audio gagal:', e); }
 
             try {
@@ -1382,7 +1370,6 @@
             });
         }
 
-        // ==================== SCHEDULE ====================
         async function loadSchedules() {
             try {
                 const res = await fetch('/api/schedules/list');
@@ -1508,28 +1495,13 @@
             }
         }
 
-        // ==================== SUBMIT TO AI (GEMINI) ====================
         async function submitToAI() {
-            if (checkedVideos.length === 0) { alert('Centang video dulu!'); return; }
-
             const prompt = document.getElementById('promptInput').value.trim();
             if (!prompt) { alert('Isi prompt dulu!'); return; }
 
-            const video = checkedVideos[0];
-            let videoUrl = video.url;
-
-            // Jika file potongan (chunks), gunakan chunk pertama
-            if (!video.is_single && video.chunks && video.chunks.length > 0) {
-                videoUrl = video.chunks[0].url;
-            }
-
-            if (!videoUrl) { alert('URL video tidak ditemukan!'); return; }
-
-            // Buka modal loading
             openAIResultModal();
             setAIResultLoading(true);
 
-            // Update button state
             const submitBtn = document.getElementById('submitAIButton');
             const originalBtnHTML = submitBtn.innerHTML;
             submitBtn.disabled = true;
@@ -1537,29 +1509,23 @@
             submitBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div><span>Memproses...</span>';
 
             try {
-                const response = await fetch('/api/analyze-video', {
+                const response = await fetch('/api/generate-video', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        video_url: videoUrl,
-                        prompt: prompt
-                    })
+                    body: JSON.stringify({ prompt: prompt })
                 });
 
                 const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Gagal generate video');
 
-                if (!response.ok) {
-                    throw new Error(data.error || 'Gagal menganalisis video');
-                }
-
-                // Tampilkan hasil
-                lastAIResult = data.analysis || 'Tidak ada hasil';
                 setAIResultLoading(false);
-                document.getElementById('aiResultText').textContent = lastAIResult;
+                document.getElementById('aiResultText').innerHTML = `
+                    <video src="${data.video_url}" controls class="w-full rounded-lg"></video>
+                    <p class="text-xs text-gray-400 mt-2">Video berhasil di-generate dan disimpan ke Vercel Blob.</p>
+                `;
                 document.getElementById('aiResultContent').classList.remove('hidden');
 
             } catch (error) {
-                console.error('Submit AI error:', error);
                 setAIResultLoading(false);
                 setAIResultError(error.message);
             } finally {
@@ -1569,7 +1535,6 @@
             }
         }
 
-        // ==================== AI RESULT MODAL ====================
         function openAIResultModal() {
             document.getElementById('aiResultModal').classList.remove('hidden');
             document.getElementById('aiResultModal').classList.add('flex');
@@ -1593,16 +1558,6 @@
             document.getElementById('aiResultErrorText').textContent = message;
         }
 
-        function copyAIResult() {
-            if (!lastAIResult) return;
-            navigator.clipboard.writeText(lastAIResult).then(() => {
-                alert('✅ Hasil analisis berhasil dicopy!');
-            }).catch(() => {
-                alert('❌ Gagal copy. Silakan pilih manual.');
-            });
-        }
-
-        // ==================== LOGIN MEDSOS ====================
         function openLoginModal() {
             document.getElementById('loginModal').classList.remove('hidden');
             document.getElementById('loginModal').classList.add('flex');

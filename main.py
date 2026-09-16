@@ -9,19 +9,17 @@ from flask import Flask, render_template, jsonify, request
 from vercel.blob import put
 import vercel_blob
 import requests as req_lib
-
-# ==================== IMPOR GEMINI ====================
 from google import genai
 from google.genai import types
 
 app = Flask(__name__)
 
-# Inisialisasi klien Gemini (otomatis membaca GEMINI_API_KEY dari environment)
+# Inisialisasi klien Gemini (untuk Veo)
 gemini_client = genai.Client()
+
 
 # ==================== DATABASE CONNECTION ====================
 def get_db():
-    """Koneksi ke Supabase Postgres dengan berbagai fallback env var."""
     priority_keys = ['DB_URL', 'DATABASE_URL', 'SUPABASE_POSTGRES_URL', 'POSTGRES_URL']
     db_url = None
     used_key = None
@@ -57,7 +55,6 @@ def get_db():
 
 
 def init_tables():
-    """Buat tabel jika belum ada."""
     conn = get_db()
     if not conn:
         return False, "Database tidak tersedia"
@@ -108,94 +105,112 @@ def init_tables():
         return False, str(e)
 
 
-# ==================== GEMINI VIDEO ANALYSIS ====================
-@app.route('/api/analyze-video', methods=['POST'])
-def analyze_video():
-    """
-    Menganalisis video menggunakan Gemini API.
-    Menerima URL video publik dari Vercel Blob, lalu mengirimkannya ke Gemini
-    untuk mendapatkan deskripsi atau prompt edit.
-    """
+# ==================== VEO VIDEO GENERATION ====================
+@app.route('/api/generate-video', methods=['POST'])
+def generate_video():
     data = request.json
-    video_url = data.get('video_url')
-    user_prompt = data.get('prompt', 'Analisis video ini dan berikan deskripsi detail tentang kontennya.')
+    prompt = data.get('prompt')
 
-    if not video_url:
-        return jsonify({'error': 'URL video tidak disediakan'}), 400
+    if not prompt:
+        return jsonify({'error': 'Prompt tidak boleh kosong'}), 400
 
-    temp_path = None
     try:
-        # 1. Unduh video dari Vercel Blob ke file sementara
-        print(f"📥 Mengunduh video dari {video_url[:80]}...")
-        video_response = req_lib.get(video_url, stream=True, timeout=60)
-        video_response.raise_for_status()
+        print(f"🎬 Generating video with Veo... Prompt: {prompt[:50]}...")
 
-        # Simpan ke file sementara di /tmp (satu-satunya direktori writable di Vercel)
-        import tempfile
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4', dir='/tmp') as temp_file:
-            for chunk in video_response.iter_content(chunk_size=8192):
-                temp_file.write(chunk)
-            temp_path = temp_file.name
-        print(f"✅ Video tersimpan sementara di {temp_path}")
-
-        # 2. Unggah video ke Gemini Files API
-        print("📤 Mengunggah video ke Gemini...")
-        uploaded_file = gemini_client.files.upload(file=temp_path)
-        print(f"✅ Uploaded file: {uploaded_file.name}")
-
-        # 3. Tunggu sampai file selesai diproses (state ACTIVE)
-        # Video files butuh waktu untuk diproses sebelum bisa digunakan
-        while uploaded_file.state.name == "PROCESSING":
-            print(".", end="", flush=True)
-            time.sleep(5)
-            uploaded_file = gemini_client.files.get(name=uploaded_file.name)
-
-        if uploaded_file.state.name == "FAILED":
-            raise ValueError(f"File processing gagal: {uploaded_file.state.name}")
-
-        print(f"\n✅ File siap digunakan: {uploaded_file.state.name}")
-
-        # 4. Kirim prompt + video ke Gemini
-        print("🤖 Menganalisis video dengan Gemini...")
-        response = gemini_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[
-                types.Content(
-                    parts=[
-                        types.Part(text=user_prompt),
-                        types.Part(
-                            file_data=types.FileData(
-                                file_uri=uploaded_file.uri,
-                                mime_type=uploaded_file.mime_type
-                            )
-                        )
-                    ]
-                )
-            ]
+        operation = gemini_client.models.generate_videos(
+            model="veo-3.1-generate-preview",
+            prompt=prompt,
         )
 
-        analysis_text = response.text if response.text else "Tidak ada hasil analisis."
+        while not operation.done:
+            print("⏳ Waiting for video generation...")
+            time.sleep(8)
+            operation = gemini_client.operations.get(operation)
+
+        generated = operation.response.generated_videos[0]
+        video_bytes = gemini_client.files.download(file=generated.video)
+
+        filename = f"ai_generated_{int(time.time())}.mp4"
+        result = put(filename, video_bytes, access='public', multipart=True)
 
         return jsonify({
             'success': True,
-            'analysis': analysis_text,
-            'file_name': uploaded_file.name
+            'video_url': result.url,
+            'pathname': result.pathname
         })
 
     except Exception as e:
-        print(f"❌ Gemini Error: {e}")
+        print(f"❌ Veo Error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-    finally:
-        # 5. Bersihkan file sementara
-        if temp_path and os.path.exists(temp_path):
-            try:
-                os.unlink(temp_path)
-                print(f"🗑️ File sementara dihapus: {temp_path}")
-            except:
-                pass
+
+# ==================== INSTAGRAM POSTING ====================
+@app.route('/api/instagram/post', methods=['POST'])
+def instagram_post():
+    data = request.json
+    video_url = data.get('video_url')
+    caption = data.get('caption', '')
+
+    if not video_url:
+        return jsonify({'error': 'Video URL tidak disediakan'}), 400
+
+    access_token = os.environ.get('INSTAGRAM_ACCESS_TOKEN')
+    ig_user_id = os.environ.get('INSTAGRAM_USER_ID')
+
+    if not access_token or not ig_user_id:
+        return jsonify({'error': 'Instagram credentials belum di-set'}), 500
+
+    try:
+        container_url = f"https://graph.instagram.com/v21.0/{ig_user_id}/media"
+        container_payload = {
+            'media_type': 'REELS',
+            'video_url': video_url,
+            'caption': caption,
+            'access_token': access_token
+        }
+
+        container_res = req_lib.post(container_url, data=container_payload)
+        container_data = container_res.json()
+
+        if 'id' not in container_data:
+            return jsonify({'error': f'Gagal create container: {container_data}'}), 500
+
+        creation_id = container_data['id']
+        print(f"✅ Container created: {creation_id}")
+
+        max_retries = 30
+        for i in range(max_retries):
+            status_url = f"https://graph.instagram.com/v21.0/{creation_id}?fields=status_code&access_token={access_token}"
+            status_res = req_lib.get(status_url)
+            status_data = status_res.json()
+
+            if status_data.get('status_code') == 'FINISHED':
+                print("✅ Video ready to publish")
+                break
+            elif status_data.get('status_code') == 'ERROR':
+                return jsonify({'error': 'Video processing error'}), 500
+
+            time.sleep(5)
+
+        publish_url = f"https://graph.instagram.com/v21.0/{ig_user_id}/media_publish"
+        publish_payload = {
+            'creation_id': creation_id,
+            'access_token': access_token
+        }
+
+        publish_res = req_lib.post(publish_url, data=publish_payload)
+        publish_data = publish_res.json()
+
+        return jsonify({
+            'success': True,
+            'media_id': publish_data.get('id')
+        })
+
+    except Exception as e:
+        print(f"❌ Instagram Error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 # ==================== USER MANAGEMENT ====================
