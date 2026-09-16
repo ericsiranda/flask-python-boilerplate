@@ -1374,41 +1374,53 @@
         async function convertToMp4(webmBlob) {
     try {
         console.log('🎬 Memuat FFmpeg...');
-        
-        // Pastikan library sudah dimuat
-        if (!window.FFmpegWASM && !window.FFmpeg) {
-            await loadScript('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js');
-            await loadScript('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js');
-        }
 
-        const FFmpegWASM = window.FFmpegWASM || window.FFmpeg;
-        const FFmpegUtil = window.FFmpegUtil;
-        
-        if (!FFmpegWASM || !FFmpegWASM.FFmpeg) {
-            throw new Error('FFmpeg tidak berhasil dimuat');
-        }
-        if (!FFmpegUtil || !FFmpegUtil.toBlobURL) {
-            throw new Error('FFmpegUtil.toBlobURL tidak tersedia');
-        }
+        // 1. Use a reliable CDN for the main library
+        const ffmpegBaseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd';
 
-        const ffmpeg = new FFmpegWASM.FFmpeg();
-        
-        // ✅ KUNCI UTAMA: gunakan toBlobURL untuk bypass CORS
-        const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
-        const coreURL = await FFmpegUtil.toBlobURL(
-            `${baseURL}/ffmpeg-core.js`, 
-            'text/javascript'
-        );
-        const wasmURL = await FFmpegUtil.toBlobURL(
-            `${baseURL}/ffmpeg-core.wasm`, 
-            'application/wasm'
-        );
-        
-        await ffmpeg.load({ coreURL, wasmURL });
-        
-        console.log('✅ FFmpeg siap (single-thread mode)');
+        // 2. Download the ffmpeg.js file
+        const ffmpegJsResponse = await fetch(`${ffmpegBaseURL}/ffmpeg.js`);
+        if (!ffmpegJsResponse.ok) throw new Error('Failed to download ffmpeg.js');
+        let ffmpegJsCode = await ffmpegJsResponse.text();
 
-        const { fetchFile } = FFmpegUtil;
+        // 3. Patch the code to use a manual worker URL (this is the key fix)
+        // The original code tries to load '814.ffmpeg.js' from the CDN, which is blocked by CORS.
+        // We replace the dynamic URL generation with a placeholder that we will fill later.
+        const originalWorkerCode = 'new URL(e.p+e.u(814),e.b)';
+        const patchedWorkerCode = 'new URL(r.worker814URL, e.b)';
+        if (!ffmpegJsCode.includes(originalWorkerCode)) {
+            console.warn('Could not find the expected worker code to patch. The FFmpeg library may have changed.');
+        }
+        ffmpegJsCode = ffmpegJsCode.replace(originalWorkerCode, patchedWorkerCode);
+
+        // 4. Create a Blob URL from the patched code
+        const ffmpegJsBlob = new Blob([ffmpegJsCode], { type: 'text/javascript' });
+        const ffmpegJsBlobURL = URL.createObjectURL(ffmpegJsBlob);
+
+        // 5. Dynamically import the patched FFmpeg library
+        const { FFmpeg } = await import(ffmpegJsBlobURL);
+
+        // 6. Also get the utility from a CDN
+        const { toBlobURL, fetchFile } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js');
+
+        const ffmpeg = new FFmpeg();
+
+        // 7. Load the core files, making sure to provide the worker script as a Blob URL
+        const coreBaseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
+
+        // First, download the worker script and turn it into a Blob URL
+        const workerBlobURL = await toBlobURL(`${ffmpegBaseURL}/814.ffmpeg.js`, 'text/javascript');
+
+        // Now, load FFmpeg, passing the worker Blob URL into the config object
+        // This works because we patched the library code to look for 'r.worker814URL'
+        await ffmpeg.load({
+            coreURL: await toBlobURL(`${coreBaseURL}/ffmpeg-core.js`, 'text/javascript'),
+            wasmURL: await toBlobURL(`${coreBaseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+            worker814URL: workerBlobURL // This is the custom property we injected via the patch
+        });
+
+        console.log('✅ FFmpeg siap (patched worker mode)');
+
         await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
 
         console.log('🔄 Mengonversi ke MP4...');
@@ -1425,7 +1437,7 @@
 
         const data = await ffmpeg.readFile('output.mp4');
         const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
-        
+
         console.log(`✅ Konversi selesai: ${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB`);
         return mp4Blob;
 
@@ -1434,6 +1446,9 @@
         throw new Error(`Gagal konversi: ${err.message}`);
     }
 }
+
+
+
 
         function loadScript(src) {
             return new Promise((resolve, reject) => {
