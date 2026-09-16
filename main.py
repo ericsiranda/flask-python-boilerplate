@@ -10,144 +10,50 @@ from vercel.blob import put
 import vercel_blob
 import requests as req_lib
 
+# ==================== IMPOR GEMINI ====================
+from google import genai
+from google.genai import types
+
 app = Flask(__name__)
 
+# Inisialisasi klien Gemini (otomatis membaca GEMINI_API_KEY dari environment)
+gemini_client = genai.Client()
+
 # ==================== DATABASE CONNECTION ====================
-def build_candidate_urls():
-    """
-    Bangun daftar kandidat URL koneksi dengan sanitasi.
-    Return: list of tuples (key_name, sanitized_url)
-    """
-    candidates = []
-    
-    # ---- 1. Ambil komponen ----
-    password = None
-    host = None
-    user = None
-    
-    for key in os.environ.keys():
-        if 'POSTGRES_PASSWORD' in key and not password:
-            password = os.environ.get(key)
-        if 'POSTGRES_HOST' in key and not host:
-            host = os.environ.get(key)
-        if 'POSTGRES_USER' in key and not user:
-            user = os.environ.get(key)
-    
-    # ---- 2. BANGUN URL POOLER (paling mungkin berhasil di Vercel) ----
-    # Format: postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
-    if password and host:
-        # Cari ref dari host: db.<ref>.supabase.co
-        m = re.match(r'db\.([a-z0-9]+)\.supabase\.co', host)
-        if m:
-            ref = m.group(1)
-            
-            # Coba berbagai region pooler
-            # Pooler host format: aws-0-<region>.pooler.supabase.com
-            pooler_regions = [
-                'us-east-1',       # dari error sebelumnya
-                'ap-southeast-1',  # Singapore
-                'ap-southeast-2',  # Sydney
-                'us-west-1',
-            ]
-            
-            for region in pooler_regions:
-                pooler_host = f"aws-0-{region}.pooler.supabase.com"
-                # PENTING: user = postgres.<ref>, port = 6543
-                url = f"postgresql://postgres.{ref}:{password}@{pooler_host}:6543/postgres"
-                candidates.append((f'pooler_{region}', url))
-    
-    # ---- 3. Ambil dari env var langsung (sanitize) ----
-    priority_keys = [
-        'DB_URL',
-        'DATABASE_URL',
-        'SUPABASE_POSTGRES_URL_NON_POOLING',
-        'POSTGRES_URL_NON_POOLING',
-        'SUPABASE_POSTGRES_URL',
-        'POSTGRES_URL',
-    ]
-    
+def get_db():
+    """Koneksi ke Supabase Postgres dengan berbagai fallback env var."""
+    priority_keys = ['DB_URL', 'DATABASE_URL', 'SUPABASE_POSTGRES_URL', 'POSTGRES_URL']
+    db_url = None
+    used_key = None
+
     for key in priority_keys:
         val = os.environ.get(key)
         if val and val.startswith('postgres'):
-            sanitized = sanitize_db_url(val)
-            candidates.append((key, sanitized))
-    
-    # ---- 4. Fallback: direct connection (IPv6, mungkin gagal) ----
-    if password and host:
-        m = re.match(r'db\.([a-z0-9]+)\.supabase\.co', host)
-        if m:
-            ref = m.group(1)
-            url = f"postgresql://postgres:{password}@db.{ref}.supabase.co:5432/postgres?sslmode=require"
-            candidates.append(('direct_ipv6', url))
-    
-    return candidates
+            db_url = val
+            used_key = key
+            break
 
+    if not db_url:
+        for key in sorted(os.environ.keys()):
+            if ('POSTGRES_URL' in key or 'DATABASE_URL' in key) and 'PRISMA' not in key:
+                val = os.environ.get(key)
+                if val and val.startswith('postgres'):
+                    db_url = val
+                    used_key = key
+                    break
 
-def sanitize_db_url(url):
-    """
-    Bersihkan URL dari parameter yang tidak dikenal psycopg2.
-    """
-    # Ganti postgres:// → postgresql://
-    if url.startswith('postgres://'):
-        url = url.replace('postgres://', 'postgresql://', 1)
-    
-    # Hapus parameter 'supa' dan 'pgbouncer' (tidak dikenal psycopg2)
-    url = re.sub(r'[?&]supa=[^&]*', '', url)
-    url = re.sub(r'[?&]pgbouncer=[^&]*', '', url)
-    
-    # Bersihkan ?& atau && yang tersisa
-    url = url.replace('?&', '?').replace('&&', '&')
-    
-    # Hapus ? atau & di akhir
-    url = re.sub(r'[?&]$', '', url)
-    
-    # Pastikan sslmode=require
-    if 'sslmode=' not in url:
-        separator = '&' if '?' in url else '?'
-        url = f"{url}{separator}sslmode=require"
-    
-    return url
-
-
-def get_db():
-    """
-    Koneksi ke Supabase Postgres.
-    Coba semua kandidat URL sampai berhasil.
-    """
-    candidates = build_candidate_urls()
-    
-    if not candidates:
-        print("⚠️ Tidak ada kandidat URL database")
+    if not db_url:
+        print("⚠️ Tidak ada URL database di environment")
         return None
-    
-    for key, url in candidates:
-        try:
-            print(f"DB: mencoba {key}...")
-            print(f"DB: URL: {url[:80]}...")
-            
-            # Koneksi dengan timeout
-            conn = psycopg2.connect(url, connect_timeout=10)
-            
-            # Test dengan query sederhana
-            cur = conn.cursor()
-            cur.execute("SELECT 1")
-            cur.fetchone()
-            cur.close()
-            
-            print(f"DB: ✅ BERHASIL dengan {key}")
-            return conn
-            
-        except psycopg2.OperationalError as e:
-            error_msg = str(e)[:150].replace('\n', ' ')
-            print(f"DB: ❌ {key} gagal: {error_msg}")
-            continue
-        except Exception as e:
-            error_msg = str(e)[:150].replace('\n', ' ')
-            print(f"DB: ❌ {key} error: {error_msg}")
-            continue
-    
-    print("DB: ⚠️ Semua kandidat gagal")
-    return None
+
+    try:
+        print(f"DB: mencoba {used_key}...")
+        conn = psycopg2.connect(db_url, sslmode='require', connect_timeout=10)
+        print(f"DB: ✅ berhasil dengan {used_key}")
+        return conn
+    except Exception as e:
+        print(f"DB: ❌ {used_key} gagal: {str(e)[:150]}")
+        return None
 
 
 def init_tables():
@@ -155,10 +61,9 @@ def init_tables():
     conn = get_db()
     if not conn:
         return False, "Database tidak tersedia"
-    
+
     try:
         cur = conn.cursor()
-        
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -167,7 +72,6 @@ def init_tables():
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
-        
         cur.execute("""
             CREATE TABLE IF NOT EXISTS schedules (
                 id SERIAL PRIMARY KEY,
@@ -181,7 +85,6 @@ def init_tables():
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
-        
         cur.execute("""
             CREATE TABLE IF NOT EXISTS medsos_accounts (
                 id SERIAL PRIMARY KEY,
@@ -191,7 +94,6 @@ def init_tables():
                 UNIQUE(platform, username)
             )
         """)
-        
         conn.commit()
         cur.close()
         conn.close()
@@ -206,82 +108,94 @@ def init_tables():
         return False, str(e)
 
 
-@app.route('/')
-def index():
-    init_tables()
-    return render_template('index.html')
+# ==================== GEMINI VIDEO ANALYSIS ====================
+@app.route('/api/analyze-video', methods=['POST'])
+def analyze_video():
+    """
+    Menganalisis video menggunakan Gemini API.
+    Menerima URL video publik dari Vercel Blob, lalu mengirimkannya ke Gemini
+    untuk mendapatkan deskripsi atau prompt edit.
+    """
+    data = request.json
+    video_url = data.get('video_url')
+    user_prompt = data.get('prompt', 'Analisis video ini dan berikan deskripsi detail tentang kontennya.')
 
+    if not video_url:
+        return jsonify({'error': 'URL video tidak disediakan'}), 400
 
-# ==================== DEBUG ====================
-@app.route('/api/debug-db', methods=['GET'])
-def debug_db():
-    """Debug: cek env var dan coba koneksi dengan error detail."""
-    relevant_keys = []
-    for key in sorted(os.environ.keys()):
-        if 'POSTGRES' in key or 'DATABASE' in key or key == 'DB_URL':
-            val = os.environ.get(key, '')
-            relevant_keys.append({
-                'key': key,
-                'has_value': bool(val),
-                'starts_with_postgres': val.startswith('postgres') if val else False,
-            })
-    
-    # Ambil kandidat URL
-    candidates = build_candidate_urls()
-    sanitized_candidates = []
-    for key, url in candidates:
-        # Sensor password
-        safe_url = re.sub(r':([^:@]+)@', ':***@', url)
-        sanitized_candidates.append({
-            'key': key,
-            'url_preview': safe_url[:100]
+    temp_path = None
+    try:
+        # 1. Unduh video dari Vercel Blob ke file sementara
+        print(f"📥 Mengunduh video dari {video_url[:80]}...")
+        video_response = req_lib.get(video_url, stream=True, timeout=60)
+        video_response.raise_for_status()
+
+        # Simpan ke file sementara di /tmp (satu-satunya direktori writable di Vercel)
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4', dir='/tmp') as temp_file:
+            for chunk in video_response.iter_content(chunk_size=8192):
+                temp_file.write(chunk)
+            temp_path = temp_file.name
+        print(f"✅ Video tersimpan sementara di {temp_path}")
+
+        # 2. Unggah video ke Gemini Files API
+        print("📤 Mengunggah video ke Gemini...")
+        uploaded_file = gemini_client.files.upload(file=temp_path)
+        print(f"✅ Uploaded file: {uploaded_file.name}")
+
+        # 3. Tunggu sampai file selesai diproses (state ACTIVE)
+        # Video files butuh waktu untuk diproses sebelum bisa digunakan
+        while uploaded_file.state.name == "PROCESSING":
+            print(".", end="", flush=True)
+            time.sleep(5)
+            uploaded_file = gemini_client.files.get(name=uploaded_file.name)
+
+        if uploaded_file.state.name == "FAILED":
+            raise ValueError(f"File processing gagal: {uploaded_file.state.name}")
+
+        print(f"\n✅ File siap digunakan: {uploaded_file.state.name}")
+
+        # 4. Kirim prompt + video ke Gemini
+        print("🤖 Menganalisis video dengan Gemini...")
+        response = gemini_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[
+                types.Content(
+                    parts=[
+                        types.Part(text=user_prompt),
+                        types.Part(
+                            file_data=types.FileData(
+                                file_uri=uploaded_file.uri,
+                                mime_type=uploaded_file.mime_type
+                            )
+                        )
+                    ]
+                )
+            ]
+        )
+
+        analysis_text = response.text if response.text else "Tidak ada hasil analisis."
+
+        return jsonify({
+            'success': True,
+            'analysis': analysis_text,
+            'file_name': uploaded_file.name
         })
-    
-    # Coba setiap kandidat
-    attempts = []
-    for key, url in candidates:
-        try:
-            conn = psycopg2.connect(url, connect_timeout=10)
-            cur = conn.cursor()
-            cur.execute("SELECT version()")
-            version = cur.fetchone()[0]
-            cur.close()
-            conn.close()
-            
-            attempts.append({
-                'key': key,
-                'status': 'success',
-                'postgres_version': version[:100]
-            })
-            
-            return jsonify({
-                'env_vars': relevant_keys,
-                'candidates': sanitized_candidates,
-                'connection_attempts': attempts,
-                'connection': {
-                    'status': 'success',
-                    'used_key': key,
-                    'postgres_version': version[:100]
-                }
-            })
-        except Exception as e:
-            error_msg = str(e)[:200].replace('\n', ' ')
-            attempts.append({
-                'key': key,
-                'status': 'failed',
-                'error_type': type(e).__name__,
-                'error_message': error_msg
-            })
-    
-    return jsonify({
-        'env_vars': relevant_keys,
-        'candidates': sanitized_candidates,
-        'connection_attempts': attempts,
-        'connection': {
-            'status': 'all_failed',
-            'total_attempts': len(attempts)
-        }
-    })
+
+    except Exception as e:
+        print(f"❌ Gemini Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        # 5. Bersihkan file sementara
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+                print(f"🗑️ File sementara dihapus: {temp_path}")
+            except:
+                pass
 
 
 # ==================== USER MANAGEMENT ====================
@@ -326,24 +240,24 @@ def add_user():
         data = request.json
         username = (data.get('username') or '').strip()
         password = data.get('password') or ''
-        
+
         if not username or len(username) < 3:
             return jsonify({'error': 'Username minimal 3 karakter'}), 400
         if not password or len(password) < 4:
             return jsonify({'error': 'Password minimal 4 karakter'}), 400
-        
+
         init_tables()
         conn = get_db()
         if not conn:
             return jsonify({'error': 'Database tidak tersedia'}), 500
-        
+
         cur = conn.cursor()
         cur.execute("SELECT id FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
         if cur.fetchone():
             cur.close()
             conn.close()
             return jsonify({'error': 'Username sudah digunakan'}), 400
-        
+
         password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         cur.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (username, password_hash))
         conn.commit()
@@ -362,25 +276,25 @@ def login_user():
         data = request.json
         username = (data.get('username') or '').strip()
         password = data.get('password') or ''
-        
+
         if not username or not password:
             return jsonify({'error': 'Username & password wajib diisi'}), 400
-        
+
         conn = get_db()
         if not conn:
             return jsonify({'error': 'Database tidak tersedia'}), 500
-        
+
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("SELECT username, password_hash FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
         row = cur.fetchone()
         cur.close()
         conn.close()
-        
+
         if not row:
             return jsonify({'error': 'Username atau password salah'}), 401
         if not bcrypt.checkpw(password.encode('utf-8'), row['password_hash'].encode('utf-8')):
             return jsonify({'error': 'Username atau password salah'}), 401
-        
+
         return jsonify({'success': True, 'user': {'username': row['username']}})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -393,7 +307,7 @@ def delete_user():
         username = (data.get('username') or '').strip()
         if not username:
             return jsonify({'error': 'Username wajib'}), 400
-        
+
         conn = get_db()
         if not conn:
             return jsonify({'error': 'Database tidak tersedia'}), 500
@@ -474,7 +388,7 @@ def delete_schedule():
         schedule_id = data.get('id')
         if not schedule_id:
             return jsonify({'error': 'ID wajib'}), 400
-        
+
         conn = get_db()
         if not conn:
             return jsonify({'error': 'Database tidak tersedia'}), 500
@@ -519,10 +433,10 @@ def add_medsos():
         data = request.json
         platform = data.get('platform', '')
         username = data.get('username', '')
-        
+
         if not platform or not username:
             return jsonify({'error': 'Data tidak lengkap'}), 400
-        
+
         init_tables()
         conn = get_db()
         if not conn:
@@ -536,7 +450,7 @@ def add_medsos():
             cur.close()
             conn.close()
             return jsonify({'error': 'Akun sudah terhubung'}), 400
-        
+
         cur.execute("INSERT INTO medsos_accounts (platform, username) VALUES (%s, %s)", (platform, username))
         conn.commit()
         cur.close()
@@ -554,7 +468,7 @@ def delete_medsos():
         username = data.get('username', '')
         if not platform or not username:
             return jsonify({'error': 'Data tidak lengkap'}), 400
-        
+
         conn = get_db()
         if not conn:
             return jsonify({'error': 'Database tidak tersedia'}), 500
@@ -615,7 +529,7 @@ def list_files_grouped():
     try:
         files = vercel_blob.list()
         sessions, singles, ai_edits = {}, [], []
-        
+
         for item in files.get('blobs', []):
             pathname = item.get('pathname', '')
             if pathname.startswith('ai_edit_'):
@@ -638,10 +552,10 @@ def list_files_grouped():
             else:
                 singles.append({'pathname': pathname, 'url': item.get('url'),
                                'size': item.get('size', 0), 'is_single': True})
-        
+
         for sid in sessions: sessions[sid]['chunks'].sort(key=lambda x: x['index'])
         ai_edit_map = {e['session_id']: e for e in ai_edits}
-        
+
         result = []
         for sid, s in sessions.items():
             has_ai = sid in ai_edit_map
@@ -693,7 +607,7 @@ def submit_to_ai():
         chunks = data.get('chunks', [])
         is_single = data.get('is_single', False)
         single_url = data.get('single_url', '')
-        
+
         if is_single:
             ai_filename = f"ai_edit_single_{int(time.time())}.webm"
             file_data = req_lib.get(single_url).content
@@ -705,11 +619,17 @@ def submit_to_ai():
                 result = put(ai_filename, file_data, access='public', multipart=True)
             else:
                 return jsonify({'error': 'Tidak ada chunk'}), 400
-        
+
         return jsonify({'success': True, 'ai_result': {
             'pathname': result.pathname, 'url': result.url, 'session_id': session_id}})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/')
+def index():
+    init_tables()
+    return render_template('index.html')
 
 
 if __name__ == '__main__':
