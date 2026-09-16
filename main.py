@@ -9,13 +9,8 @@ from flask import Flask, render_template, jsonify, request
 from vercel.blob import put
 import vercel_blob
 import requests as req_lib
-from google import genai
-from google.genai import types
 
 app = Flask(__name__)
-
-# Inisialisasi klien Gemini (untuk Veo)
-gemini_client = genai.Client()
 
 
 # ==================== DATABASE CONNECTION ====================
@@ -105,112 +100,14 @@ def init_tables():
         return False, str(e)
 
 
-# ==================== VEO VIDEO GENERATION ====================
-@app.route('/api/generate-video', methods=['POST'])
-def generate_video():
-    data = request.json
-    prompt = data.get('prompt')
-
-    if not prompt:
-        return jsonify({'error': 'Prompt tidak boleh kosong'}), 400
-
-    try:
-        print(f"🎬 Generating video with Veo... Prompt: {prompt[:50]}...")
-
-        operation = gemini_client.models.generate_videos(
-            model="veo-3.1-generate-preview",
-            prompt=prompt,
-        )
-
-        while not operation.done:
-            print("⏳ Waiting for video generation...")
-            time.sleep(8)
-            operation = gemini_client.operations.get(operation)
-
-        generated = operation.response.generated_videos[0]
-        video_bytes = gemini_client.files.download(file=generated.video)
-
-        filename = f"ai_generated_{int(time.time())}.mp4"
-        result = put(filename, video_bytes, access='public', multipart=True)
-
-        return jsonify({
-            'success': True,
-            'video_url': result.url,
-            'pathname': result.pathname
-        })
-
-    except Exception as e:
-        print(f"❌ Veo Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-
-
-# ==================== INSTAGRAM POSTING ====================
-@app.route('/api/instagram/post', methods=['POST'])
-def instagram_post():
-    data = request.json
-    video_url = data.get('video_url')
-    caption = data.get('caption', '')
-
-    if not video_url:
-        return jsonify({'error': 'Video URL tidak disediakan'}), 400
-
-    access_token = os.environ.get('INSTAGRAM_ACCESS_TOKEN')
-    ig_user_id = os.environ.get('INSTAGRAM_USER_ID')
-
-    if not access_token or not ig_user_id:
-        return jsonify({'error': 'Instagram credentials belum di-set'}), 500
-
-    try:
-        container_url = f"https://graph.instagram.com/v21.0/{ig_user_id}/media"
-        container_payload = {
-            'media_type': 'REELS',
-            'video_url': video_url,
-            'caption': caption,
-            'access_token': access_token
-        }
-
-        container_res = req_lib.post(container_url, data=container_payload)
-        container_data = container_res.json()
-
-        if 'id' not in container_data:
-            return jsonify({'error': f'Gagal create container: {container_data}'}), 500
-
-        creation_id = container_data['id']
-        print(f"✅ Container created: {creation_id}")
-
-        max_retries = 30
-        for i in range(max_retries):
-            status_url = f"https://graph.instagram.com/v21.0/{creation_id}?fields=status_code&access_token={access_token}"
-            status_res = req_lib.get(status_url)
-            status_data = status_res.json()
-
-            if status_data.get('status_code') == 'FINISHED':
-                print("✅ Video ready to publish")
-                break
-            elif status_data.get('status_code') == 'ERROR':
-                return jsonify({'error': 'Video processing error'}), 500
-
-            time.sleep(5)
-
-        publish_url = f"https://graph.instagram.com/v21.0/{ig_user_id}/media_publish"
-        publish_payload = {
-            'creation_id': creation_id,
-            'access_token': access_token
-        }
-
-        publish_res = req_lib.post(publish_url, data=publish_payload)
-        publish_data = publish_res.json()
-
-        return jsonify({
-            'success': True,
-            'media_id': publish_data.get('id')
-        })
-
-    except Exception as e:
-        print(f"❌ Instagram Error: {e}")
-        return jsonify({'error': str(e)}), 500
+# ==================== PLACEHOLDER: AI VIDEO EDIT ====================
+# Fungsi AI edit video akan ditambahkan setelah provider AI ditentukan.
+# Untuk sekarang, endpoint ini mengembalikan pesan bahwa fitur belum aktif.
+@app.route('/api/edit-video', methods=['POST'])
+def edit_video():
+    return jsonify({
+        'error': 'Fitur AI edit video belum aktif. Silakan hubungkan provider AI terlebih dahulu (Kling AI, Runway, dll).'
+    }), 503
 
 
 # ==================== USER MANAGEMENT ====================
@@ -610,33 +507,6 @@ def rename_file():
         result = put(safe_name, resp.content, access='public', multipart=True)
         vercel_blob.delete(old_url)
         return jsonify({'success': True, 'new_url': result.url})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/submit-to-ai', methods=['POST'])
-def submit_to_ai():
-    try:
-        data = request.json
-        session_id = data.get('session_id', '')
-        chunks = data.get('chunks', [])
-        is_single = data.get('is_single', False)
-        single_url = data.get('single_url', '')
-
-        if is_single:
-            ai_filename = f"ai_edit_single_{int(time.time())}.webm"
-            file_data = req_lib.get(single_url).content
-            result = put(ai_filename, file_data, access='public', multipart=True)
-        else:
-            ai_filename = f"ai_edit_{session_id}.webm"
-            if chunks:
-                file_data = req_lib.get(chunks[0]['url']).content
-                result = put(ai_filename, file_data, access='public', multipart=True)
-            else:
-                return jsonify({'error': 'Tidak ada chunk'}), 400
-
-        return jsonify({'success': True, 'ai_result': {
-            'pathname': result.pathname, 'url': result.url, 'session_id': session_id}})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

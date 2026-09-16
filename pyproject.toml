@@ -9,7 +9,6 @@ dependencies = [
     "vercel_blob",
     "psycopg2-binary",
     "bcrypt",
-    "google-genai",
     "requests",
 ]
 
