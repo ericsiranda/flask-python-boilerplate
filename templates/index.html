@@ -85,6 +85,41 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        /* Combo box dropdown */
+        .combo-panel {
+            max-height: 280px;
+            overflow-y: auto;
+            animation: comboSlide 0.15s ease-out;
+        }
+        @keyframes comboSlide {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .combo-radio {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #6b7280;
+            border-radius: 50%;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .combo-radio:checked { border-color: #a855f7; }
+        .combo-radio:checked::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #a855f7;
+        }
+        .combo-radio:disabled { opacity: 0.3; cursor: not-allowed; }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen font-sans">
@@ -167,8 +202,7 @@
                     </div>
                 </div>
                 <div class="flex border-b border-gray-700 text-xs flex-shrink-0 overflow-x-auto">
-                    <button onclick="setFilter('all')" id="filter-all" class="flex-1 py-2 px-2 text-blue-400 border-b-2 border-blue-400 font-medium whitespace-nowrap">Semua</button>
-                    <button onclick="setFilter('raw')" id="filter-raw" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Mentah</button>
+                    <button onclick="setFilter('raw')" id="filter-raw" class="flex-1 py-2 px-2 text-blue-400 border-b-2 border-blue-400 font-medium whitespace-nowrap">Video</button>
                     <button onclick="setFilter('video_ai')" id="filter-video_ai" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Video AI</button>
                     <button onclick="setFilter('image')" id="filter-image" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Gambar</button>
                     <button onclick="setFilter('image_ai')" id="filter-image_ai" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Gambar AI</button>
@@ -216,7 +250,7 @@
                     </div>
                 </div>
 
-                <!-- JADWAL POSTING DENGAN MULTI-MEDIA -->
+                <!-- JADWAL POSTING DENGAN COMBO BOX MULTI-MEDIA -->
                 <div class="bg-gray-800 rounded-2xl border border-blue-500/40 p-3 sm:p-4">
                     <div class="flex items-center gap-2 mb-3">
                         <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -224,20 +258,42 @@
                     </div>
                     <div class="space-y-3">
 
-                        <!-- Pilih Video -->
-                        <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1">🎬 Pilih Video (bisa lebih dari satu)</label>
-                            <div id="scheduleVideoDropdown" class="bg-gray-700 border border-gray-600 rounded-lg max-h-40 overflow-y-auto p-2 space-y-1">
-                                <p class="text-xs text-gray-500 italic">Memuat...</p>
+                        <!-- COMBO BOX: Pilih Video -->
+                        <div class="relative">
+                            <label class="block text-xs font-medium text-gray-400 mb-1">🎬 Pilih Video</label>
+                            <button type="button" onclick="toggleCombo('video')" 
+                                    class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-left text-xs text-white flex justify-between items-center hover:border-blue-500 transition">
+                                <span id="comboVideoLabel" class="truncate">Pilih video...</span>
+                                <svg id="comboVideoArrow" class="w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <div id="comboVideoPanel" class="hidden absolute z-30 mt-1 w-full bg-gray-700 border border-gray-600 rounded-lg shadow-2xl combo-panel">
+                                <div id="comboVideoList" class="p-1.5 space-y-0.5">
+                                    <p class="text-xs text-gray-500 italic p-2">Memuat...</p>
+                                </div>
+                                <div class="border-t border-gray-600 p-1.5 flex justify-between text-xs">
+                                    <button onclick="clearComboSelection('video')" class="text-red-400 hover:underline px-2 py-1">Bersihkan</button>
+                                    <button onclick="toggleCombo('video')" class="text-blue-400 hover:underline px-2 py-1">Tutup</button>
+                                </div>
                             </div>
                             <p class="text-xs text-gray-500 mt-1">Radio = video utama · Checkbox = ikut diposting</p>
                         </div>
 
-                        <!-- Pilih Gambar -->
-                        <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1">🖼️ Pilih Gambar (bisa lebih dari satu)</label>
-                            <div id="scheduleImageDropdown" class="bg-gray-700 border border-gray-600 rounded-lg max-h-40 overflow-y-auto p-2 space-y-1">
-                                <p class="text-xs text-gray-500 italic">Memuat...</p>
+                        <!-- COMBO BOX: Pilih Gambar -->
+                        <div class="relative">
+                            <label class="block text-xs font-medium text-gray-400 mb-1">🖼️ Pilih Gambar</label>
+                            <button type="button" onclick="toggleCombo('image')" 
+                                    class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-left text-xs text-white flex justify-between items-center hover:border-pink-500 transition">
+                                <span id="comboImageLabel" class="truncate">Pilih gambar...</span>
+                                <svg id="comboImageArrow" class="w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <div id="comboImagePanel" class="hidden absolute z-30 mt-1 w-full bg-gray-700 border border-gray-600 rounded-lg shadow-2xl combo-panel">
+                                <div id="comboImageList" class="p-1.5 space-y-0.5">
+                                    <p class="text-xs text-gray-500 italic p-2">Memuat...</p>
+                                </div>
+                                <div class="border-t border-gray-600 p-1.5 flex justify-between text-xs">
+                                    <button onclick="clearComboSelection('image')" class="text-red-400 hover:underline px-2 py-1">Bersihkan</button>
+                                    <button onclick="toggleCombo('image')" class="text-blue-400 hover:underline px-2 py-1">Tutup</button>
+                                </div>
                             </div>
                             <p class="text-xs text-gray-500 mt-1">Radio = gambar utama · Checkbox = ikut diposting</p>
                         </div>
@@ -575,6 +631,21 @@
             if (isLoggedIn()) { showApp(); } else { showLoginGate(); }
         });
 
+        // Tutup combo panel kalau klik di luar
+        document.addEventListener('click', function(e) {
+            ['video', 'image'].forEach(type => {
+                const panel = document.getElementById(`combo${type.charAt(0).toUpperCase() + type.slice(1)}Panel`);
+                const button = panel ? panel.previousElementSibling : null;
+                if (panel && !panel.classList.contains('hidden')) {
+                    if (!panel.contains(e.target) && button && !button.contains(e.target)) {
+                        panel.classList.add('hidden');
+                        const arrow = document.getElementById(`combo${type.charAt(0).toUpperCase() + type.slice(1)}Arrow`);
+                        if (arrow) arrow.style.transform = '';
+                    }
+                }
+            });
+        });
+
         function setDefaultScheduleTime() {
             const el = document.getElementById('scheduleTime');
             if (!el) return;
@@ -719,14 +790,13 @@
         // ==================== GLOBAL STATE ====================
         let allFiles = [];
         let filteredFiles = [];
-        let currentFilter = 'all';
+        let currentFilter = 'raw';
         let selectedVideo = null;
         let checkedVideos = [];
         let renamingFile = null;
 
-        // State untuk jadwal multi-select
-        let scheduleSelectedVideos = [];  // [{url, name}]
-        let scheduleSelectedImages = [];  // [{url, name}]
+        let scheduleSelectedVideos = [];
+        let scheduleSelectedImages = [];
         let schedulePrimaryVideo = null;
         let schedulePrimaryImage = null;
 
@@ -786,7 +856,7 @@
 
         function setFilter(filter) {
             currentFilter = filter;
-            ['all', 'raw', 'video_ai', 'image', 'image_ai'].forEach(f => {
+            ['raw', 'video_ai', 'image', 'image_ai'].forEach(f => {
                 const btn = document.getElementById(`filter-${f}`);
                 if (!btn) return;
                 if (f === filter) btn.className = 'flex-1 py-2 px-2 text-blue-400 border-b-2 border-blue-400 font-medium whitespace-nowrap';
@@ -796,9 +866,7 @@
         }
 
         function applyFilter() {
-            if (currentFilter === 'all') {
-                filteredFiles = allFiles;
-            } else if (currentFilter === 'raw') {
+            if (currentFilter === 'raw') {
                 filteredFiles = allFiles.filter(f => f.type === 'raw' && f.media_type === 'video');
             } else {
                 filteredFiles = allFiles.filter(f => f.type === currentFilter);
@@ -918,7 +986,7 @@
             renderVideoList();
             showPreview(file);
             const badge = document.getElementById('previewBadge');
-            badge.className = `text-xs px-2 py-1 rounded-full ${file.type === 'ai' ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'}`;
+            badge.className = `text-xs px-2 py-1 rounded-full ${file.type === 'video_ai' ? 'bg-green-500/20 text-green-400' : file.type === 'image_ai' ? 'bg-purple-500/20 text-purple-400' : file.type === 'image' ? 'bg-pink-500/20 text-pink-400' : 'bg-blue-500/20 text-blue-400'}`;
             badge.textContent = file.displayStatus;
         }
 
@@ -1185,7 +1253,6 @@
             const ext = file.name.toLowerCase().split('.').pop();
             const IMAGE_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
             if (IMAGE_EXT.includes(ext)) {
-                // Gambar langsung upload
                 doUpload('direct');
                 return;
             }
@@ -1440,6 +1507,72 @@
             });
         }
 
+        // ==================== COMBO BOX DROPDOWN ====================
+        function toggleCombo(type) {
+            const panel = document.getElementById(`combo${type.charAt(0).toUpperCase() + type.slice(1)}Panel`);
+            const arrow = document.getElementById(`combo${type.charAt(0).toUpperCase() + type.slice(1)}Arrow`);
+            if (!panel) return;
+            const isHidden = panel.classList.contains('hidden');
+            if (isHidden) {
+                panel.classList.remove('hidden');
+                if (arrow) arrow.style.transform = 'rotate(180deg)';
+            } else {
+                panel.classList.add('hidden');
+                if (arrow) arrow.style.transform = '';
+            }
+        }
+
+        function closeAllCombos() {
+            ['video', 'image'].forEach(type => {
+                const panel = document.getElementById(`combo${type.charAt(0).toUpperCase() + type.slice(1)}Panel`);
+                const arrow = document.getElementById(`combo${type.charAt(0).toUpperCase() + type.slice(1)}Arrow`);
+                if (panel) panel.classList.add('hidden');
+                if (arrow) arrow.style.transform = '';
+            });
+        }
+
+        function clearComboSelection(type) {
+            if (type === 'video') {
+                scheduleSelectedVideos = [];
+                schedulePrimaryVideo = null;
+            } else {
+                scheduleSelectedImages = [];
+                schedulePrimaryImage = null;
+            }
+            populateMediaDropdowns();
+        }
+
+        function updateComboLabels() {
+            const videoLabel = document.getElementById('comboVideoLabel');
+            const imageLabel = document.getElementById('comboImageLabel');
+
+            if (scheduleSelectedVideos.length === 0) {
+                videoLabel.textContent = 'Pilih video...';
+                videoLabel.className = 'truncate text-gray-400';
+            } else {
+                const primary = scheduleSelectedVideos.find(v => v.url === schedulePrimaryVideo);
+                if (scheduleSelectedVideos.length === 1) {
+                    videoLabel.textContent = `🎬 ${scheduleSelectedVideos[0].name}`;
+                } else {
+                    videoLabel.textContent = `🎬 ${scheduleSelectedVideos.length} video dipilih${primary ? ` (utama: ${primary.name.substring(0, 20)}...)` : ''}`;
+                }
+                videoLabel.className = 'truncate text-white';
+            }
+
+            if (scheduleSelectedImages.length === 0) {
+                imageLabel.textContent = 'Pilih gambar...';
+                imageLabel.className = 'truncate text-gray-400';
+            } else {
+                const primary = scheduleSelectedImages.find(i => i.url === schedulePrimaryImage);
+                if (scheduleSelectedImages.length === 1) {
+                    imageLabel.textContent = `🖼️ ${scheduleSelectedImages[0].name}`;
+                } else {
+                    imageLabel.textContent = `🖼️ ${scheduleSelectedImages.length} gambar dipilih${primary ? ` (utama: ${primary.name.substring(0, 20)}...)` : ''}`;
+                }
+                imageLabel.className = 'truncate text-white';
+            }
+        }
+
         // ==================== SCHEDULE MULTI-MEDIA ====================
         async function loadSchedules() {
             try {
@@ -1491,26 +1624,27 @@
 
         async function populateMediaDropdowns() {
             // === Video ===
-            const videoContainer = document.getElementById('scheduleVideoDropdown');
+            const videoList = document.getElementById('comboVideoList');
             const videoFiles = allFiles.filter(f => f.media_type === 'video');
 
             if (videoFiles.length === 0) {
-                videoContainer.innerHTML = '<p class="text-xs text-gray-500 italic">Belum ada video</p>';
+                videoList.innerHTML = '<p class="text-xs text-gray-500 italic p-2">Belum ada video</p>';
             } else {
-                videoContainer.innerHTML = videoFiles.map(f => {
+                videoList.innerHTML = videoFiles.map(f => {
                     const checked = scheduleSelectedVideos.some(v => v.url === f.url);
                     const isPrimary = schedulePrimaryVideo === f.url;
                     const icon = f.type === 'raw' ? '📹' : '✨';
                     const safeName = f.displayName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const safeUrl = f.url.replace(/'/g, "\\'");
                     return `
-                        <div class="flex items-center gap-2 py-1 px-1 hover:bg-gray-600/50 rounded">
+                        <div class="flex items-center gap-2 py-1.5 px-2 hover:bg-gray-600/50 rounded cursor-pointer" onclick="event.stopPropagation();">
                             <input type="checkbox" ${checked ? 'checked' : ''} 
-                                   onchange="toggleScheduleVideo('${f.url}', '${safeName}', this.checked)"
+                                   onclick="event.stopPropagation(); toggleScheduleVideo('${safeUrl}', '${safeName}', this.checked)"
                                    class="checkbox-custom"/>
                             <input type="radio" name="primaryVideo" ${isPrimary ? 'checked' : ''} 
                                    ${!checked ? 'disabled' : ''}
-                                   onchange="setPrimaryVideo('${f.url}')"
-                                   class="w-3.5 h-3.5 accent-purple-500"/>
+                                   onclick="event.stopPropagation(); setPrimaryVideo('${safeUrl}')"
+                                   class="combo-radio"/>
                             <span class="text-xs text-white truncate flex-1">${icon} ${f.displayName}</span>
                         </div>
                     `;
@@ -1518,31 +1652,35 @@
             }
 
             // === Gambar ===
-            const imageContainer = document.getElementById('scheduleImageDropdown');
+            const imageList = document.getElementById('comboImageList');
             const imageFiles = allFiles.filter(f => f.media_type === 'image');
 
             if (imageFiles.length === 0) {
-                imageContainer.innerHTML = '<p class="text-xs text-gray-500 italic">Belum ada gambar</p>';
+                imageList.innerHTML = '<p class="text-xs text-gray-500 italic p-2">Belum ada gambar</p>';
             } else {
-                imageContainer.innerHTML = imageFiles.map(f => {
+                imageList.innerHTML = imageFiles.map(f => {
                     const checked = scheduleSelectedImages.some(v => v.url === f.url);
                     const isPrimary = schedulePrimaryImage === f.url;
                     const icon = f.type === 'image_ai' ? '✨' : '🖼️';
                     const safeName = f.displayName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const safeUrl = f.url.replace(/'/g, "\\'");
                     return `
-                        <div class="flex items-center gap-2 py-1 px-1 hover:bg-gray-600/50 rounded">
+                        <div class="flex items-center gap-2 py-1.5 px-2 hover:bg-gray-600/50 rounded cursor-pointer" onclick="event.stopPropagation();">
                             <input type="checkbox" ${checked ? 'checked' : ''} 
-                                   onchange="toggleScheduleImage('${f.url}', '${safeName}', this.checked)"
+                                   onclick="event.stopPropagation(); toggleScheduleImage('${safeUrl}', '${safeName}', this.checked)"
                                    class="checkbox-custom"/>
                             <input type="radio" name="primaryImage" ${isPrimary ? 'checked' : ''} 
                                    ${!checked ? 'disabled' : ''}
-                                   onchange="setPrimaryImage('${f.url}')"
-                                   class="w-3.5 h-3.5 accent-pink-500"/>
+                                   onclick="event.stopPropagation(); setPrimaryImage('${safeUrl}')"
+                                   class="combo-radio"/>
                             <span class="text-xs text-white truncate flex-1">${icon} ${f.displayName}</span>
                         </div>
                     `;
                 }).join('');
             }
+
+            // Update label button
+            updateComboLabels();
 
             // Platform dropdown
             const platformSelect = document.getElementById('schedulePlatform');
@@ -1604,7 +1742,6 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error);
 
-                // Reset
                 scheduleSelectedVideos = [];
                 scheduleSelectedImages = [];
                 schedulePrimaryVideo = null;
@@ -1710,7 +1847,7 @@
 
                 document.getElementById('aiResultLoading').innerHTML = `
                     <div class="spinner mx-auto mb-4"></div>
-                    <p class="text-purple-400 font-medium">📤 Mengunggah video ke AI...</p>
+                    <p class="text-purple-400 font-medium">📤 Mengirim ke AI...</p>
                 `;
 
                 const response = await fetch('/api/edit-video', {
@@ -1904,6 +2041,8 @@
         window.toggleScheduleImage = toggleScheduleImage;
         window.setPrimaryVideo = setPrimaryVideo;
         window.setPrimaryImage = setPrimaryImage;
+        window.toggleCombo = toggleCombo;
+        window.clearComboSelection = clearComboSelection;
     </script>
 </body>
 </html>
