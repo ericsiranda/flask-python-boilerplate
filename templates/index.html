@@ -709,6 +709,7 @@
         let selectedVideo = null;
         let checkedVideos = [];
         let renamingFile = null;
+        let lastAIResult = '';
 
         async function loadFiles() {
             const container = document.getElementById('videoListContainer');
@@ -848,10 +849,7 @@
 
             if (countBadge) countBadge.textContent = checkedVideos.length;
 
-            if (!listEl) {
-                console.warn('checkedVideosList element not found');
-                return;
-            }
+            if (!listEl) { console.warn('checkedVideosList element not found'); return; }
 
             if (checkedVideos.length === 0) {
                 listEl.innerHTML = '<span class="text-gray-500 italic">Belum ada video terpilih</span>';
@@ -1495,9 +1493,19 @@
             }
         }
 
+        // ==================== SUBMIT TO AI (AGNES) ====================
         async function submitToAI() {
             const prompt = document.getElementById('promptInput').value.trim();
             if (!prompt) { alert('Isi prompt dulu!'); return; }
+
+            let videoUrl = null;
+            if (checkedVideos.length > 0) {
+                const video = checkedVideos[0];
+                videoUrl = video.url;
+                if (!video.is_single && video.chunks && video.chunks.length > 0) {
+                    videoUrl = video.chunks[0].url;
+                }
+            }
 
             openAIResultModal();
             setAIResultLoading(true);
@@ -1509,10 +1517,13 @@
             submitBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div><span>Memproses...</span>';
 
             try {
-                const response = await fetch('/api/generate-video', {
+                const response = await fetch('/api/edit-video', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: prompt })
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        image_url: videoUrl
+                    })
                 });
 
                 const data = await response.json();
@@ -1521,7 +1532,7 @@
                 setAIResultLoading(false);
                 document.getElementById('aiResultText').innerHTML = `
                     <video src="${data.video_url}" controls class="w-full rounded-lg"></video>
-                    <p class="text-xs text-gray-400 mt-2">Video berhasil di-generate dan disimpan ke Vercel Blob.</p>
+                    <p class="text-xs text-gray-400 mt-2">Video berhasil di-generate dengan Agnes AI.</p>
                 `;
                 document.getElementById('aiResultContent').classList.remove('hidden');
 
@@ -1558,6 +1569,7 @@
             document.getElementById('aiResultErrorText').textContent = message;
         }
 
+        // ==================== LOGIN MEDSOS ====================
         function openLoginModal() {
             document.getElementById('loginModal').classList.remove('hidden');
             document.getElementById('loginModal').classList.add('flex');

@@ -100,14 +100,141 @@ def init_tables():
         return False, str(e)
 
 
-# ==================== PLACEHOLDER: AI VIDEO EDIT ====================
-# Fungsi AI edit video akan ditambahkan setelah provider AI ditentukan.
-# Untuk sekarang, endpoint ini mengembalikan pesan bahwa fitur belum aktif.
+# ==================== AGNES AI VIDEO GENERATION ====================
 @app.route('/api/edit-video', methods=['POST'])
-def edit_video():
-    return jsonify({
-        'error': 'Fitur AI edit video belum aktif. Silakan hubungkan provider AI terlebih dahulu (Kling AI, Runway, dll).'
-    }), 503
+def edit_video_agnes():
+    data = request.json
+    prompt = data.get('prompt')
+    image_url = data.get('image_url')
+
+    if not prompt:
+        return jsonify({'error': 'Prompt wajib disediakan'}), 400
+
+    agnes_api_key = os.environ.get('AGNES_API_KEY')
+    if not agnes_api_key:
+        return jsonify({'error': 'AGNES_API_KEY belum di-set di environment'}), 500
+
+    try:
+        print(f"🎬 Generating video dengan Agnes AI...")
+        print(f"Prompt: {prompt[:80]}...")
+
+        submit_url = "https://apihub.agnes-ai.com/v1/videos"
+
+        submit_payload = {
+            "model": "agnes-video-v2.0",
+            "prompt": prompt,
+            "height": 768,
+            "width": 1152,
+            "num_frames": 121,
+            "frame_rate": 24
+        }
+
+        if image_url:
+            submit_payload["image"] = image_url
+
+        submit_headers = {
+            "Authorization": f"Bearer {agnes_api_key}",
+            "Content-Type": "application/json"
+        }
+
+        submit_res = req_lib.post(
+            submit_url,
+            headers=submit_headers,
+            json=submit_payload,
+            timeout=60
+        )
+
+        submit_data = submit_res.json()
+        print(f"Agnes submit response: {submit_data}")
+
+        video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
+
+        if not video_id:
+            return jsonify({
+                'error': f'Gagal submit ke Agnes AI: {submit_data}'
+            }), 500
+
+        print(f"✅ Video ID: {video_id}")
+
+        result_url = f"https://apihub.agnes-ai.com/agnesapi?video_id={video_id}"
+        result_headers = {"Authorization": f"Bearer {agnes_api_key}"}
+
+        max_retries = 60
+        result_data = None
+
+        for i in range(max_retries):
+            time.sleep(10)
+
+            try:
+                result_res = req_lib.get(result_url, headers=result_headers, timeout=30)
+                result_data = result_res.json()
+                status = result_data.get('status') or result_data.get('data', {}).get('status')
+
+                print(f"Polling {i+1}/{max_retries}: status = {status}")
+
+                if status == 'completed':
+                    print("✅ Video selesai diproses")
+                    break
+                elif status == 'failed':
+                    return jsonify({'error': f'Agnes AI gagal: {result_data}'}), 500
+
+            except Exception as poll_error:
+                print(f"⚠️ Polling error: {poll_error}")
+                continue
+
+        final_status = result_data.get('status') if result_data else None
+
+        if final_status != 'completed':
+            return jsonify({
+                'error': f'Timeout: Agnes AI belum selesai. Status: {final_status}'
+            }), 500
+
+        output_url = None
+        if result_data:
+            output_url = (
+                result_data.get('video_url') or
+                result_data.get('url') or
+                result_data.get('data', {}).get('video_url') or
+                result_data.get('data', {}).get('url')
+            )
+
+        if not output_url:
+            return jsonify({'error': f'URL video tidak ditemukan: {result_data}'}), 500
+
+        print(f"✅ Video hasil: {output_url}")
+        print("📥 Mengunduh video...")
+
+        video_download_res = req_lib.get(output_url, timeout=120, stream=True)
+
+        if video_download_res.status_code != 200:
+            return jsonify({'error': f'Gagal download: {video_download_res.status_code}'}), 500
+
+        video_bytes = video_download_res.content
+        print(f"✅ Video diunduh: {len(video_bytes)} bytes")
+
+        filename = f"agnes_video_{int(time.time())}.mp4"
+        print(f"📤 Upload ke Vercel Blob: {filename}...")
+
+        blob_result = put(filename, video_bytes, access='public', multipart=True)
+
+        print(f"✅ Selesai: {blob_result.url}")
+
+        return jsonify({
+            'success': True,
+            'video_url': blob_result.url,
+            'pathname': blob_result.pathname,
+            'video_id': video_id
+        })
+
+    except req_lib.exceptions.Timeout:
+        return jsonify({'error': 'Timeout saat menghubungi Agnes API'}), 504
+    except req_lib.exceptions.ConnectionError:
+        return jsonify({'error': 'Gagal terhubung ke Agnes API'}), 503
+    except Exception as e:
+        print(f"❌ Agnes AI Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 
 # ==================== USER MANAGEMENT ====================
