@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Project IGIKI - Manajemen Medsos</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FFmpeg.wasm UMD -->
-<!-- <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
-<script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>   -->
     <style>
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
@@ -58,10 +55,7 @@
             to { opacity: 1; transform: translateX(0); }
         }
 
-        .video-list-item .action-btn {
-            opacity: 0;
-            transition: opacity 0.2s ease;
-        }
+        .video-list-item .action-btn { opacity: 0; transition: opacity 0.2s ease; }
         .video-list-item:hover .action-btn { opacity: 1; }
         .video-list-item.selected .action-btn,
         .video-list-item.checked .action-btn { opacity: 1; }
@@ -158,11 +152,11 @@
         </nav>
 
         <main id="mainGrid" class="max-w-[1600px] mx-auto p-3 sm:p-4 grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4" style="min-height: calc(100vh - 60px);">
-            <!-- KOLOM 1 -->
+            <!-- KOLOM 1: MEDIA LIST -->
             <div id="videoListColumn" class="col-span-1 md:col-span-5 bg-gray-800 rounded-2xl border border-gray-700 flex flex-col overflow-hidden" style="max-height: 50vh; min-height: 300px;">
                 <div class="px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-700 flex justify-between items-center gap-2 flex-shrink-0">
                     <h2 class="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
-                        📹 Video <span id="videoCountBadge" class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">0</span>
+                        📁 Media <span id="videoCountBadge" class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">0</span>
                     </h2>
                     <div class="flex items-center gap-1 sm:gap-1.5">
                         <button onclick="openUploadModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 px-2 sm:px-3 rounded-lg flex items-center gap-1">
@@ -172,17 +166,19 @@
                         <button onclick="loadFiles()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1.5 rounded-lg" title="Refresh">🔄</button>
                     </div>
                 </div>
-                <div class="flex border-b border-gray-700 text-xs flex-shrink-0">
-                    <button onclick="setFilter('all')" id="filter-all" class="flex-1 py-2 px-2 text-blue-400 border-b-2 border-blue-400 font-medium">Semua</button>
-                    <button onclick="setFilter('raw')" id="filter-raw" class="flex-1 py-2 px-2 text-gray-400 hover:text-white">Mentah</button>
-                    <button onclick="setFilter('ai')" id="filter-ai" class="flex-1 py-2 px-2 text-gray-400 hover:text-white">Hasil AI</button>
+                <div class="flex border-b border-gray-700 text-xs flex-shrink-0 overflow-x-auto">
+                    <button onclick="setFilter('all')" id="filter-all" class="flex-1 py-2 px-2 text-blue-400 border-b-2 border-blue-400 font-medium whitespace-nowrap">Semua</button>
+                    <button onclick="setFilter('raw')" id="filter-raw" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Mentah</button>
+                    <button onclick="setFilter('video_ai')" id="filter-video_ai" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Video AI</button>
+                    <button onclick="setFilter('image')" id="filter-image" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Gambar</button>
+                    <button onclick="setFilter('image_ai')" id="filter-image_ai" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Gambar AI</button>
                 </div>
                 <div id="videoListContainer" class="flex-1 overflow-y-auto p-2 space-y-1">
                     <div class="text-center text-gray-500 italic p-4 text-xs">Memuat data...</div>
                 </div>
             </div>
 
-            <!-- KOLOM 2 -->
+            <!-- KOLOM 2: EDIT AI -->
             <div id="aiEditColumn" class="col-span-1 md:col-span-3 bg-gray-800 rounded-2xl border border-purple-500/40 flex-col overflow-hidden hidden slide-in-right" style="max-height: calc(100vh - 90px);">
                 <div class="px-4 py-3 border-b border-purple-500/20 flex justify-between items-center bg-purple-500/5 flex-shrink-0">
                     <h2 class="font-bold text-purple-400 text-sm flex items-center gap-2">
@@ -208,30 +204,44 @@
                 </div>
             </div>
 
-            <!-- KOLOM 3 -->
+            <!-- KOLOM 3: PREVIEW + JADWAL -->
             <div id="rightColumn" class="col-span-1 md:col-span-7 space-y-3 sm:space-y-4">
                 <div class="bg-gray-800 rounded-2xl border border-gray-700 p-3 sm:p-4">
                     <div class="flex justify-between items-center mb-3">
                         <h2 class="font-bold text-white text-sm">🎬 Preview</h2>
-                        <span id="previewBadge" class="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-400">Belum ada video</span>
+                        <span id="previewBadge" class="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-400">Belum ada media</span>
                     </div>
                     <div id="rawVideoContainer" class="aspect-video bg-gray-900 rounded-lg flex items-center justify-center text-gray-600 text-sm overflow-hidden">
-                        Pilih video dari daftar
+                        Pilih media dari daftar
                     </div>
                 </div>
 
+                <!-- JADWAL POSTING DENGAN MULTI-MEDIA -->
                 <div class="bg-gray-800 rounded-2xl border border-blue-500/40 p-3 sm:p-4">
                     <div class="flex items-center gap-2 mb-3">
                         <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                         <h2 class="font-bold text-blue-400 text-sm">Jadwal Posting Medsos</h2>
                     </div>
                     <div class="space-y-3">
+
+                        <!-- Pilih Video -->
                         <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1">Pilih Video</label>
-                            <select id="scheduleVideoSelect" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none">
-                                <option value="">- Pilih video -</option>
-                            </select>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">🎬 Pilih Video (bisa lebih dari satu)</label>
+                            <div id="scheduleVideoDropdown" class="bg-gray-700 border border-gray-600 rounded-lg max-h-40 overflow-y-auto p-2 space-y-1">
+                                <p class="text-xs text-gray-500 italic">Memuat...</p>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Radio = video utama · Checkbox = ikut diposting</p>
                         </div>
+
+                        <!-- Pilih Gambar -->
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">🖼️ Pilih Gambar (bisa lebih dari satu)</label>
+                            <div id="scheduleImageDropdown" class="bg-gray-700 border border-gray-600 rounded-lg max-h-40 overflow-y-auto p-2 space-y-1">
+                                <p class="text-xs text-gray-500 italic">Memuat...</p>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Radio = gambar utama · Checkbox = ikut diposting</p>
+                        </div>
+
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label class="block text-xs font-medium text-gray-400 mb-1">Waktu Tayang</label>
@@ -259,13 +269,14 @@
         <div id="uploadModal" class="fixed inset-0 bg-black/70 modal-backdrop z-50 hidden items-center justify-center p-4">
             <div class="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-md overflow-hidden">
                 <div class="p-4 border-b border-gray-700 flex justify-between items-center">
-                    <h3 class="font-bold text-white">📤 Upload Video</h3>
+                    <h3 class="font-bold text-white">📤 Upload Media</h3>
                     <button onclick="closeUploadModal()" class="text-gray-400 hover:text-white">✕</button>
                 </div>
                 <div class="p-4 space-y-4">
-                    <input type="file" id="uploadInput" accept="video/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white cursor-pointer bg-gray-700 rounded-lg p-1"/>
+                    <input type="file" id="uploadInput" accept="video/*,image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white cursor-pointer bg-gray-700 rounded-lg p-1"/>
+                    <p class="text-xs text-gray-500">💡 Gambar & video didukung. Video besar akan otomatis ditawari kompres/potong.</p>
                     <div id="uploadMethodChoice" class="hidden space-y-2">
-                        <p class="text-xs text-yellow-400">⚠️ File > 4.5 MB. Pilih metode:</p>
+                        <p class="text-xs text-yellow-400">⚠️ File video > 4.5 MB. Pilih metode:</p>
                         <div class="grid grid-cols-2 gap-2">
                             <button onclick="doUpload('compress')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-xs sm:text-sm">🗜️ Kompres</button>
                             <button onclick="doUpload('cut')" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg text-xs sm:text-sm">✂️ Potong</button>
@@ -713,6 +724,12 @@
         let checkedVideos = [];
         let renamingFile = null;
 
+        // State untuk jadwal multi-select
+        let scheduleSelectedVideos = [];  // [{url, name}]
+        let scheduleSelectedImages = [];  // [{url, name}]
+        let schedulePrimaryVideo = null;
+        let schedulePrimaryImage = null;
+
         async function loadFiles() {
             const container = document.getElementById('videoListContainer');
             container.innerHTML = '<div class="text-center text-gray-500 italic p-4 text-xs">Memuat data...</div>';
@@ -723,25 +740,45 @@
                 if (!response.ok) throw new Error(data.error || 'Gagal');
 
                 allFiles = [];
-                data.files.forEach(function(file) {
+
+                (data.videos_raw || []).forEach(file => {
                     allFiles.push({
-                        ...file, type: 'raw',
+                        ...file, type: 'raw', media_type: 'video',
                         displayName: file.is_single ? file.pathname : file.pathname.replace('.webm', ''),
                         displayStatus: 'Mentah',
                         unique_id: `raw_${file.session_id || file.pathname}`,
                     });
-                    if (file.ai_result) {
-                        allFiles.push({
-                            ...file, type: 'ai', url: file.ai_result.url,
-                            displayName: `AI: ${file.pathname.replace('.webm', '')}`,
-                            displayStatus: 'AI',
-                            ai_timestamp: file.ai_result.uploadedAt || new Date().toISOString(),
-                            unique_id: `ai_${file.session_id}`,
-                        });
-                    }
                 });
+
+                (data.videos_ai || []).forEach(file => {
+                    allFiles.push({
+                        ...file, type: 'video_ai', media_type: 'video',
+                        displayName: file.pathname.replace('ai_edit_', '').replace(/^\d+/, 'AI_'),
+                        displayStatus: 'Video AI',
+                        unique_id: `vai_${file.session_id}_${file.pathname}`,
+                    });
+                });
+
+                (data.images_raw || []).forEach(file => {
+                    allFiles.push({
+                        ...file, type: 'image', media_type: 'image',
+                        displayName: file.pathname,
+                        displayStatus: 'Gambar',
+                        unique_id: `img_${file.pathname}`,
+                    });
+                });
+
+                (data.images_ai || []).forEach(file => {
+                    allFiles.push({
+                        ...file, type: 'image_ai', media_type: 'image',
+                        displayName: file.pathname.replace('ai_edit_image_', 'IMG_AI_'),
+                        displayStatus: 'Gambar AI',
+                        unique_id: `iai_${file.session_id}_${file.pathname}`,
+                    });
+                });
+
                 applyFilter();
-                await populateVideoDropdown();
+                await populateMediaDropdowns();
             } catch (error) {
                 container.innerHTML = `<div class="text-center text-red-400 italic p-4 text-xs">Error: ${error.message}</div>`;
             }
@@ -749,16 +786,23 @@
 
         function setFilter(filter) {
             currentFilter = filter;
-            ['all', 'raw', 'ai'].forEach(f => {
+            ['all', 'raw', 'video_ai', 'image', 'image_ai'].forEach(f => {
                 const btn = document.getElementById(`filter-${f}`);
-                if (f === filter) btn.className = 'flex-1 py-2 px-2 text-blue-400 border-b-2 border-blue-400 font-medium';
-                else btn.className = 'flex-1 py-2 px-2 text-gray-400 hover:text-white';
+                if (!btn) return;
+                if (f === filter) btn.className = 'flex-1 py-2 px-2 text-blue-400 border-b-2 border-blue-400 font-medium whitespace-nowrap';
+                else btn.className = 'flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap';
             });
             applyFilter();
         }
 
         function applyFilter() {
-            filteredFiles = currentFilter === 'all' ? allFiles : allFiles.filter(f => f.type === currentFilter);
+            if (currentFilter === 'all') {
+                filteredFiles = allFiles;
+            } else if (currentFilter === 'raw') {
+                filteredFiles = allFiles.filter(f => f.type === 'raw' && f.media_type === 'video');
+            } else {
+                filteredFiles = allFiles.filter(f => f.type === currentFilter);
+            }
             renderVideoList();
         }
 
@@ -767,7 +811,7 @@
             document.getElementById('videoCountBadge').textContent = filteredFiles.length;
 
             if (filteredFiles.length === 0) {
-                container.innerHTML = '<div class="text-center text-gray-500 italic p-4 text-xs">Belum ada video.</div>';
+                container.innerHTML = '<div class="text-center text-gray-500 italic p-4 text-xs">Belum ada media.</div>';
                 return;
             }
 
@@ -775,16 +819,17 @@
                 const sizeMB = (file.size / 1024 / 1024).toFixed(2);
                 const isSelected = selectedVideo && selectedVideo.unique_id === file.unique_id;
                 const isChecked = checkedVideos.some(v => v.unique_id === file.unique_id);
-                const canBeChecked = file.type === 'raw';
+                const canBeChecked = file.type === 'raw' && file.media_type === 'video';
 
-                let statusText = file.displayStatus;
-                if (file.type === 'ai' && file.ai_timestamp) {
-                    try {
-                        const d = new Date(file.ai_timestamp);
-                        statusText = `AI • ${d.toLocaleDateString('id-ID', {day: '2-digit', month: 'short'})}`;
-                    } catch(e) { statusText = 'AI'; }
+                let icon = '📹';
+                let statusClass = 'bg-blue-500/20 text-blue-400';
+                if (file.media_type === 'image') {
+                    icon = file.type === 'image_ai' ? '✨' : '🖼️';
+                    statusClass = file.type === 'image_ai' ? 'bg-purple-500/20 text-purple-400' : 'bg-pink-500/20 text-pink-400';
+                } else if (file.type === 'video_ai') {
+                    icon = '✨';
+                    statusClass = 'bg-green-500/20 text-green-400';
                 }
-                const statusClass = file.type === 'ai' ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400';
 
                 return `
                     <div class="video-list-item ${isSelected ? 'selected' : ''} ${isChecked ? 'checked' : ''} 
@@ -797,9 +842,10 @@
                                        onclick="event.stopPropagation(); toggleCheck('${file.unique_id}')"/>
                             ` : '<div class="w-[16px]"></div>'}
                             <div class="flex-1 min-w-0 flex items-center gap-2" onclick='selectVideoByUniqueId("${file.unique_id}")'>
+                                <span class="text-xs flex-shrink-0">${icon}</span>
                                 <span class="text-xs font-medium text-white truncate flex-1 min-w-0">${file.displayName}</span>
                                 <span class="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">${sizeMB} MB</span>
-                                <span class="text-xs px-1.5 py-0.5 rounded ${statusClass} whitespace-nowrap flex-shrink-0">${statusText}</span>
+                                <span class="text-xs px-1.5 py-0.5 rounded ${statusClass} whitespace-nowrap flex-shrink-0">${file.displayStatus}</span>
                             </div>
                             <div class="flex items-center gap-0.5 flex-shrink-0">
                                 <button onclick='event.stopPropagation(); openRenameModal("${file.unique_id}")' class="action-btn text-yellow-400 hover:text-yellow-300 p-1 rounded hover:bg-yellow-500/20" title="Rename">
@@ -829,7 +875,7 @@
 
         function toggleCheck(uniqueId) {
             const file = allFiles.find(f => f.unique_id === uniqueId);
-            if (!file || file.type !== 'raw') return;
+            if (!file || file.type !== 'raw' || file.media_type !== 'video') return;
             const idx = checkedVideos.findIndex(v => v.unique_id === uniqueId);
             if (idx >= 0) checkedVideos.splice(idx, 1);
             else checkedVideos.push(file);
@@ -848,10 +894,8 @@
         function updateCheckedUI() {
             const countBadge = document.getElementById('checkedCountBadge');
             const listEl = document.getElementById('checkedVideosList');
-
             if (countBadge) countBadge.textContent = checkedVideos.length;
-
-            if (!listEl) { console.warn('checkedVideosList element not found'); return; }
+            if (!listEl) return;
 
             if (checkedVideos.length === 0) {
                 listEl.innerHTML = '<span class="text-gray-500 italic">Belum ada video terpilih</span>';
@@ -875,18 +919,19 @@
             showPreview(file);
             const badge = document.getElementById('previewBadge');
             badge.className = `text-xs px-2 py-1 rounded-full ${file.type === 'ai' ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'}`;
-            badge.textContent = file.type === 'ai' ? '✅ Hasil AI' : '📹 Video Mentah';
+            badge.textContent = file.displayStatus;
         }
 
         function showPreview(file) {
             const container = document.getElementById('rawVideoContainer');
+            if (file.media_type === 'image') {
+                container.innerHTML = `<img src="${file.url}" class="w-full h-full object-contain rounded-lg bg-black"/>`;
+                return;
+            }
             if (!file.is_single && file.type === 'raw' && file.chunks) {
                 previewGrouped(file.chunks, container);
             } else {
-                container.innerHTML = `
-                    <video src="${file.url}" controls playsinline preload="metadata" 
-                           class="w-full h-full object-contain rounded-lg bg-black"></video>
-                `;
+                container.innerHTML = `<video src="${file.url}" controls playsinline preload="metadata" class="w-full h-full object-contain rounded-lg bg-black"></video>`;
             }
         }
 
@@ -901,7 +946,6 @@
                         <div id="firstLoadOverlay" class="absolute inset-0 bg-gray-900/95 flex flex-col items-center justify-center p-4 z-10">
                             <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500/30 border-t-blue-500 mb-4"></div>
                             <div class="bg-yellow-500/20 border border-yellow-500/40 rounded-lg p-3 max-w-xs flex items-start gap-2 mb-3">
-                                <svg class="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
                                 <p class="text-xs text-yellow-200"><strong>Memuat...</strong> Video terdiri dari ${chunks.length} file.</p>
                             </div>
                         </div>
@@ -1028,12 +1072,12 @@
         function openRenameModal(uniqueId) {
             const file = allFiles.find(f => f.unique_id === uniqueId);
             if (!file) return;
-            if (file.type === 'ai') { alert('⚠️ File hasil AI tidak bisa di-rename.'); return; }
+            if (file.type !== 'raw') { alert('⚠️ File hasil AI tidak bisa di-rename.'); return; }
             renamingFile = file;
             document.getElementById('renameModal').classList.remove('hidden');
             document.getElementById('renameModal').classList.add('flex');
             document.getElementById('renameOldName').value = file.displayName;
-            document.getElementById('renameNewName').value = file.displayName.replace('.webm', '');
+            document.getElementById('renameNewName').value = file.displayName.replace(/\.(webm|mp4)$/, '');
             document.getElementById('renameStatus').classList.add('hidden');
             setTimeout(() => document.getElementById('renameNewName').focus(), 200);
         }
@@ -1089,7 +1133,7 @@
             if (!confirm(`Yakin ingin menghapus "${file.displayName}"?`)) return;
 
             try {
-                if (file.is_single || file.type === 'ai') {
+                if (file.is_single || file.type !== 'raw') {
                     await fetch('/api/delete-file', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1107,11 +1151,9 @@
                 checkedVideos = checkedVideos.filter(v => v.unique_id !== uniqueId);
                 if (selectedVideo && selectedVideo.unique_id === uniqueId) {
                     selectedVideo = null;
-                    document.getElementById('rawVideoContainer').innerHTML = `
-                        <div class="text-center text-gray-600 text-sm">Pilih video dari daftar</div>
-                    `;
+                    document.getElementById('rawVideoContainer').innerHTML = `<div class="text-center text-gray-600 text-sm">Pilih media dari daftar</div>`;
                     document.getElementById('previewBadge').className = 'text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-400';
-                    document.getElementById('previewBadge').textContent = 'Belum ada video';
+                    document.getElementById('previewBadge').textContent = 'Belum ada media';
                 }
                 updateCheckedUI();
                 updateGridLayout();
@@ -1140,6 +1182,13 @@
         function checkAndUpload() {
             const file = document.getElementById('uploadInput').files[0];
             if (!file) { alert('Pilih file dulu!'); return; }
+            const ext = file.name.toLowerCase().split('.').pop();
+            const IMAGE_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+            if (IMAGE_EXT.includes(ext)) {
+                // Gambar langsung upload
+                doUpload('direct');
+                return;
+            }
             const sizeMB = file.size / 1024 / 1024;
             if (sizeMB > 4.5) {
                 document.getElementById('uploadMethodChoice').classList.remove('hidden');
@@ -1160,7 +1209,28 @@
             progressContainer.classList.remove('hidden');
             statusDiv.classList.remove('hidden');
             progressBar.style.width = '0%';
-            statusDiv.innerHTML = '<span class="text-blue-400">Memproses...</span>';
+            progressBar.style.background = '';
+
+            const ext = file.name.toLowerCase().split('.').pop();
+            const IMAGE_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+            const isImage = IMAGE_EXT.includes(ext);
+
+            if (isImage) {
+                statusDiv.innerHTML = '<span class="text-pink-400">🖼️ Upload gambar...</span>';
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    const res = await fetch('/api/upload-media', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error);
+                    progressBar.style.width = '100%';
+                    statusDiv.innerHTML = '<span class="text-green-400">✅ Gambar terupload!</span>';
+                    setTimeout(() => { closeUploadModal(); loadFiles(); }, 1200);
+                } catch(e) {
+                    statusDiv.innerHTML = `<span class="text-red-400">❌ ${e.message}</span>`;
+                }
+                return;
+            }
 
             let preWarmAudioCtx = null;
             try {
@@ -1225,8 +1295,8 @@
 
         async function uploadSingleFile(file) {
             const formData = new FormData();
-            formData.append('video', file);
-            const response = await fetch('/api/upload', { method: 'POST', body: formData });
+            formData.append('file', file);
+            const response = await fetch('/api/upload-media', { method: 'POST', body: formData });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error);
         }
@@ -1370,72 +1440,7 @@
             });
         }
 
-        // ==================== KONVERSI WEBM → MP4 (UMD) ====================
-async function convertToMp4(webmBlob) {
-    try {
-        console.log('🎬 Memuat FFmpeg (dengan custom worker)...');
-
-        const { FFmpeg } = await import('https://esm.sh/@ffmpeg/ffmpeg@0.12.10');
-        const { toBlobURL, fetchFile } = await import('https://esm.sh/@ffmpeg/util@0.12.1');
-
-        const ffmpeg = new FFmpeg();
-        ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
-
-        console.log('📦 Memuat core FFmpeg...');
-        // Gunakan core versi UMD agar lebih stabil
-        const coreBaseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-
-        // Tentukan lokasi file worker.js yang sudah Anda salin ke folder public
-        // Ganti '/ffmpeg/worker.js' sesuai dengan lokasi file di proyek Anda
-        const workerURL = '/ffmpeg/worker.js'; 
-
-        await ffmpeg.load({
-            coreURL: await toBlobURL(`${coreBaseURL}/ffmpeg-core.js`, 'text/javascript'),
-            wasmURL: await toBlobURL(`${coreBaseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-            // Ini adalah kunci perbaikannya:
-            classWorkerURL: workerURL,
-        });
-
-        console.log('✅ FFmpeg siap');
-
-        await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
-
-        console.log('🔄 Konversi WEBM → MP4...');
-        await ffmpeg.exec([
-            '-i', 'input.webm',
-            '-c:v', 'libx264',
-            '-preset', 'fast',
-            '-crf', '23',
-            '-c:a', 'aac',
-            '-b:a', '128k',
-            '-movflags', '+faststart',
-            'output.mp4'
-        ]);
-
-        const data = await ffmpeg.readFile('output.mp4');
-        const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
-
-        console.log(`✅ Selesai: ${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB`);
-        return mp4Blob;
-
-    } catch (err) {
-        console.error('❌ Konversi gagal:', err);
-        throw new Error(`Gagal konversi: ${err.message}`);
-    }
-}
-
-        function loadScript(src) {
-            return new Promise((resolve, reject) => {
-                if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
-                const script = document.createElement('script');
-                script.src = src;
-                script.onload = resolve;
-                script.onerror = () => reject(new Error(`Gagal memuat: ${src}`));
-                document.head.appendChild(script);
-            });
-        }
-
-        // ==================== SCHEDULE ====================
+        // ==================== SCHEDULE MULTI-MEDIA ====================
         async function loadSchedules() {
             try {
                 const res = await fetch('/api/schedules/list');
@@ -1444,28 +1449,152 @@ async function convertToMp4(webmBlob) {
             } catch(e) { return []; }
         }
 
+        function toggleScheduleVideo(url, name, checked) {
+            if (checked) {
+                if (!scheduleSelectedVideos.some(v => v.url === url)) {
+                    scheduleSelectedVideos.push({ url, name });
+                }
+                if (!schedulePrimaryVideo) schedulePrimaryVideo = url;
+            } else {
+                scheduleSelectedVideos = scheduleSelectedVideos.filter(v => v.url !== url);
+                if (schedulePrimaryVideo === url) {
+                    schedulePrimaryVideo = scheduleSelectedVideos.length > 0 ? scheduleSelectedVideos[0].url : null;
+                }
+            }
+            populateMediaDropdowns();
+        }
+
+        function toggleScheduleImage(url, name, checked) {
+            if (checked) {
+                if (!scheduleSelectedImages.some(v => v.url === url)) {
+                    scheduleSelectedImages.push({ url, name });
+                }
+                if (!schedulePrimaryImage) schedulePrimaryImage = url;
+            } else {
+                scheduleSelectedImages = scheduleSelectedImages.filter(v => v.url !== url);
+                if (schedulePrimaryImage === url) {
+                    schedulePrimaryImage = scheduleSelectedImages.length > 0 ? scheduleSelectedImages[0].url : null;
+                }
+            }
+            populateMediaDropdowns();
+        }
+
+        function setPrimaryVideo(url) {
+            schedulePrimaryVideo = url;
+            populateMediaDropdowns();
+        }
+
+        function setPrimaryImage(url) {
+            schedulePrimaryImage = url;
+            populateMediaDropdowns();
+        }
+
+        async function populateMediaDropdowns() {
+            // === Video ===
+            const videoContainer = document.getElementById('scheduleVideoDropdown');
+            const videoFiles = allFiles.filter(f => f.media_type === 'video');
+
+            if (videoFiles.length === 0) {
+                videoContainer.innerHTML = '<p class="text-xs text-gray-500 italic">Belum ada video</p>';
+            } else {
+                videoContainer.innerHTML = videoFiles.map(f => {
+                    const checked = scheduleSelectedVideos.some(v => v.url === f.url);
+                    const isPrimary = schedulePrimaryVideo === f.url;
+                    const icon = f.type === 'raw' ? '📹' : '✨';
+                    const safeName = f.displayName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    return `
+                        <div class="flex items-center gap-2 py-1 px-1 hover:bg-gray-600/50 rounded">
+                            <input type="checkbox" ${checked ? 'checked' : ''} 
+                                   onchange="toggleScheduleVideo('${f.url}', '${safeName}', this.checked)"
+                                   class="checkbox-custom"/>
+                            <input type="radio" name="primaryVideo" ${isPrimary ? 'checked' : ''} 
+                                   ${!checked ? 'disabled' : ''}
+                                   onchange="setPrimaryVideo('${f.url}')"
+                                   class="w-3.5 h-3.5 accent-purple-500"/>
+                            <span class="text-xs text-white truncate flex-1">${icon} ${f.displayName}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // === Gambar ===
+            const imageContainer = document.getElementById('scheduleImageDropdown');
+            const imageFiles = allFiles.filter(f => f.media_type === 'image');
+
+            if (imageFiles.length === 0) {
+                imageContainer.innerHTML = '<p class="text-xs text-gray-500 italic">Belum ada gambar</p>';
+            } else {
+                imageContainer.innerHTML = imageFiles.map(f => {
+                    const checked = scheduleSelectedImages.some(v => v.url === f.url);
+                    const isPrimary = schedulePrimaryImage === f.url;
+                    const icon = f.type === 'image_ai' ? '✨' : '🖼️';
+                    const safeName = f.displayName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    return `
+                        <div class="flex items-center gap-2 py-1 px-1 hover:bg-gray-600/50 rounded">
+                            <input type="checkbox" ${checked ? 'checked' : ''} 
+                                   onchange="toggleScheduleImage('${f.url}', '${safeName}', this.checked)"
+                                   class="checkbox-custom"/>
+                            <input type="radio" name="primaryImage" ${isPrimary ? 'checked' : ''} 
+                                   ${!checked ? 'disabled' : ''}
+                                   onchange="setPrimaryImage('${f.url}')"
+                                   class="w-3.5 h-3.5 accent-pink-500"/>
+                            <span class="text-xs text-white truncate flex-1">${icon} ${f.displayName}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Platform dropdown
+            const platformSelect = document.getElementById('schedulePlatform');
+            const currentVal = platformSelect.value;
+            platformSelect.innerHTML = '<option value="">- Pilih -</option>';
+            const accounts = await loadMedsosAccounts();
+            if (accounts.length > 0) {
+                accounts.forEach(acc => {
+                    const opt = document.createElement('option');
+                    opt.value = `${acc.platform}:${acc.username}`;
+                    opt.textContent = `${getPlatformIcon(acc.platform)} ${acc.platform} - ${acc.username}`;
+                    platformSelect.appendChild(opt);
+                });
+            } else {
+                platformSelect.innerHTML = '<option value="">- Belum ada akun -</option>';
+            }
+            if (currentVal) platformSelect.value = currentVal;
+        }
+
         async function saveSchedule() {
-            const videoId = document.getElementById('scheduleVideoSelect').value;
             const time = document.getElementById('scheduleTime').value;
             const platform = document.getElementById('schedulePlatform').value;
             const caption = document.getElementById('scheduleCaption').value.trim();
 
-            if (!videoId) { alert('Pilih video!'); return; }
+            if (scheduleSelectedVideos.length === 0 && scheduleSelectedImages.length === 0) {
+                alert('Pilih minimal 1 video atau 1 gambar!');
+                return;
+            }
             if (!time) { alert('Isi waktu tayang!'); return; }
             if (!platform) { alert('Pilih platform medsos!'); return; }
 
-            const video = allFiles.find(f => f.unique_id === videoId);
-            if (!video) { alert('Video tidak ditemukan!'); return; }
             const [platformName, accountUsername] = platform.split(':');
+
+            const videosPayload = scheduleSelectedVideos.map(v => ({
+                url: v.url,
+                name: v.name,
+                is_primary: v.url === schedulePrimaryVideo
+            }));
+            const imagesPayload = scheduleSelectedImages.map(i => ({
+                url: i.url,
+                name: i.name,
+                is_primary: i.url === schedulePrimaryImage
+            }));
 
             try {
                 const res = await fetch('/api/schedules/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        session_id: video.session_id || video.pathname,
-                        video_name: video.displayName,
-                        video_url: video.url,
+                        session_id: 'multi_' + Date.now(),
+                        videos: videosPayload,
+                        images: imagesPayload,
                         time: time,
                         platform: platformName,
                         account: accountUsername,
@@ -1474,10 +1603,16 @@ async function convertToMp4(webmBlob) {
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error);
+
+                // Reset
+                scheduleSelectedVideos = [];
+                scheduleSelectedImages = [];
+                schedulePrimaryVideo = null;
+                schedulePrimaryImage = null;
                 document.getElementById('scheduleCaption').value = '';
                 setDefaultScheduleTime();
+                await populateMediaDropdowns();
                 await renderScheduleList();
-                renderVideoList();
                 alert('✅ Jadwal tersimpan!');
             } catch(e) {
                 alert('❌ Gagal: ' + e.message);
@@ -1499,14 +1634,30 @@ async function convertToMp4(webmBlob) {
                         timeStr = d.toLocaleString('id-ID', {day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'});
                     } catch(e) {}
                     const isPast = new Date(s.time) < new Date();
+
+                    const videosList = (s.videos || []).map(v => 
+                        `<span class="text-xs">${v.is_primary ? '⭐' : '📹'} ${v.name}</span>`
+                    ).join('<br>') || '<span class="text-xs text-gray-500 italic">Tidak ada video</span>';
+
+                    const imagesList = (s.images || []).map(i => 
+                        `<span class="text-xs">${i.is_primary ? '⭐' : '🖼️'} ${i.name}</span>`
+                    ).join('<br>') || '<span class="text-xs text-gray-500 italic">Tidak ada gambar</span>';
+
                     return `
                         <div class="bg-gray-700/50 border ${isPast ? 'border-gray-600/50 opacity-60' : 'border-blue-500/30'} rounded-lg p-2">
                             <div class="flex justify-between items-start gap-2">
                                 <div class="flex-1 min-w-0">
-                                    <p class="text-xs font-medium text-white truncate">${s.video_name}</p>
-                                    <p class="text-xs text-blue-400 mt-0.5">🕐 ${timeStr}</p>
+                                    <p class="text-xs text-blue-400 font-medium">🕐 ${timeStr}</p>
                                     <p class="text-xs text-purple-400">${getPlatformIcon(s.platform)} ${s.platform} - @${s.account}</p>
-                                    ${s.caption ? `<p class="text-xs text-gray-400 italic mt-1 truncate">"${s.caption}"</p>` : ''}
+                                    <div class="mt-1.5 space-y-0.5">
+                                        <p class="text-xs text-gray-300 font-medium">🎬 Video:</p>
+                                        <div class="ml-2 text-gray-400">${videosList}</div>
+                                    </div>
+                                    <div class="mt-1.5 space-y-0.5">
+                                        <p class="text-xs text-gray-300 font-medium">🖼️ Gambar:</p>
+                                        <div class="ml-2 text-gray-400">${imagesList}</div>
+                                    </div>
+                                    ${s.caption ? `<p class="text-xs text-gray-400 italic mt-1.5 truncate">"${s.caption}"</p>` : ''}
                                 </div>
                                 <button onclick='deleteSchedule("${s.id}")' class="text-red-400 hover:text-red-300 text-xs flex-shrink-0">✕</button>
                             </div>
@@ -1526,39 +1677,12 @@ async function convertToMp4(webmBlob) {
                 });
                 if (!res.ok) throw new Error('Gagal hapus');
                 await renderScheduleList();
-                renderVideoList();
             } catch(e) { alert('❌ ' + e.message); }
         }
 
         function getPlatformIcon(platform) {
             const icons = { instagram: '📷', tiktok: '🎵', youtube: '▶️', facebook: '👤' };
             return icons[platform] || '🔗';
-        }
-
-        async function populateVideoDropdown() {
-            const select = document.getElementById('scheduleVideoSelect');
-            select.innerHTML = '<option value="">- Pilih video -</option>';
-            allFiles.forEach(file => {
-                const opt = document.createElement('option');
-                opt.value = file.unique_id;
-                opt.textContent = `${file.displayName} (${file.type === 'ai' ? 'AI' : 'Mentah'})`;
-                select.appendChild(opt);
-            });
-
-            const platformSelect = document.getElementById('schedulePlatform');
-            platformSelect.innerHTML = '<option value="">- Pilih -</option>';
-
-            const accounts = await loadMedsosAccounts();
-            if (accounts.length > 0) {
-                accounts.forEach(acc => {
-                    const opt = document.createElement('option');
-                    opt.value = `${acc.platform}:${acc.username}`;
-                    opt.textContent = `${getPlatformIcon(acc.platform)} ${acc.platform} - ${acc.username}`;
-                    platformSelect.appendChild(opt);
-                });
-            } else {
-                platformSelect.innerHTML = '<option value="">- Belum ada akun -</option>';
-            }
         }
 
         // ==================== SUBMIT TO AI ====================
@@ -1568,7 +1692,6 @@ async function convertToMp4(webmBlob) {
             if (checkedVideos.length === 0) { alert('Centang video dulu!'); return; }
 
             const video = checkedVideos[0];
-
             openAIResultModal();
             setAIResultLoading(true);
 
@@ -1587,39 +1710,7 @@ async function convertToMp4(webmBlob) {
 
                 document.getElementById('aiResultLoading').innerHTML = `
                     <div class="spinner mx-auto mb-4"></div>
-                    <p class="text-purple-400 font-medium">📥 Mengunduh video...</p>
-                `;
-                console.log('📥 Mengunduh video untuk konversi...');
-                const videoResponse = await fetch(videoUrl);
-                if (!videoResponse.ok) throw new Error('Gagal mengunduh video');
-                const videoBlob = await videoResponse.blob();
-                console.log(`✅ Video terunduh: ${(videoBlob.size / 1024 / 1024).toFixed(2)} MB`);
-
-                document.getElementById('aiResultLoading').innerHTML = `
-                    <div class="spinner mx-auto mb-4"></div>
-                    <p class="text-purple-400 font-medium">🔄 Mengonversi video ke MP4 (H.264)...</p>
-                    <p class="text-gray-500 text-xs mt-2">Proses ini memakan waktu 30-60 detik</p>
-                `;
-
-                const mp4Blob = await convertToMp4(videoBlob);
-                const mp4File = new File([mp4Blob], 'video_converted.mp4', { type: 'video/mp4' });
-
-                document.getElementById('aiResultLoading').innerHTML = `
-                    <div class="spinner mx-auto mb-4"></div>
-                    <p class="text-purple-400 font-medium">📤 Mengunggah video MP4...</p>
-                `;
-
-                const formData = new FormData();
-                formData.append('video', mp4File);
-                const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-                const uploadData = await uploadRes.json();
-                if (!uploadRes.ok) throw new Error(uploadData.error || 'Gagal upload MP4');
-                console.log('✅ Video MP4 terupload:', uploadData.url);
-
-                document.getElementById('aiResultLoading').innerHTML = `
-                    <div class="spinner mx-auto mb-4"></div>
-                    <p class="text-purple-400 font-medium">🤖 Menunggu Agnes AI memproses video...</p>
-                    <p class="text-gray-500 text-xs mt-2">Proses ini bisa memakan waktu 1-3 menit</p>
+                    <p class="text-purple-400 font-medium">📤 Mengunggah video ke AI...</p>
                 `;
 
                 const response = await fetch('/api/edit-video', {
@@ -1627,7 +1718,7 @@ async function convertToMp4(webmBlob) {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         prompt: prompt,
-                        image_url: uploadData.url
+                        image_url: videoUrl
                     })
                 });
 
@@ -1663,6 +1754,7 @@ async function convertToMp4(webmBlob) {
         function closeAIResultModal() {
             document.getElementById('aiResultModal').classList.add('hidden');
             document.getElementById('aiResultModal').classList.remove('flex');
+            loadFiles();
         }
 
         function setAIResultLoading(isLoading) {
@@ -1737,7 +1829,7 @@ async function convertToMp4(webmBlob) {
                 });
                 if (!res.ok) throw new Error('Gagal');
                 await renderConnectedAccounts();
-                await populateVideoDropdown();
+                await populateMediaDropdowns();
             } catch(e) { alert('❌ ' + e.message); }
         }
 
@@ -1768,7 +1860,7 @@ async function convertToMp4(webmBlob) {
                     document.getElementById('loginUsername').value = '';
                     document.getElementById('loginPassword').value = '';
                     await renderConnectedAccounts();
-                    await populateVideoDropdown();
+                    await populateMediaDropdowns();
                     setTimeout(() => statusDiv.classList.add('hidden'), 3000);
                 } else {
                     statusDiv.innerHTML = `<span class="text-red-400">❌ ${data.error || 'Gagal'}</span>`;
@@ -1808,6 +1900,10 @@ async function convertToMp4(webmBlob) {
         window.deleteVideoByUniqueId = deleteVideoByUniqueId;
         window.saveSchedule = saveSchedule;
         window.deleteSchedule = deleteSchedule;
+        window.toggleScheduleVideo = toggleScheduleVideo;
+        window.toggleScheduleImage = toggleScheduleImage;
+        window.setPrimaryVideo = setPrimaryVideo;
+        window.setPrimaryImage = setPrimaryImage;
     </script>
 </body>
 </html>

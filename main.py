@@ -1,6 +1,7 @@
 import os
 import time
 import re
+import json
 import bcrypt
 import psycopg2
 import psycopg2.extras
@@ -70,6 +71,8 @@ def init_tables():
                 session_id VARCHAR(100),
                 video_name VARCHAR(255),
                 video_url TEXT,
+                videos_json TEXT DEFAULT '[]',
+                images_json TEXT DEFAULT '[]',
                 time VARCHAR(50),
                 platform VARCHAR(50),
                 account VARCHAR(100),
@@ -77,6 +80,14 @@ def init_tables():
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
+        # Migration: tambah kolom baru kalau belum ada
+        try:
+            cur.execute("ALTER TABLE schedules ADD COLUMN IF NOT EXISTS videos_json TEXT DEFAULT '[]'")
+            cur.execute("ALTER TABLE schedules ADD COLUMN IF NOT EXISTS images_json TEXT DEFAULT '[]'")
+        except Exception as e:
+            print(f"Migration note: {e}")
+            conn.rollback()
+
         cur.execute("""
             CREATE TABLE IF NOT EXISTS medsos_accounts (
                 id SERIAL PRIMARY KEY,
@@ -221,7 +232,7 @@ def edit_video_agnes():
         video_bytes = video_download_res.content
         print(f"✅ Video diunduh: {len(video_bytes)} bytes")
 
-        filename = f"agnes_video_{int(time.time())}.mp4"
+        filename = f"ai_edit_{int(time.time())}.mp4"
         print(f"📤 Upload ke Vercel Blob: {filename}...")
 
         blob_result = put(filename, video_bytes, access='public', multipart=True)
@@ -383,11 +394,21 @@ def list_schedules():
         conn.close()
         schedules = []
         for r in rows:
+            try:
+                videos = json.loads(r.get('videos_json') or '[]')
+            except:
+                videos = []
+            try:
+                images = json.loads(r.get('images_json') or '[]')
+            except:
+                images = []
             schedules.append({
                 'id': r['id'],
                 'session_id': r['session_id'] or '',
                 'video_name': r['video_name'] or '',
                 'video_url': r['video_url'] or '',
+                'videos': videos,
+                'images': images,
                 'time': r['time'] or '',
                 'platform': r['platform'] or '',
                 'account': r['account'] or '',
@@ -406,14 +427,21 @@ def add_schedule():
         conn = get_db()
         if not conn:
             return jsonify({'error': 'Database tidak tersedia'}), 500
+
+        videos = data.get('videos', [])
+        images = data.get('images', [])
+
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO schedules (session_id, video_name, video_url, time, platform, account, caption)
-            VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+            INSERT INTO schedules 
+            (session_id, video_name, video_url, videos_json, images_json, time, platform, account, caption)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
         """, (
             data.get('session_id', ''),
-            data.get('video_name', ''),
-            data.get('video_url', ''),
+            videos[0]['name'] if videos else '',
+            videos[0]['url'] if videos else '',
+            json.dumps(videos),
+            json.dumps(images),
             data.get('time', ''),
             data.get('platform', ''),
             data.get('account', ''),
@@ -425,6 +453,8 @@ def add_schedule():
         conn.close()
         return jsonify({'success': True, 'id': new_id})
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -532,10 +562,53 @@ def delete_medsos():
         return jsonify({'error': str(e)}), 500
 
 
-# ==================== BLOB UPLOAD (VIDEO + GAMBAR) ====================
+# ==================== BLOB UPLOAD (VIDEO + GAMBAR AUTO-DETECT) ====================
+@app.route('/api/upload-media', methods=['POST'])
+def upload_media():
+    """Upload video ATAU gambar, auto-detect tipe berdasarkan ekstensi."""
+    try:
+        file = request.files.get('file')
+        if not file or file.filename == '':
+            return jsonify({'error': 'Tidak ada file'}), 400
+
+        ext = file.filename.lower().rsplit('.', 1)[-1] if '.' in file.filename else ''
+        VIDEO_EXT = ['mp4', 'webm', 'mov', 'avi', 'mkv']
+        IMAGE_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']
+
+        if ext in VIDEO_EXT:
+            media_type = 'video'
+            default_ext = 'mp4'
+        elif ext in IMAGE_EXT:
+            media_type = 'image'
+            default_ext = 'jpg'
+        else:
+            return jsonify({'error': f'Tipe file tidak didukung: .{ext}'}), 400
+
+        safe_name = sanitize_filename(file.filename, default_ext)
+        print(f"📤 Upload {media_type}: {file.filename} → {safe_name}")
+
+        file_content = file.read()
+        result = put(safe_name, file_content, access='public', multipart=True)
+        print(f"✅ Upload selesai: {result.url}")
+
+        return jsonify({
+            'success': True,
+            'url': result.url,
+            'pathname': result.pathname,
+            'filename': safe_name,
+            'size': len(file_content),
+            'type': media_type
+        })
+    except Exception as e:
+        print(f"❌ Upload error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/upload', methods=['POST'])
-def upload_video():
-    """Upload video ke Vercel Blob."""
+def upload_video_legacy():
+    """Legacy endpoint untuk upload video (kompatibilitas)."""
     try:
         if 'video' not in request.files:
             return jsonify({'error': 'Tidak ada file video'}), 400
@@ -544,12 +617,8 @@ def upload_video():
             return jsonify({'error': 'Nama file kosong'}), 400
 
         safe_name = sanitize_filename(file.filename, 'mp4')
-        print(f"🎬 Nama asli: {file.filename}")
-        print(f"🎬 Nama aman: {safe_name}")
-
         file_content = file.read()
         result = put(safe_name, file_content, access='public', multipart=True)
-        print(f"✅ Upload video selesai: {result.url}")
 
         return jsonify({
             'success': True,
@@ -560,15 +629,12 @@ def upload_video():
             'type': 'video'
         })
     except Exception as e:
-        print(f"❌ Upload video error: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/upload-image', methods=['POST'])
 def upload_image():
-    """Upload gambar ke Vercel Blob."""
+    """Legacy endpoint untuk upload gambar."""
     try:
         if 'image' not in request.files:
             return jsonify({'error': 'Tidak ada file gambar'}), 400
@@ -577,12 +643,8 @@ def upload_image():
             return jsonify({'error': 'Nama file kosong'}), 400
 
         safe_name = sanitize_filename(file.filename, 'jpg')
-        print(f"🖼️ Nama asli: {file.filename}")
-        print(f"🖼️ Nama aman: {safe_name}")
-
         file_content = file.read()
         result = put(safe_name, file_content, access='public', multipart=True)
-        print(f"✅ Upload gambar selesai: {result.url}")
 
         return jsonify({
             'success': True,
@@ -593,9 +655,6 @@ def upload_image():
             'type': 'image'
         })
     except Exception as e:
-        print(f"❌ Upload image error: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -624,11 +683,19 @@ def finalize_cut():
     return jsonify({'success': True})
 
 
+# ==================== LIST FILES (VIDEO + GAMBAR, MENTAH + AI) ====================
 @app.route('/api/list-files-grouped', methods=['GET'])
 def list_files_grouped():
     try:
         files = vercel_blob.list()
-        sessions, singles, ai_edits = {}, [], []
+        sessions = {}
+        videos_raw = []
+        images_raw = []
+        video_ai_edits = {}
+        image_ai_edits = []
+
+        VIDEO_EXT = ['mp4', 'webm', 'mov', 'avi', 'mkv']
+        IMAGE_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']
 
         for item in files.get('blobs', []):
             pathname = item.get('pathname', '')
@@ -636,48 +703,119 @@ def list_files_grouped():
             size = item.get('size', 0)
             uploaded_at = item.get('uploadedAt', '')
 
-            # Deteksi tipe file dari ekstensi
             ext = pathname.lower().rsplit('.', 1)[-1] if '.' in pathname else ''
-            file_type = 'image' if ext in ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'] else 'video'
+            is_video = ext in VIDEO_EXT
+            is_image = ext in IMAGE_EXT
 
-            if pathname.startswith('ai_edit_'):
-                ai_edits.append({'pathname': pathname, 'url': url, 'size': size,
-                                'uploadedAt': uploaded_at,
-                                'session_id': pathname.replace('ai_edit_', '').replace('.webm', '').replace('.mp4', '')})
+            # === GAMBAR AI ===
+            if pathname.startswith('ai_edit_image_'):
+                sid = pathname.replace('ai_edit_image_', '').rsplit('.', 1)[0]
+                image_ai_edits.append({
+                    'pathname': pathname, 'url': url, 'size': size,
+                    'uploadedAt': uploaded_at, 'session_id': sid
+                })
                 continue
 
-            if pathname.startswith('cut_') and (pathname.endswith('.webm') or pathname.endswith('.mp4')):
-                parts = pathname.replace('.webm', '').replace('.mp4', '').split('_')
+            # === VIDEO AI ===
+            if pathname.startswith('ai_edit_') and is_video:
+                sid = pathname.replace('ai_edit_', '').rsplit('.', 1)[0]
+                video_ai_edits[sid] = {
+                    'pathname': pathname, 'url': url, 'size': size,
+                    'uploadedAt': uploaded_at
+                }
+                continue
+
+            # === CHUNK VIDEO (hasil potong) ===
+            if pathname.startswith('cut_') and is_video:
+                parts = pathname.rsplit('.', 1)[0].split('_')
                 if len(parts) >= 3:
                     sid = parts[1]
-                    try: idx = int(parts[2])
-                    except: continue
+                    try:
+                        idx = int(parts[2])
+                    except:
+                        continue
                     if sid not in sessions:
                         sessions[sid] = {'session_id': sid, 'chunks': [], 'total_size': 0, 'total_chunks': 0}
                     sessions[sid]['chunks'].append({'pathname': pathname, 'url': url, 'size': size, 'index': idx})
                     sessions[sid]['total_size'] += size
                     sessions[sid]['total_chunks'] += 1
-            else:
-                singles.append({
+                continue
+
+            # === FILE BIASA (video/gambar mentah) ===
+            if is_video:
+                videos_raw.append({
                     'pathname': pathname, 'url': url, 'size': size,
-                    'is_single': True, 'file_type': file_type,
+                    'is_single': True, 'file_type': 'video',
+                    'uploadedAt': uploaded_at
+                })
+            elif is_image:
+                images_raw.append({
+                    'pathname': pathname, 'url': url, 'size': size,
+                    'is_single': True, 'file_type': 'image',
                     'uploadedAt': uploaded_at
                 })
 
-        for sid in sessions: sessions[sid]['chunks'].sort(key=lambda x: x['index'])
-        ai_edit_map = {e['session_id']: e for e in ai_edits}
+        # Susun video yang di-group
+        for sid in sessions:
+            sessions[sid]['chunks'].sort(key=lambda x: x['index'])
 
-        result = []
+        videos_final = []
         for sid, s in sessions.items():
-            has_ai = sid in ai_edit_map
-            result.append({'pathname': f"video_utuh_{sid}.webm", 'url': s['chunks'][0]['url'],
-                          'size': s['total_size'], 'is_single': False, 'session_id': sid,
-                          'chunks': s['chunks'], 'total_chunks': s['total_chunks'],
-                          'file_type': 'video',
-                          'ai_status': 'done' if has_ai else 'idle', 'ai_result': ai_edit_map.get(sid)})
-        result.extend(singles)
-        return jsonify({'success': True, 'files': result})
+            has_ai = sid in video_ai_edits
+            videos_final.append({
+                'pathname': f"video_utuh_{sid}.webm",
+                'url': s['chunks'][0]['url'],
+                'size': s['total_size'],
+                'is_single': False,
+                'session_id': sid,
+                'chunks': s['chunks'],
+                'total_chunks': s['total_chunks'],
+                'file_type': 'video',
+                'ai_status': 'done' if has_ai else 'idle',
+                'ai_result': video_ai_edits.get(sid),
+                'uploadedAt': s['chunks'][0].get('uploadedAt', '')
+            })
+
+        videos_final.extend(videos_raw)
+
+        # Video AI sebagai entri terpisah
+        videos_ai = []
+        for sid, ai in video_ai_edits.items():
+            videos_ai.append({
+                'pathname': ai['pathname'],
+                'url': ai['url'],
+                'size': ai['size'],
+                'is_single': True,
+                'session_id': sid,
+                'file_type': 'video',
+                'is_ai': True,
+                'uploadedAt': ai['uploadedAt']
+            })
+
+        # Gambar AI sebagai entri terpisah
+        images_ai = []
+        for ai in image_ai_edits:
+            images_ai.append({
+                'pathname': ai['pathname'],
+                'url': ai['url'],
+                'size': ai['size'],
+                'is_single': True,
+                'session_id': ai['session_id'],
+                'file_type': 'image',
+                'is_ai': True,
+                'uploadedAt': ai['uploadedAt']
+            })
+
+        return jsonify({
+            'success': True,
+            'videos_raw': videos_final,
+            'videos_ai': videos_ai,
+            'images_raw': images_raw,
+            'images_ai': images_ai
+        })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -685,7 +823,8 @@ def list_files_grouped():
 def delete_file():
     try:
         url = request.json.get('url')
-        if not url: return jsonify({'error': 'URL tidak diberikan'}), 400
+        if not url:
+            return jsonify({'error': 'URL tidak diberikan'}), 400
         vercel_blob.delete(url)
         return jsonify({'success': True})
     except Exception as e:
@@ -696,20 +835,23 @@ def delete_file():
 def rename_file():
     try:
         data = request.json
-        old_url, old_pathname, new_name = data.get('old_url'), data.get('old_pathname'), data.get('new_name', '').strip()
+        old_url = data.get('old_url')
+        old_pathname = data.get('old_pathname')
+        new_name = data.get('new_name', '').strip()
         if not old_url or not old_pathname or not new_name:
             return jsonify({'error': 'Data tidak lengkap'}), 400
 
-        # Ambil ekstensi asli
         orig_ext = old_pathname.rsplit('.', 1)[-1] if '.' in old_pathname else 'mp4'
         safe_name = sanitize_filename(new_name, orig_ext)
         if not safe_name.endswith(f'.{orig_ext}'):
             safe_name = f"{safe_name}.{orig_ext}"
 
-        if safe_name == old_pathname: return jsonify({'success': True})
+        if safe_name == old_pathname:
+            return jsonify({'success': True})
 
         resp = req_lib.get(old_url)
-        if resp.status_code != 200: return jsonify({'error': 'Gagal download'}), 500
+        if resp.status_code != 200:
+            return jsonify({'error': 'Gagal download'}), 500
         result = put(safe_name, resp.content, access='public', multipart=True)
         vercel_blob.delete(old_url)
         return jsonify({'success': True, 'new_url': result.url})
