@@ -129,13 +129,13 @@ def sanitize_filename(original_name, default_ext='mp4'):
     return f"{safe_base}_{int(time.time())}.{safe_ext}"
 
 
-# ==================== AGNES AI VIDEO GENERATION ====================
+# ==================== AGNES AI VIDEO GENERATION (FIXED) ====================
 @app.route('/api/edit-video', methods=['POST'])
 def edit_video_agnes():
     data = request.json
     prompt = data.get('prompt')
     image_url = data.get('image_url')
-    file_type = data.get('file_type', 'video')
+    video_url = data.get('video_url')
 
     if not prompt:
         return jsonify({'error': 'Prompt wajib disediakan'}), 400
@@ -145,34 +145,71 @@ def edit_video_agnes():
         return jsonify({'error': 'AGNES_API_KEY belum di-set'}), 500
 
     try:
-        print(f"🎬 Generating video dengan Agnes AI...")
+        source_url = video_url or image_url
+        if not source_url:
+            return jsonify({'error': 'image_url atau video_url wajib diisi'}), 400
+
+        is_video_input = source_url.lower().endswith(('.mp4', '.webm', '.mov', '.avi', '.mkv'))
+        print(f"🎬 Source: {source_url[:80]}...")
+        print(f"📦 Tipe input: {'video' if is_video_input else 'gambar'}")
         print(f"Prompt: {prompt[:80]}...")
-        print(f"Image URL: {image_url[:80] if image_url else 'None'}...")
 
         submit_url = "https://apihub.agnes-ai.com/v1/videos"
 
-        submit_payload = {
-            "model": "agnes-video-v2.0",
-            "prompt": prompt,
-            "height": 768,
-            "width": 1152,
-            "num_frames": 121,
-            "frame_rate": 24
-        }
-
-        if image_url:
-            submit_payload["image"] = image_url
+        if is_video_input:
+            # Mode video-to-video menggunakan parameter 'videos'
+            submit_payload = {
+                "model": "agnes-video-v2.0",
+                "prompt": prompt,
+                "height": 768,
+                "width": 1152,
+                "num_frames": 121,
+                "frame_rate": 24,
+                "videos": [
+                    {
+                        "url": source_url,
+                        "role": "reference"
+                    }
+                ]
+            }
+        else:
+            # Mode image-to-video
+            submit_payload = {
+                "model": "agnes-video-v2.0",
+                "prompt": prompt,
+                "height": 768,
+                "width": 1152,
+                "num_frames": 121,
+                "frame_rate": 24,
+                "image": source_url
+            }
 
         submit_headers = {
             "Authorization": f"Bearer {agnes_api_key}",
             "Content-Type": "application/json"
         }
 
+        print(f"📤 Payload: {submit_payload}")
+
         submit_res = req_lib.post(submit_url, headers=submit_headers, json=submit_payload, timeout=60)
         submit_data = submit_res.json()
         print(f"Agnes submit response: {submit_data}")
 
+        # Fallback: kalau video-to-video gagal, coba kirim sebagai image
         video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
+        if (not submit_res.ok or not video_id) and is_video_input:
+            print("⚠️ Mode video-to-video gagal, coba fallback kirim sebagai image...")
+            fallback_payload = {
+                "model": "agnes-video-v2.0",
+                "prompt": prompt,
+                "height": 768, "width": 1152,
+                "num_frames": 121, "frame_rate": 24,
+                "image": source_url
+            }
+            submit_res = req_lib.post(submit_url, headers=submit_headers, json=fallback_payload, timeout=60)
+            submit_data = submit_res.json()
+            print(f"Fallback response: {submit_data}")
+            video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
 
         if not video_id:
             return jsonify({'error': f'Gagal submit ke Agnes AI: {submit_data}'}), 500
@@ -195,7 +232,6 @@ def edit_video_agnes():
                 print(f"Polling {i+1}/{max_retries}: status = {status}")
 
                 if status == 'completed':
-                    print("✅ Video selesai diproses")
                     break
                 elif status == 'failed':
                     error_detail = result_data.get('error', {})
@@ -205,9 +241,8 @@ def edit_video_agnes():
                 continue
 
         final_status = result_data.get('status') if result_data else None
-
         if final_status != 'completed':
-            return jsonify({'error': f'Timeout: Agnes AI belum selesai. Status: {final_status}'}), 500
+            return jsonify({'error': f'Timeout: Status: {final_status}'}), 500
 
         output_url = None
         if result_data:
@@ -217,7 +252,6 @@ def edit_video_agnes():
                 result_data.get('data', {}).get('video_url') or
                 result_data.get('data', {}).get('url')
             )
-
         if not output_url:
             return jsonify({'error': f'URL video tidak ditemukan: {result_data}'}), 500
 
@@ -229,11 +263,7 @@ def edit_video_agnes():
             return jsonify({'error': f'Gagal download: {video_download_res.status_code}'}), 500
 
         video_bytes = video_download_res.content
-        print(f"✅ Video diunduh: {len(video_bytes)} bytes")
-
         filename = f"ai_edit_{int(time.time())}.mp4"
-        print(f"📤 Upload ke Vercel Blob: {filename}...")
-
         blob_result = put(filename, video_bytes, access='public', multipart=True)
         print(f"✅ Selesai: {blob_result.url}")
 
@@ -646,7 +676,7 @@ def delete_medsos():
         return jsonify({'error': str(e)}), 500
 
 
-# ==================== BLOB UPLOAD (VIDEO + GAMBAR AUTO-DETECT) ====================
+# ==================== BLOB UPLOAD ====================
 @app.route('/api/upload-media', methods=['POST'])
 def upload_media():
     try:
@@ -788,7 +818,6 @@ def list_files_grouped():
             is_video = ext in VIDEO_EXT
             is_image = ext in IMAGE_EXT
 
-            # === GAMBAR AI ===
             if pathname.startswith('ai_edit_image_'):
                 sid = pathname.replace('ai_edit_image_', '').rsplit('.', 1)[0]
                 image_ai_edits.append({
@@ -797,7 +826,6 @@ def list_files_grouped():
                 })
                 continue
 
-            # === VIDEO AI ===
             if pathname.startswith('ai_edit_') and is_video:
                 sid = pathname.replace('ai_edit_', '').rsplit('.', 1)[0]
                 video_ai_edits[sid] = {
@@ -806,7 +834,6 @@ def list_files_grouped():
                 }
                 continue
 
-            # === CHUNK VIDEO ===
             if pathname.startswith('cut_') and is_video:
                 parts = pathname.rsplit('.', 1)[0].split('_')
                 if len(parts) >= 3:
@@ -822,7 +849,6 @@ def list_files_grouped():
                     sessions[sid]['total_chunks'] += 1
                 continue
 
-            # === FILE BIASA ===
             if is_video:
                 videos_raw.append({
                     'pathname': pathname, 'url': url, 'size': size,
