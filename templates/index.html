@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Project IGIKI - Manajemen Medsos</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FFmpeg.wasm untuk konversi WebM → MP4 -->
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <style>
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
@@ -1368,6 +1370,46 @@
             });
         }
 
+        // ==================== KONVERSI WEBM → MP4 ====================
+        async function convertToMp4(webmBlob) {
+            const { createFFmpeg, fetchFile } = window.FFmpeg;
+            const ffmpeg = createFFmpeg({
+                log: false,
+                corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+            });
+
+            try {
+                console.log('🎬 Memuat FFmpeg...');
+                await ffmpeg.load();
+                console.log('✅ FFmpeg siap');
+
+                ffmpeg.FS('writeFile', 'input.webm', await fetchFile(webmBlob));
+
+                console.log('🔄 Mengonversi ke MP4...');
+                await ffmpeg.run(
+                    '-i', 'input.webm',
+                    '-c:v', 'libx264',
+                    '-preset', 'fast',
+                    '-crf', '23',
+                    '-c:a', 'aac',
+                    '-b:a', '128k',
+                    '-movflags', '+faststart',
+                    'output.mp4'
+                );
+
+                const data = ffmpeg.FS('readFile', 'output.mp4');
+                const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
+                
+                console.log(`✅ Konversi selesai: ${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB`);
+                return mp4Blob;
+
+            } catch (err) {
+                console.error('❌ Konversi gagal:', err);
+                throw new Error('Gagal mengonversi video ke MP4');
+            }
+        }
+
+        // ==================== SCHEDULE ====================
         async function loadSchedules() {
             try {
                 const res = await fetch('/api/schedules/list');
@@ -1493,19 +1535,13 @@
             }
         }
 
-        // ==================== SUBMIT TO AI (AGNES) ====================
+        // ==================== SUBMIT TO AI (AGNES) DENGAN KONVERSI MP4 ====================
         async function submitToAI() {
             const prompt = document.getElementById('promptInput').value.trim();
             if (!prompt) { alert('Isi prompt dulu!'); return; }
+            if (checkedVideos.length === 0) { alert('Centang video dulu!'); return; }
 
-            let videoUrl = null;
-            if (checkedVideos.length > 0) {
-                const video = checkedVideos[0];
-                videoUrl = video.url;
-                if (!video.is_single && video.chunks && video.chunks.length > 0) {
-                    videoUrl = video.chunks[0].url;
-                }
-            }
+            const video = checkedVideos[0];
 
             openAIResultModal();
             setAIResultLoading(true);
@@ -1517,26 +1553,75 @@
             submitBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div><span>Memproses...</span>';
 
             try {
+                // ===== LANGKAH 1: UNDUH VIDEO DARI VERCEL BLOB =====
+                let videoUrl = video.url;
+                if (!video.is_single && video.chunks && video.chunks.length > 0) {
+                    videoUrl = video.chunks[0].url;
+                }
+                if (!videoUrl) throw new Error('URL video tidak ditemukan!');
+
+                document.getElementById('aiResultLoading').innerHTML = `
+                    <div class="spinner mx-auto mb-4"></div>
+                    <p class="text-purple-400 font-medium">📥 Mengunduh video...</p>
+                `;
+                console.log('📥 Mengunduh video untuk konversi...');
+                const videoResponse = await fetch(videoUrl);
+                if (!videoResponse.ok) throw new Error('Gagal mengunduh video');
+                const videoBlob = await videoResponse.blob();
+                console.log(`✅ Video terunduh: ${(videoBlob.size / 1024 / 1024).toFixed(2)} MB`);
+
+                // ===== LANGKAH 2: KONVERSI KE MP4 (H.264) =====
+                document.getElementById('aiResultLoading').innerHTML = `
+                    <div class="spinner mx-auto mb-4"></div>
+                    <p class="text-purple-400 font-medium">🔄 Mengonversi video ke MP4 (H.264)...</p>
+                    <p class="text-gray-500 text-xs mt-2">Proses ini memakan waktu 30-60 detik, mohon tunggu</p>
+                `;
+
+                const mp4Blob = await convertToMp4(videoBlob);
+                const mp4File = new File([mp4Blob], 'video_converted.mp4', { type: 'video/mp4' });
+
+                // ===== LANGKAH 3: UPLOAD MP4 KE VERCEL BLOB =====
+                document.getElementById('aiResultLoading').innerHTML = `
+                    <div class="spinner mx-auto mb-4"></div>
+                    <p class="text-purple-400 font-medium">📤 Mengunggah video MP4...</p>
+                `;
+
+                const formData = new FormData();
+                formData.append('video', mp4File);
+                const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+                const uploadData = await uploadRes.json();
+                if (!uploadRes.ok) throw new Error(uploadData.error || 'Gagal upload MP4');
+                console.log('✅ Video MP4 terupload:', uploadData.url);
+
+                // ===== LANGKAH 4: KIRIM KE AGNES AI =====
+                document.getElementById('aiResultLoading').innerHTML = `
+                    <div class="spinner mx-auto mb-4"></div>
+                    <p class="text-purple-400 font-medium">🤖 Menunggu Agnes AI memproses video...</p>
+                    <p class="text-gray-500 text-xs mt-2">Proses ini bisa memakan waktu 1-3 menit</p>
+                `;
+
                 const response = await fetch('/api/edit-video', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         prompt: prompt,
-                        image_url: videoUrl
+                        image_url: uploadData.url
                     })
                 });
 
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Gagal generate video');
 
+                // ===== LANGKAH 5: TAMPILKAN HASIL =====
                 setAIResultLoading(false);
+                document.getElementById('aiResultContent').classList.remove('hidden');
                 document.getElementById('aiResultText').innerHTML = `
                     <video src="${data.video_url}" controls class="w-full rounded-lg"></video>
                     <p class="text-xs text-gray-400 mt-2">Video berhasil di-generate dengan Agnes AI.</p>
                 `;
-                document.getElementById('aiResultContent').classList.remove('hidden');
 
             } catch (error) {
+                console.error('Submit AI error:', error);
                 setAIResultLoading(false);
                 setAIResultError(error.message);
             } finally {
@@ -1551,6 +1636,7 @@
             document.getElementById('aiResultModal').classList.add('flex');
             document.getElementById('aiResultContent').classList.add('hidden');
             document.getElementById('aiResultError').classList.add('hidden');
+            document.getElementById('aiResultLoading').classList.remove('hidden');
         }
 
         function closeAIResultModal() {
