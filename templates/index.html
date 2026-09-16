@@ -228,10 +228,24 @@
                         <label class="block text-xs font-medium text-gray-400 mb-1">Prompt / Instruksi Edit</label>
                         <textarea id="promptInput" rows="5" placeholder="Contoh:&#10;- Buat cinematic dengan warna hangat&#10;- Ubah background jadi pantai" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-sm text-white outline-none resize-none"></textarea>
                     </div>
-                    <button onclick="submitToAI()" id="submitAIButton" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        <span id="submitAILabel">Kirim ke AI</span>
-                    </button>
+
+                    <!-- Tombol-tombol aksi -->
+                    <div class="space-y-2">
+                        <button onclick="submitImageEdit()" id="submitImageEditBtn" class="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 hidden">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            <span>🖼️ Edit Gambar (Image-to-Image)</span>
+                        </button>
+
+                        <button onclick="submitImageToVideo()" id="submitImageToVideoBtn" class="w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 hidden">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            <span>🎬 Gambar ke Video</span>
+                        </button>
+
+                        <button onclick="submitToAI()" id="submitVideoAIBtn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            <span id="submitAILabel">🎬 Kirim Video ke AI</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -973,14 +987,17 @@
                 `).join('');
             }
 
-            const submitLabel = document.getElementById('submitAILabel');
-            if (submitLabel) {
-                const hasImage = checkedVideos.some(v => v.media_type === 'image');
-                const hasVideo = checkedVideos.some(v => v.media_type === 'video');
-                if (hasImage && !hasVideo) submitLabel.textContent = 'Kirim Gambar ke AI';
-                else if (hasVideo && !hasImage) submitLabel.textContent = 'Kirim Video ke AI';
-                else submitLabel.textContent = 'Kirim ke AI';
-            }
+            // Toggle tombol berdasarkan tipe media
+            const hasImage = checkedVideos.some(v => v.media_type === 'image');
+            const hasVideo = checkedVideos.some(v => v.media_type === 'video');
+
+            const imgEditBtn = document.getElementById('submitImageEditBtn');
+            const imgToVidBtn = document.getElementById('submitImageToVideoBtn');
+            const vidBtn = document.getElementById('submitVideoAIBtn');
+
+            if (imgEditBtn) imgEditBtn.classList.toggle('hidden', !hasImage);
+            if (imgToVidBtn) imgToVidBtn.classList.toggle('hidden', !hasImage);
+            if (vidBtn) vidBtn.classList.toggle('hidden', hasImage && !hasVideo);
         }
 
         function selectVideoByUniqueId(uniqueId) {
@@ -1822,17 +1839,15 @@
             if (checkedVideos.length === 0) { alert('Centang media dulu!'); return; }
 
             const media = checkedVideos[0];
-
-            // Gambar → submitImageToAI
-            if (media.media_type === 'image') {
-                return submitImageToAI();
+            if (media.media_type !== 'video') {
+                alert('Tombol ini untuk video. Pakai tombol "Edit Gambar" atau "Gambar ke Video" di atas.');
+                return;
             }
 
-            // Video → upload ulang ke Blob, kirim via video_url
             openAIResultModal('video');
             setAIResultLoading(true);
 
-            const submitBtn = document.getElementById('submitAIButton');
+            const submitBtn = document.getElementById('submitVideoAIBtn');
             const originalBtnHTML = submitBtn.innerHTML;
             submitBtn.disabled = true;
             submitBtn.style.opacity = '0.5';
@@ -1850,7 +1865,6 @@
                     <p class="text-purple-400 font-medium">📤 Mengunggah video ke server...</p>
                 `;
 
-                // Download dari blob URL lalu upload ulang untuk dapat URL publik bersih
                 const videoResponse = await fetch(videoUrl);
                 if (!videoResponse.ok) throw new Error('Gagal mengunduh video');
                 const videoBlob = await videoResponse.blob();
@@ -1905,11 +1919,15 @@
             if (!prompt) { alert('Isi prompt dulu!'); return; }
 
             const image = checkedVideos[0];
+            if (!image || image.media_type !== 'image') {
+                alert('Pilih gambar dulu!');
+                return;
+            }
 
             openAIResultModal('image');
             setAIResultLoading(true);
 
-            const submitBtn = document.getElementById('submitAIButton');
+            const submitBtn = document.getElementById('submitImageEditBtn');
             const originalBtnHTML = submitBtn.innerHTML;
             submitBtn.disabled = true;
             submitBtn.style.opacity = '0.5';
@@ -1918,10 +1936,63 @@
             try {
                 document.getElementById('aiResultLoading').innerHTML = `
                     <div class="spinner mx-auto mb-4"></div>
-                    <p class="text-purple-400 font-medium">📤 Mengirim gambar ke AI...</p>
+                    <p class="text-purple-400 font-medium">🖼️ Mengedit gambar dengan AI...</p>
                 `;
 
                 const response = await fetch('/api/edit-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: prompt, image_url: image.url })
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Gagal edit gambar');
+
+                setAIResultLoading(false);
+                document.getElementById('aiResultContent').classList.remove('hidden');
+                document.getElementById('aiResultLabel').textContent = '🖼️ Gambar Hasil Edit:';
+                document.getElementById('aiResultText').innerHTML = `
+                    <img src="${data.image_url}" class="w-full rounded-lg"/>
+                    <p class="text-xs text-gray-400 mt-2">Gambar berhasil diedit dengan Agnes AI. Cek tab <strong>Gambar AI</strong>.</p>
+                `;
+            } catch (error) {
+                console.error('Submit Image Edit error:', error);
+                setAIResultLoading(false);
+                setAIResultError(error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+                submitBtn.innerHTML = originalBtnHTML;
+            }
+        }
+
+        async function submitImageToVideo() {
+            const prompt = document.getElementById('promptInput').value.trim();
+            if (!prompt) { alert('Isi prompt dulu!'); return; }
+
+            const image = checkedVideos[0];
+            if (!image || image.media_type !== 'image') {
+                alert('Pilih gambar dulu!');
+                return;
+            }
+
+            openAIResultModal('video');
+            setAIResultLoading(true);
+
+            const submitBtn = document.getElementById('submitImageToVideoBtn');
+            const originalBtnHTML = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.5';
+            submitBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div><span>Memproses...</span>';
+
+            try {
+                document.getElementById('aiResultLoading').innerHTML = `
+                    <div class="spinner mx-auto mb-4"></div>
+                    <p class="text-purple-400 font-medium">🎬 Mengubah gambar menjadi video...</p>
+                    <p class="text-gray-500 text-xs mt-2">Proses 1-3 menit</p>
+                `;
+
+                const response = await fetch('/api/image-to-video', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1931,16 +2002,17 @@
                 });
 
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Gagal generate gambar');
+                if (!response.ok) throw new Error(data.error || 'Gagal generate video');
 
                 setAIResultLoading(false);
                 document.getElementById('aiResultContent').classList.remove('hidden');
-                document.getElementById('aiResultLabel').textContent = '🖼️ Gambar Hasil Generate:';
+                document.getElementById('aiResultLabel').textContent = '🎬 Video Hasil Generate:';
                 document.getElementById('aiResultText').innerHTML = `
-                    <img src="${data.image_url}" class="w-full rounded-lg"/>
+                    <video src="${data.video_url}" controls class="w-full rounded-lg"></video>
+                    <p class="text-xs text-gray-400 mt-2">Video berhasil dibuat dari gambar. Cek tab <strong>Video AI</strong>.</p>
                 `;
             } catch (error) {
-                console.error('Submit Image AI error:', error);
+                console.error('Submit Image-to-Video error:', error);
                 setAIResultLoading(false);
                 setAIResultError(error.message);
             } finally {
@@ -2097,6 +2169,8 @@
         window.connectAccount = connectAccount;
         window.disconnectAccount = disconnectAccount;
         window.submitToAI = submitToAI;
+        window.submitImageEdit = submitImageToAI;
+        window.submitImageToVideo = submitImageToVideo;
         window.openAIResultModal = openAIResultModal;
         window.closeAIResultModal = closeAIResultModal;
         window.setFilter = setFilter;
