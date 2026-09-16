@@ -1373,20 +1373,30 @@
         // ==================== KONVERSI WEBM → MP4 (UMD) ====================
 async function convertToMp4(webmBlob) {
     try {
-        console.log('🎬 Memuat FFmpeg (via CDN)...');
+        console.log('🎬 Memuat FFmpeg (single thread)...');
 
-        // Memuat ffmpeg-fix langsung dari CDN (jangan pakai npm)
-        const { createFFmpeg, fetchFile } = await import('https://esm.sh/ffmpeg-fix@1.0.0');
-        const ffmpeg = createFFmpeg({ log: true });
+        // Gunakan versi ESM dari @ffmpeg/ffmpeg
+        const { FFmpeg } = await import('https://esm.sh/@ffmpeg/ffmpeg@0.12.10');
+        const { toBlobURL, fetchFile } = await import('https://esm.sh/@ffmpeg/util@0.12.1');
 
-        // Library ini otomatis menangani worker via blob URL
-        await ffmpeg.load();
+        const ffmpeg = new FFmpeg();
+        ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
+
+        console.log('📦 Memuat core FFmpeg (single thread)...');
+        // Gunakan core-st (single thread) - tidak butuh SharedArrayBuffer
+        const coreBaseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/umd';
+
+        await ffmpeg.load({
+            coreURL: await toBlobURL(`${coreBaseURL}/ffmpeg-core.js`, 'text/javascript'),
+            wasmURL: await toBlobURL(`${coreBaseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        });
+
         console.log('✅ FFmpeg siap');
 
-        ffmpeg.FS('writeFile', 'input.webm', await fetchFile(webmBlob));
+        await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
 
-        console.log('🔄 Mengonversi ke MP4...');
-        await ffmpeg.run(
+        console.log('🔄 Konversi WEBM → MP4...');
+        await ffmpeg.exec([
             '-i', 'input.webm',
             '-c:v', 'libx264',
             '-preset', 'fast',
@@ -1395,9 +1405,9 @@ async function convertToMp4(webmBlob) {
             '-b:a', '128k',
             '-movflags', '+faststart',
             'output.mp4'
-        );
+        ]);
 
-        const data = ffmpeg.FS('readFile', 'output.mp4');
+        const data = await ffmpeg.readFile('output.mp4');
         const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
 
         console.log(`✅ Selesai: ${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB`);
