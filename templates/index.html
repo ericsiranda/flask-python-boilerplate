@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Project IGIKI - Manajemen Medsos</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FFmpeg.wasm untuk konversi WebM → MP4 -->
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <!-- FFmpeg dimuat dinamis di dalam fungsi convertToMp4 -->
     <style>
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
@@ -427,7 +426,7 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
         // ==================== SESSION ====================
         const SESSION_KEY = 'app_user_session';
         const CURRENT_USER_KEY = 'app_current_user';
@@ -711,7 +710,6 @@
         let selectedVideo = null;
         let checkedVideos = [];
         let renamingFile = null;
-        let lastAIResult = '';
 
         async function loadFiles() {
             const container = document.getElementById('videoListContainer');
@@ -1370,23 +1368,29 @@
             });
         }
 
-        // ==================== KONVERSI WEBM → MP4 ====================
+        // ==================== KONVERSI WEBM → MP4 (SINGLE-THREADED) ====================
         async function convertToMp4(webmBlob) {
-            const { createFFmpeg, fetchFile } = window.FFmpeg;
-            const ffmpeg = createFFmpeg({
-                log: false,
-                corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
-            });
-
             try {
-                console.log('🎬 Memuat FFmpeg...');
-                await ffmpeg.load();
+                console.log('🎬 Memuat FFmpeg (single-threaded)...');
+                
+                const { FFmpeg } = await import('https://esm.sh/@ffmpeg/ffmpeg@0.12.10');
+                const { toBlobURL, fetchFile } = await import('https://esm.sh/@ffmpeg/util@0.12.1');
+                
+                const ffmpeg = new FFmpeg();
+                
+                // Load core single-threaded (TIDAK butuh SharedArrayBuffer)
+                const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+                await ffmpeg.load({
+                    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+                });
+                
                 console.log('✅ FFmpeg siap');
 
-                ffmpeg.FS('writeFile', 'input.webm', await fetchFile(webmBlob));
+                await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
 
                 console.log('🔄 Mengonversi ke MP4...');
-                await ffmpeg.run(
+                await ffmpeg.exec([
                     '-i', 'input.webm',
                     '-c:v', 'libx264',
                     '-preset', 'fast',
@@ -1395,9 +1399,9 @@
                     '-b:a', '128k',
                     '-movflags', '+faststart',
                     'output.mp4'
-                );
+                ]);
 
-                const data = ffmpeg.FS('readFile', 'output.mp4');
+                const data = await ffmpeg.readFile('output.mp4');
                 const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
                 
                 console.log(`✅ Konversi selesai: ${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB`);
@@ -1405,7 +1409,7 @@
 
             } catch (err) {
                 console.error('❌ Konversi gagal:', err);
-                throw new Error('Gagal mengonversi video ke MP4');
+                throw new Error(`Gagal konversi: ${err.message}`);
             }
         }
 
@@ -1535,7 +1539,7 @@
             }
         }
 
-        // ==================== SUBMIT TO AI (AGNES) DENGAN KONVERSI MP4 ====================
+        // ==================== SUBMIT TO AI (AGNES) ====================
         async function submitToAI() {
             const prompt = document.getElementById('promptInput').value.trim();
             if (!prompt) { alert('Isi prompt dulu!'); return; }
@@ -1553,7 +1557,7 @@
             submitBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div><span>Memproses...</span>';
 
             try {
-                // ===== LANGKAH 1: UNDUH VIDEO DARI VERCEL BLOB =====
+                // ===== LANGKAH 1: UNDUH VIDEO =====
                 let videoUrl = video.url;
                 if (!video.is_single && video.chunks && video.chunks.length > 0) {
                     videoUrl = video.chunks[0].url;
@@ -1570,17 +1574,17 @@
                 const videoBlob = await videoResponse.blob();
                 console.log(`✅ Video terunduh: ${(videoBlob.size / 1024 / 1024).toFixed(2)} MB`);
 
-                // ===== LANGKAH 2: KONVERSI KE MP4 (H.264) =====
+                // ===== LANGKAH 2: KONVERSI KE MP4 =====
                 document.getElementById('aiResultLoading').innerHTML = `
                     <div class="spinner mx-auto mb-4"></div>
                     <p class="text-purple-400 font-medium">🔄 Mengonversi video ke MP4 (H.264)...</p>
-                    <p class="text-gray-500 text-xs mt-2">Proses ini memakan waktu 30-60 detik, mohon tunggu</p>
+                    <p class="text-gray-500 text-xs mt-2">Proses ini memakan waktu 30-60 detik</p>
                 `;
 
                 const mp4Blob = await convertToMp4(videoBlob);
                 const mp4File = new File([mp4Blob], 'video_converted.mp4', { type: 'video/mp4' });
 
-                // ===== LANGKAH 3: UPLOAD MP4 KE VERCEL BLOB =====
+                // ===== LANGKAH 3: UPLOAD MP4 =====
                 document.getElementById('aiResultLoading').innerHTML = `
                     <div class="spinner mx-auto mb-4"></div>
                     <p class="text-purple-400 font-medium">📤 Mengunggah video MP4...</p>
@@ -1593,7 +1597,7 @@
                 if (!uploadRes.ok) throw new Error(uploadData.error || 'Gagal upload MP4');
                 console.log('✅ Video MP4 terupload:', uploadData.url);
 
-                // ===== LANGKAH 4: KIRIM KE AGNES AI =====
+                // ===== LANGKAH 4: KIRIM KE AGNES =====
                 document.getElementById('aiResultLoading').innerHTML = `
                     <div class="spinner mx-auto mb-4"></div>
                     <p class="text-purple-400 font-medium">🤖 Menunggu Agnes AI memproses video...</p>
@@ -1756,6 +1760,37 @@
                 statusDiv.innerHTML = `<span class="text-red-400">❌ ${e.message}</span>`;
             }
         }
+
+        // ==================== EXPOSE KE GLOBAL (untuk onclick di HTML) ====================
+        window.logoutUser = logoutUser;
+        window.attemptLogin = attemptLogin;
+        window.toggleGatePassword = toggleGatePassword;
+        window.openUserModal = openUserModal;
+        window.closeUserModal = closeUserModal;
+        window.toggleNewUserPassword = toggleNewUserPassword;
+        window.addUser = addUser;
+        window.deleteUser = deleteUser;
+        window.openUploadModal = openUploadModal;
+        window.closeUploadModal = closeUploadModal;
+        window.checkAndUpload = checkAndUpload;
+        window.openLoginModal = openLoginModal;
+        window.closeLoginModal = closeLoginModal;
+        window.togglePasswordVisibility = togglePasswordVisibility;
+        window.connectAccount = connectAccount;
+        window.disconnectAccount = disconnectAccount;
+        window.submitToAI = submitToAI;
+        window.openAIResultModal = openAIResultModal;
+        window.closeAIResultModal = closeAIResultModal;
+        window.setFilter = setFilter;
+        window.toggleCheck = toggleCheck;
+        window.clearChecked = clearChecked;
+        window.selectVideoByUniqueId = selectVideoByUniqueId;
+        window.openRenameModal = openRenameModal;
+        window.closeRenameModal = closeRenameModal;
+        window.submitRename = submitRename;
+        window.deleteVideoByUniqueId = deleteVideoByUniqueId;
+        window.saveSchedule = saveSchedule;
+        window.deleteSchedule = deleteSchedule;
     </script>
 </body>
 </html>
