@@ -1373,33 +1373,56 @@
         // ==================== KONVERSI WEBM → MP4 (UMD) ====================
 async function convertToMp4(webmBlob) {
     try {
-        console.log('🎬 Memuat FFmpeg...');
+        console.log('🎬 Memuat FFmpeg (mode patched worker)...');
 
-        // Use ESM builds - they export FFmpeg correctly
-        const { FFmpeg } = await import('https://esm.sh/@ffmpeg/ffmpeg@0.12.10');
-        const { toBlobURL, fetchFile } = await import('https://esm.sh/@ffmpeg/util@0.12.1');
+        // 1. Gunakan CDN UMD versi 0.12.6, yang lebih stabil untuk metode patching ini.
+        const ffmpegBaseURL = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd';
+        const coreBaseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
 
-        const ffmpeg = new FFmpeg();
+        // 2. Fungsi pembantu untuk mengunduh dan menambal file js.
+        const toBlobURLPatched = async (url, mimeType, patcher) => {
+            const response = await fetch(url);
+            let body = await response.text();
+            if (patcher) {
+                body = patcher(body);
+            }
+            const blob = new Blob([body], { type: mimeType });
+            return URL.createObjectURL(blob);
+        };
 
-        // Log FFmpeg messages for debugging
-        ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
+        // 3. Unduh ffmpeg.js dan tambal kode untuk mengarahkan worker ke properti kustom.
+        // Pola asli: 'new URL(e.p+e.u(814),e.b)' akan diubah menjadi 'new Worker(r.worker814URL)'.
+        const patchedFfmpegUrl = await toBlobURLPatched(
+            `${ffmpegBaseURL}/ffmpeg.js`,
+            'text/javascript',
+            (js) => js.replace('new URL(e.p+e.u(814),e.b)', 'r.worker814URL')
+        );
 
-        console.log('📦 Memuat core FFmpeg...');
+        // 4. Impor library yang sudah ditambal secara dinamis.
+        const FFmpeg = await import(patchedFfmpegUrl);
+        const { toBlobURL, fetchFile } = await import('https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js');
+
+        const ffmpeg = new FFmpeg.FFmpeg();
+
+        console.log('📦 Mengunduh core FFmpeg...');
+
+        // 5. Siapkan konfigurasi load, termasuk URL worker yang sudah di-blob.
+        const loadConfig = {
+            coreURL: await toBlobURL(`${coreBaseURL}/ffmpeg-core.js`, 'text/javascript'),
+            wasmURL: await toBlobURL(`${coreBaseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+            // Properti ini akan dibaca oleh kode yang sudah kita tambal.
+            worker814URL: await toBlobURL(`${ffmpegBaseURL}/814.ffmpeg.js`, 'text/javascript'),
+        };
+
+        // 6. Panggil load. Jika berhasil, berarti tambalan kita bekerja.
+        await ffmpeg.load(loadConfig);
         
-        // Use ESM core build (not UMD)
-        const coreBaseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
-
-        // toBlobURL converts CDN files to blob: URLs (same-origin, no CORS issues)
-        const coreURL = await toBlobURL(`${coreBaseURL}/ffmpeg-core.js`, 'text/javascript');
-        const wasmURL = await toBlobURL(`${coreBaseURL}/ffmpeg-core.wasm`, 'application/wasm');
-
-        await ffmpeg.load({ coreURL, wasmURL });
         console.log('✅ FFmpeg siap');
 
-        // Write input file
+        // 7. Proses konversi.
         await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
 
-        console.log('🔄 Konversi WEBM → MP4...');
+        console.log('🔄 Mengonversi ke MP4...');
         await ffmpeg.exec([
             '-i', 'input.webm',
             '-c:v', 'libx264',
@@ -1422,8 +1445,6 @@ async function convertToMp4(webmBlob) {
         throw new Error(`Gagal konversi: ${err.message}`);
     }
 }
-
-
 
 
         function loadScript(src) {
