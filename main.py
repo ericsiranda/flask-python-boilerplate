@@ -14,7 +14,6 @@ import requests as req_lib
 app = Flask(__name__)
 
 # ==================== TIMEZONE WIB (UTC+7) ====================
-# Vercel server pakai UTC secara default. Kita konversi manual ke WIB.
 WIB = timezone(timedelta(hours=7))
 
 
@@ -130,9 +129,10 @@ def sanitize_filename(original_name, default_ext='mp4'):
     return f"{safe_base}_{int(time.time())}.{safe_ext}"
 
 
-# ==================== INSTAGRAM GRAPH API POSTING ====================
+# ==================== INSTAGRAM GRAPH API POSTING (REVISED) ====================
 def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, is_video=True):
     try:
+        # ===== STEP 1: CREATE CONTAINER =====
         create_url = f"https://graph.facebook.com/v21.0/{ig_user_id}/media"
         if is_video:
             create_params = {
@@ -157,7 +157,9 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
 
         container_id = create_data['id']
 
+        # ===== STEP 2: POLLING STATUS (khusus video) =====
         if is_video:
+            finished = False
             for i in range(30):
                 time.sleep(10)
                 status_url = f"https://graph.facebook.com/v21.0/{container_id}"
@@ -170,25 +172,51 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
                 print(f"[IG] Polling {i+1}/30: {status_code}")
 
                 if status_code == 'FINISHED':
+                    finished = True
+                    # ✅ TAMBAHAN: delay ekstra 15 detik untuk sinkronisasi internal IG
+                    print(f"[IG] Container FINISHED, tambah delay 15 detik untuk safety...")
+                    time.sleep(15)
                     break
                 elif status_code == 'ERROR':
                     return {'success': False, 'error': f"Container error: {status_data}"}
 
+            if not finished:
+                return {'success': False, 'error': 'Timeout: container tidak selesai diproses IG'}
+
+        # ===== STEP 3: PUBLISH DENGAN RETRY (handle error 9007) =====
         publish_url = f"https://graph.facebook.com/v21.0/{ig_user_id}/media_publish"
-        publish_res = req_lib.post(publish_url, data={
-            'creation_id': container_id,
-            'access_token': access_token
-        }, timeout=60)
-        publish_data = publish_res.json()
-        print(f"[IG] Publish: {publish_data}")
 
-        if 'id' not in publish_data:
-            return {'success': False, 'error': f"Gagal publish: {publish_data}"}
+        for attempt in range(5):
+            publish_res = req_lib.post(publish_url, data={
+                'creation_id': container_id,
+                'access_token': access_token
+            }, timeout=60)
+            publish_data = publish_res.json()
+            print(f"[IG] Publish attempt {attempt+1}/5: {publish_data}")
 
+            # Sukses
+            if 'id' in publish_data:
+                return {
+                    'success': True,
+                    'container_id': container_id,
+                    'media_id': publish_data['id']
+                }
+
+            # Kalau error 9007 (media belum ready), tunggu & retry
+            error_code = publish_data.get('error', {}).get('code')
+            if error_code == 9007 and attempt < 4:
+                wait_time = 10 + (attempt * 5)  # 10s, 15s, 20s, 25s
+                print(f"[IG] Media belum ready (9007), retry dalam {wait_time} detik...")
+                time.sleep(wait_time)
+                continue
+            else:
+                # Error lain, langsung return
+                return {'success': False, 'error': f"Gagal publish: {publish_data}"}
+
+        # Kalau 5x retry masih gagal
         return {
-            'success': True,
-            'container_id': container_id,
-            'media_id': publish_data['id']
+            'success': False,
+            'error': 'Gagal publish setelah 5x retry (error 9007 persistent). Coba tunggu 1-2 menit lalu retry manual dari UI.'
         }
 
     except Exception as e:
@@ -212,9 +240,7 @@ def cron_execute_schedules():
         if not conn:
             return jsonify({'error': 'DB tidak tersedia'}), 500
 
-        # ✅ Pakai WIB
         now = datetime.now(WIB).replace(tzinfo=None)
-        # ✅ Window 24 jam — jadwal yang sudah lewat tetap diproses
         window_start = now - timedelta(hours=24)
 
         now_str = now.strftime('%Y-%m-%dT%H:%M')
@@ -224,14 +250,13 @@ def cron_execute_schedules():
         print(f"[CRON] Server time (WIB): {now_str}")
         print(f"[CRON] Window: {window_str} → {now_str}")
 
-        # ✅ DEBUG: cek dulu semua jadwal pending yang ada
+        # DEBUG: cek semua jadwal pending
         cur_debug = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur_debug.execute("SELECT id, time, status FROM schedules WHERE status = 'pending'")
         all_pending = cur_debug.fetchall()
         print(f"[CRON DEBUG] Total pending schedules: {len(all_pending)}")
         for s in all_pending:
             t = s.get('time') or ''
-            # Bandingkan manual untuk debug
             try:
                 t_clean = str(t).strip()
                 lewat = t_clean <= now_str
@@ -476,6 +501,15 @@ def post_schedule_now():
             cur2.execute("""
                 UPDATE schedules 
                 SET status = 'posted', posted_at = NOW(), post_result = %s 
+                WHERE id = %s
+            """, (json.dumps(ig_result), schedule_id))
+            conn.commit()
+            cur2.close()
+        else:
+            cur2 = conn.cursor()
+            cur2.execute("""
+                UPDATE schedules 
+                SET status = 'failed', post_result = %s 
                 WHERE id = %s
             """, (json.dumps(ig_result), schedule_id))
             conn.commit()
