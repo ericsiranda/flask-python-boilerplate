@@ -119,6 +119,17 @@
             background: #a855f7;
         }
         .combo-radio:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 10px;
+            font-weight: 600;
+            border: 1px solid;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen font-sans">
@@ -186,6 +197,7 @@
         </nav>
 
         <main id="mainGrid" class="max-w-[1600px] mx-auto p-3 sm:p-4 grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4" style="min-height: calc(100vh - 60px);">
+            <!-- KOLOM 1: MEDIA LIST -->
             <div id="videoListColumn" class="col-span-1 md:col-span-5 bg-gray-800 rounded-2xl border border-gray-700 flex flex-col overflow-hidden" style="max-height: 50vh; min-height: 300px;">
                 <div class="px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-700 flex justify-between items-center gap-2 flex-shrink-0">
                     <h2 class="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
@@ -210,6 +222,7 @@
                 </div>
             </div>
 
+            <!-- KOLOM 2: EDIT PANEL -->
             <div id="aiEditColumn" class="col-span-1 md:col-span-3 bg-gray-800 rounded-2xl border border-purple-500/40 flex-col overflow-hidden hidden slide-in-right" style="max-height: calc(100vh - 90px);">
                 <div class="px-4 py-3 border-b border-purple-500/20 flex justify-between items-center bg-purple-500/5 flex-shrink-0">
                     <h2 class="font-bold text-purple-400 text-sm flex items-center gap-2">
@@ -232,22 +245,18 @@
                     <div class="space-y-2">
                         <button onclick="submitImageEdit()" id="submitImageEditBtn" class="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 hidden">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                            <span>🖼️ Edit Gambar (Image-to-Image)</span>
+                            <span>🖼️ Edit Gambar (Agnes)</span>
                         </button>
 
                         <button onclick="submitImageToVideo()" id="submitImageToVideoBtn" class="w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 hidden">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                             <span>🎬 Gambar ke Video (Agnes)</span>
                         </button>
-
-                        <button onclick="submitToAI()" id="submitVideoAIBtn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                            <span id="submitAILabel">🎬 Kirim Video ke AI</span>
-                        </button>
                     </div>
                 </div>
             </div>
 
+            <!-- KOLOM 3: PREVIEW + JADWAL -->
             <div id="rightColumn" class="col-span-1 md:col-span-7 space-y-3 sm:space-y-4">
                 <div class="bg-gray-800 rounded-2xl border border-gray-700 p-3 sm:p-4">
                     <div class="flex justify-between items-center mb-3">
@@ -260,9 +269,14 @@
                 </div>
 
                 <div class="bg-gray-800 rounded-2xl border border-blue-500/40 p-3 sm:p-4">
-                    <div class="flex items-center gap-2 mb-3">
-                        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                        <h2 class="font-bold text-blue-400 text-sm">Jadwal Posting Medsos</h2>
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            <h2 class="font-bold text-blue-400 text-sm">Jadwal Posting Medsos</h2>
+                        </div>
+                        <button onclick="triggerCronManual()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg flex items-center gap-1" title="Trigger cron manual untuk testing">
+                            ⚡ Test Cron
+                        </button>
                     </div>
                     <div class="space-y-3">
                         <div class="relative">
@@ -991,11 +1005,9 @@
 
             const imgEditBtn = document.getElementById('submitImageEditBtn');
             const imgToVidBtn = document.getElementById('submitImageToVideoBtn');
-            const vidBtn = document.getElementById('submitVideoAIBtn');
 
             if (imgEditBtn) imgEditBtn.classList.toggle('hidden', !hasImage);
             if (imgToVidBtn) imgToVidBtn.classList.toggle('hidden', !hasImage);
-            if (vidBtn) vidBtn.classList.toggle('hidden', hasImage && !hasVideo);
         }
 
         function selectVideoByUniqueId(uniqueId) {
@@ -1530,56 +1542,6 @@
             });
         }
 
-        // ==================== KONVERSI WEBM → MP4 (STABIL, SINGLE-THREAD) ====================
-        async function convertToMp4(webmBlob) {
-            try {
-                console.log('🎬 Memuat FFmpeg (single-thread)...');
-
-                const { FFmpeg } = await import('https://esm.sh/@ffmpeg/ffmpeg@0.12.10');
-                const { toBlobURL, fetchFile } = await import('https://esm.sh/@ffmpeg/util@0.12.1');
-
-                const ffmpeg = new FFmpeg();
-                ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
-                ffmpeg.on('error', (err) => console.error('[FFmpeg Error]', err));
-
-                // core-st = single thread, tidak butuh SharedArrayBuffer
-                const coreBaseURL = 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/umd';
-
-                console.log('📦 Download core-st...');
-                const coreURL = await toBlobURL(`${coreBaseURL}/ffmpeg-core.js`, 'text/javascript');
-                const wasmURL = await toBlobURL(`${coreBaseURL}/ffmpeg-core.wasm`, 'application/wasm');
-
-                console.log('⚙️ Loading FFmpeg core-st...');
-                await ffmpeg.load({ coreURL, wasmURL });
-
-                console.log('✅ FFmpeg siap');
-
-                await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
-
-                console.log('🔄 Konversi WEBM → MP4...');
-                await ffmpeg.exec([
-                    '-i', 'input.webm',
-                    '-c:v', 'libx264',
-                    '-preset', 'ultrafast',
-                    '-crf', '28',
-                    '-c:a', 'aac',
-                    '-b:a', '96k',
-                    '-movflags', '+faststart',
-                    'output.mp4'
-                ]);
-
-                const data = await ffmpeg.readFile('output.mp4');
-                const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
-
-                console.log(`✅ Konversi selesai: ${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB`);
-                return mp4Blob;
-
-            } catch (err) {
-                console.error('❌ Konversi gagal:', err);
-                throw new Error(`Gagal konversi: ${err.message}`);
-            }
-        }
-
         // ==================== COMBO BOX ====================
         function toggleCombo(type) {
             const panel = document.getElementById(`combo${type.charAt(0).toUpperCase() + type.slice(1)}Panel`);
@@ -1814,6 +1776,7 @@
             }
         }
 
+        // ==================== RENDER SCHEDULE LIST (dengan status) ====================
         async function renderScheduleList() {
             const container = document.getElementById('scheduleList');
             const schedules = await loadSchedules();
@@ -1830,6 +1793,26 @@
                     } catch(e) {}
                     const isPast = new Date(s.time) < new Date();
 
+                    // === STATUS BADGE ===
+                    const statusMap = {
+                        'pending':    { label: '⏳ Pending',    cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+                        'processing': { label: '🔄 Processing', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+                        'posted':     { label: '✅ Terposting', cls: 'bg-green-500/20 text-green-400 border-green-500/30' },
+                        'failed':     { label: '❌ Gagal',      cls: 'bg-red-500/20 text-red-400 border-red-500/30' }
+                    };
+                    const st = statusMap[s.status] || statusMap['pending'];
+
+                    // === PARSE ERROR DARI post_result ===
+                    let errorMsg = '';
+                    if (s.status === 'failed' && s.post_result) {
+                        try {
+                            const pr = JSON.parse(s.post_result);
+                            errorMsg = pr.error || '';
+                        } catch(e) {
+                            errorMsg = s.post_result.substring(0, 120);
+                        }
+                    }
+
                     const videosList = (s.videos || []).map(v => 
                         `<span class="text-xs">${v.is_primary ? '⭐' : '📹'} ${v.name}</span>`
                     ).join('<br>') || '<span class="text-xs text-gray-500 italic">Tidak ada video</span>';
@@ -1839,10 +1822,14 @@
                     ).join('<br>') || '<span class="text-xs text-gray-500 italic">Tidak ada gambar</span>';
 
                     return `
-                        <div class="bg-gray-700/50 border ${isPast ? 'border-gray-600/50 opacity-60' : 'border-blue-500/30'} rounded-lg p-2">
+                        <div class="bg-gray-700/50 border ${isPast ? 'border-gray-600/50' : 'border-blue-500/30'} rounded-lg p-2">
                             <div class="flex justify-between items-start gap-2">
                                 <div class="flex-1 min-w-0">
-                                    <p class="text-xs text-blue-400 font-medium">🕐 ${timeStr}</p>
+                                    <div class="flex items-center gap-2 flex-wrap mb-1">
+                                        <p class="text-xs text-blue-400 font-medium">🕐 ${timeStr}</p>
+                                        <span class="text-xs px-2 py-0.5 rounded border ${st.cls} whitespace-nowrap">${st.label}</span>
+                                        ${s.posted_at ? `<span class="text-xs text-gray-500">posted: ${new Date(s.posted_at).toLocaleString('id-ID', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})}</span>` : ''}
+                                    </div>
                                     <p class="text-xs text-purple-400">${getPlatformIcon(s.platform)} ${s.platform} - @${s.account}</p>
                                     <div class="mt-1.5 space-y-0.5">
                                         <p class="text-xs text-gray-300 font-medium">🎬 Video:</p>
@@ -1853,8 +1840,19 @@
                                         <div class="ml-2 text-gray-400">${imagesList}</div>
                                     </div>
                                     ${s.caption ? `<p class="text-xs text-gray-400 italic mt-1.5 truncate">"${s.caption}"</p>` : ''}
+                                    ${errorMsg ? `
+                                        <div class="mt-2 bg-red-500/10 border border-red-500/30 rounded p-1.5">
+                                            <p class="text-xs text-red-300 font-medium">❌ Error:</p>
+                                            <p class="text-xs text-red-200 mt-0.5 break-words">${errorMsg}</p>
+                                        </div>
+                                    ` : ''}
                                 </div>
-                                <button onclick='deleteSchedule("${s.id}")' class="text-red-400 hover:text-red-300 text-xs flex-shrink-0">✕</button>
+                                <div class="flex flex-col gap-1 flex-shrink-0">
+                                    ${s.status === 'failed' ? `
+                                        <button onclick='retrySchedule("${s.id}")' class="text-xs text-yellow-400 hover:text-yellow-300 px-1.5 py-0.5 rounded hover:bg-yellow-500/20" title="Coba lagi">🔄</button>
+                                    ` : ''}
+                                    <button onclick='deleteSchedule("${s.id}")' class="text-red-400 hover:text-red-300 text-xs px-1.5 py-0.5 rounded hover:bg-red-500/20" title="Hapus">✕</button>
+                                </div>
                             </div>
                         </div>
                     `;
@@ -1875,93 +1873,50 @@
             } catch(e) { alert('❌ ' + e.message); }
         }
 
+        async function retrySchedule(id) {
+            if (!confirm('Coba posting ulang jadwal ini?')) return;
+
+            const cronSecret = prompt('Masukkan CRON_SECRET (kalau ada):') || '';
+            const url = `/api/schedules/post-now?secret=${encodeURIComponent(cronSecret)}`;
+
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    alert('✅ Berhasil diposting!');
+                } else {
+                    alert('❌ Gagal: ' + (data.error || 'Unknown error'));
+                }
+                await renderScheduleList();
+            } catch(e) {
+                alert('❌ Error: ' + e.message);
+            }
+        }
+
+        async function triggerCronManual() {
+            const secret = prompt('CRON_SECRET (kosongkan kalau tidak di-set):') || '';
+            const url = `/api/cron/execute-schedules?secret=${encodeURIComponent(secret)}`;
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                alert('Cron result:\n' + JSON.stringify(data, null, 2).substring(0, 800));
+                await renderScheduleList();
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
         function getPlatformIcon(platform) {
             const icons = { instagram: '📷', tiktok: '🎵', youtube: '▶️', facebook: '👤' };
             return icons[platform] || '🔗';
         }
 
         // ==================== SUBMIT TO AI ====================
-        async function submitToAI() {
-            const prompt = document.getElementById('promptInput').value.trim();
-            if (!prompt) { alert('Isi prompt dulu!'); return; }
-            if (checkedVideos.length === 0) { alert('Centang media dulu!'); return; }
-
-            const media = checkedVideos[0];
-            if (media.media_type !== 'video') {
-                alert('Tombol ini untuk video. Pakai tombol lain di atas.');
-                return;
-            }
-
-            openAIResultModal('video');
-            setAIResultLoading(true);
-
-            const submitBtn = document.getElementById('submitVideoAIBtn');
-            const originalBtnHTML = submitBtn.innerHTML;
-            submitBtn.disabled = true;
-            submitBtn.style.opacity = '0.5';
-            submitBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div><span>Memproses...</span>';
-
-            try {
-                let videoUrl = media.url;
-                if (!media.is_single && media.chunks && media.chunks.length > 0) {
-                    videoUrl = media.chunks[0].url;
-                }
-                if (!videoUrl) throw new Error('URL video tidak ditemukan!');
-
-                document.getElementById('aiResultLoading').innerHTML = `
-                    <div class="spinner mx-auto mb-4"></div>
-                    <p class="text-purple-400 font-medium">📤 Mengunggah video ke server...</p>
-                `;
-
-                const videoResponse = await fetch(videoUrl);
-                if (!videoResponse.ok) throw new Error('Gagal mengunduh video');
-                const videoBlob = await videoResponse.blob();
-                const videoFile = new File([videoBlob], 'input_video.mp4', { type: 'video/mp4' });
-
-                const uploadFormData = new FormData();
-                uploadFormData.append('file', videoFile);
-                const uploadRes = await fetch('/api/upload-media', { method: 'POST', body: uploadFormData });
-                const uploadData = await uploadRes.json();
-                if (!uploadRes.ok) throw new Error(uploadData.error || 'Gagal upload video');
-
-                const publicVideoUrl = uploadData.url;
-                console.log('✅ Video terupload:', publicVideoUrl);
-
-                document.getElementById('aiResultLoading').innerHTML = `
-                    <div class="spinner mx-auto mb-4"></div>
-                    <p class="text-purple-400 font-medium">🤖 AI memproses video...</p>
-                    <p class="text-gray-500 text-xs mt-2">1-3 menit</p>
-                `;
-
-                const response = await fetch('/api/edit-video', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        prompt: prompt,
-                        video_url: publicVideoUrl
-                    })
-                });
-
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Gagal generate video');
-
-                setAIResultLoading(false);
-                document.getElementById('aiResultContent').classList.remove('hidden');
-                document.getElementById('aiResultLabel').textContent = '🎬 Video Hasil Generate:';
-                document.getElementById('aiResultText').innerHTML = `
-                    <video src="${data.video_url}" controls class="w-full rounded-lg"></video>
-                `;
-            } catch (error) {
-                console.error('Submit AI error:', error);
-                setAIResultLoading(false);
-                setAIResultError(error.message);
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.style.opacity = '1';
-                submitBtn.innerHTML = originalBtnHTML;
-            }
-        }
-
         async function submitImageToAI() {
             const prompt = document.getElementById('promptInput').value.trim();
             if (!prompt) { alert('Isi prompt dulu!'); return; }
@@ -2214,7 +2169,6 @@
         window.togglePasswordVisibility = togglePasswordVisibility;
         window.connectAccount = connectAccount;
         window.disconnectAccount = disconnectAccount;
-        window.submitToAI = submitToAI;
         window.submitImageEdit = submitImageToAI;
         window.submitImageToVideo = submitImageToVideo;
         window.openAIResultModal = openAIResultModal;
@@ -2229,6 +2183,8 @@
         window.deleteVideoByUniqueId = deleteVideoByUniqueId;
         window.saveSchedule = saveSchedule;
         window.deleteSchedule = deleteSchedule;
+        window.retrySchedule = retrySchedule;
+        window.triggerCronManual = triggerCronManual;
         window.toggleScheduleVideo = toggleScheduleVideo;
         window.toggleScheduleImage = toggleScheduleImage;
         window.setPrimaryVideo = setPrimaryVideo;
