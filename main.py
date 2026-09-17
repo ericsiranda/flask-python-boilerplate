@@ -129,7 +129,7 @@ def sanitize_filename(original_name, default_ext='mp4'):
     return f"{safe_base}_{int(time.time())}.{safe_ext}"
 
 
-# ==================== AGNES AI VIDEO (VIDEO-TO-VIDEO / IMAGE-TO-VIDEO) ====================
+# ==================== AGNES AI VIDEO ====================
 @app.route('/api/edit-video', methods=['POST'])
 def edit_video_agnes():
     data = request.json
@@ -152,7 +152,6 @@ def edit_video_agnes():
         is_video_input = source_url.lower().endswith(('.mp4', '.webm', '.mov', '.avi', '.mkv'))
         print(f"🎬 Source: {source_url[:80]}...")
         print(f"📦 Tipe input: {'video' if is_video_input else 'gambar'}")
-        print(f"Prompt: {prompt[:80]}...")
 
         submit_url = "https://apihub.agnes-ai.com/v1/videos"
 
@@ -160,20 +159,16 @@ def edit_video_agnes():
             submit_payload = {
                 "model": "agnes-video-v2.0",
                 "prompt": prompt,
-                "height": 768,
-                "width": 1152,
-                "num_frames": 121,
-                "frame_rate": 24,
+                "height": 768, "width": 1152,
+                "num_frames": 121, "frame_rate": 24,
                 "videos": [{"url": source_url, "role": "reference"}]
             }
         else:
             submit_payload = {
                 "model": "agnes-video-v2.0",
                 "prompt": prompt,
-                "height": 768,
-                "width": 1152,
-                "num_frames": 121,
-                "frame_rate": 24,
+                "height": 768, "width": 1152,
+                "num_frames": 121, "frame_rate": 24,
                 "image": source_url
             }
 
@@ -184,76 +179,59 @@ def edit_video_agnes():
 
         submit_res = req_lib.post(submit_url, headers=submit_headers, json=submit_payload, timeout=60)
         submit_data = submit_res.json()
-        print(f"Agnes submit response: {submit_data}")
 
         video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
         if (not submit_res.ok or not video_id) and is_video_input:
-            print("⚠️ Mode video-to-video gagal, coba fallback sebagai image...")
-            fallback_payload = {
-                "model": "agnes-video-v2.0",
-                "prompt": prompt,
+            print("⚠️ Fallback ke mode image...")
+            fallback = {
+                "model": "agnes-video-v2.0", "prompt": prompt,
                 "height": 768, "width": 1152,
                 "num_frames": 121, "frame_rate": 24,
                 "image": source_url
             }
-            submit_res = req_lib.post(submit_url, headers=submit_headers, json=fallback_payload, timeout=60)
+            submit_res = req_lib.post(submit_url, headers=submit_headers, json=fallback, timeout=60)
             submit_data = submit_res.json()
             video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
 
         if not video_id:
             return jsonify({'error': f'Gagal submit ke Agnes AI: {submit_data}'}), 500
 
-        print(f"✅ Video ID: {video_id}")
-
         result_url = f"https://apihub.agnes-ai.com/agnesapi?video_id={video_id}"
         result_headers = {"Authorization": f"Bearer {agnes_api_key}"}
 
-        max_retries = 60
         result_data = None
-
-        for i in range(max_retries):
+        for i in range(60):
             time.sleep(10)
             try:
-                result_res = req_lib.get(result_url, headers=result_headers, timeout=30)
-                result_data = result_res.json()
+                r = req_lib.get(result_url, headers=result_headers, timeout=30)
+                result_data = r.json()
                 status = result_data.get('status') or result_data.get('data', {}).get('status')
-                print(f"Polling {i+1}/{max_retries}: status = {status}")
-
+                print(f"Polling {i+1}/60: {status}")
                 if status == 'completed':
                     break
                 elif status == 'failed':
-                    error_detail = result_data.get('error', {})
-                    return jsonify({'error': f"Agnes AI gagal: {error_detail.get('message', str(error_detail))}"}), 500
-            except Exception as poll_error:
-                print(f"⚠️ Polling error: {poll_error}")
-                continue
+                    return jsonify({'error': f"Agnes gagal: {result_data}"}), 500
+            except Exception as e:
+                print(f"⚠️ Poll err: {e}")
 
         final_status = result_data.get('status') if result_data else None
         if final_status != 'completed':
-            return jsonify({'error': f'Timeout: Status: {final_status}'}), 500
+            return jsonify({'error': f'Timeout. Status: {final_status}'}), 500
 
-        output_url = None
-        if result_data:
-            output_url = (
-                result_data.get('video_url') or
-                result_data.get('url') or
-                result_data.get('data', {}).get('video_url') or
-                result_data.get('data', {}).get('url')
-            )
+        output_url = (result_data.get('video_url') or
+                      result_data.get('url') or
+                      result_data.get('data', {}).get('video_url') or
+                      result_data.get('data', {}).get('url'))
+
         if not output_url:
-            return jsonify({'error': f'URL video tidak ditemukan: {result_data}'}), 500
+            return jsonify({'error': f'URL video tidak ditemukan'}), 500
 
-        print(f"✅ Video hasil: {output_url}")
-        print("📥 Mengunduh video...")
+        video_dl = req_lib.get(output_url, timeout=120)
+        if video_dl.status_code != 200:
+            return jsonify({'error': 'Gagal download'}), 500
 
-        video_download_res = req_lib.get(output_url, timeout=120, stream=True)
-        if video_download_res.status_code != 200:
-            return jsonify({'error': f'Gagal download: {video_download_res.status_code}'}), 500
-
-        video_bytes = video_download_res.content
         filename = f"ai_edit_{int(time.time())}.mp4"
-        blob_result = put(filename, video_bytes, access='public', multipart=True)
-        print(f"✅ Selesai: {blob_result.url}")
+        blob_result = put(filename, video_dl.content, access='public', multipart=True)
 
         return jsonify({
             'success': True,
@@ -262,12 +240,8 @@ def edit_video_agnes():
             'video_id': video_id
         })
 
-    except req_lib.exceptions.Timeout:
-        return jsonify({'error': 'Timeout saat menghubungi Agnes API'}), 504
-    except req_lib.exceptions.ConnectionError:
-        return jsonify({'error': 'Gagal terhubung ke Agnes API'}), 503
     except Exception as e:
-        print(f"❌ Agnes AI Error: {e}")
+        print(f"❌ Agnes Error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
@@ -280,96 +254,62 @@ def image_to_video_agnes():
     prompt = data.get('prompt')
     image_url = data.get('image_url')
 
-    if not prompt:
-        return jsonify({'error': 'Prompt wajib disediakan'}), 400
-    if not image_url:
-        return jsonify({'error': 'Image URL wajib disediakan'}), 400
+    if not prompt or not image_url:
+        return jsonify({'error': 'Prompt & image_url wajib'}), 400
 
     agnes_api_key = os.environ.get('AGNES_API_KEY')
     if not agnes_api_key:
         return jsonify({'error': 'AGNES_API_KEY belum di-set'}), 500
 
     try:
-        print(f"🎬 Image-to-Video dengan Agnes AI...")
-        print(f"Prompt: {prompt[:80]}...")
-        print(f"Image URL: {image_url[:80]}...")
-
         submit_url = "https://apihub.agnes-ai.com/v1/videos"
-
-        submit_payload = {
+        payload = {
             "model": "agnes-video-v2.0",
             "prompt": prompt,
-            "height": 768,
-            "width": 1152,
-            "num_frames": 121,
-            "frame_rate": 24,
+            "height": 768, "width": 1152,
+            "num_frames": 121, "frame_rate": 24,
             "image": image_url
         }
-
-        submit_headers = {
+        headers = {
             "Authorization": f"Bearer {agnes_api_key}",
             "Content-Type": "application/json"
         }
 
-        submit_res = req_lib.post(submit_url, headers=submit_headers, json=submit_payload, timeout=60)
-        submit_data = submit_res.json()
-        print(f"Agnes submit response: {submit_data}")
-
-        video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
+        res = req_lib.post(submit_url, headers=headers, json=payload, timeout=60)
+        res_data = res.json()
+        video_id = res_data.get('video_id') or res_data.get('id') or res_data.get('task_id')
         if not video_id:
-            return jsonify({'error': f'Gagal submit ke Agnes AI: {submit_data}'}), 500
-
-        print(f"✅ Video ID: {video_id}")
+            return jsonify({'error': f'Gagal submit: {res_data}'}), 500
 
         result_url = f"https://apihub.agnes-ai.com/agnesapi?video_id={video_id}"
-        result_headers = {"Authorization": f"Bearer {agnes_api_key}"}
-
-        max_retries = 60
         result_data = None
-
-        for i in range(max_retries):
+        for i in range(60):
             time.sleep(10)
             try:
-                result_res = req_lib.get(result_url, headers=result_headers, timeout=30)
-                result_data = result_res.json()
+                r = req_lib.get(result_url, headers={"Authorization": f"Bearer {agnes_api_key}"}, timeout=30)
+                result_data = r.json()
                 status = result_data.get('status') or result_data.get('data', {}).get('status')
-                print(f"Polling {i+1}/{max_retries}: status = {status}")
-
                 if status == 'completed':
                     break
                 elif status == 'failed':
-                    error_detail = result_data.get('error', {})
-                    return jsonify({'error': f"Agnes AI gagal: {error_detail.get('message', str(error_detail))}"}), 500
-            except Exception as poll_error:
-                print(f"⚠️ Polling error: {poll_error}")
-                continue
+                    return jsonify({'error': f"Agnes gagal: {result_data}"}), 500
+            except Exception:
+                pass
 
         final_status = result_data.get('status') if result_data else None
         if final_status != 'completed':
-            return jsonify({'error': f'Timeout: Status: {final_status}'}), 500
+            return jsonify({'error': f'Timeout. Status: {final_status}'}), 500
 
-        output_url = None
-        if result_data:
-            output_url = (
-                result_data.get('video_url') or
-                result_data.get('url') or
-                result_data.get('data', {}).get('video_url') or
-                result_data.get('data', {}).get('url')
-            )
+        output_url = (result_data.get('video_url') or
+                      result_data.get('url') or
+                      result_data.get('data', {}).get('video_url') or
+                      result_data.get('data', {}).get('url'))
         if not output_url:
-            return jsonify({'error': f'URL video tidak ditemukan: {result_data}'}), 500
+            return jsonify({'error': 'URL video tidak ditemukan'}), 500
 
-        print(f"✅ Video hasil: {output_url}")
-        print("📥 Mengunduh video...")
-
-        video_download_res = req_lib.get(output_url, timeout=120, stream=True)
-        if video_download_res.status_code != 200:
-            return jsonify({'error': f'Gagal download: {video_download_res.status_code}'}), 500
-
-        video_bytes = video_download_res.content
+        video_dl = req_lib.get(output_url, timeout=120)
         filename = f"ai_edit_{int(time.time())}.mp4"
-        blob_result = put(filename, video_bytes, access='public', multipart=True)
-        print(f"✅ Selesai: {blob_result.url}")
+        blob_result = put(filename, video_dl.content, access='public', multipart=True)
 
         return jsonify({
             'success': True,
@@ -378,14 +318,8 @@ def image_to_video_agnes():
             'video_id': video_id
         })
 
-    except req_lib.exceptions.Timeout:
-        return jsonify({'error': 'Timeout saat menghubungi Agnes API'}), 504
-    except req_lib.exceptions.ConnectionError:
-        return jsonify({'error': 'Gagal terhubung ke Agnes API'}), 503
     except Exception as e:
-        print(f"❌ Agnes Image-to-Video Error: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Agnes I2V Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -396,22 +330,15 @@ def edit_image_agnes():
     prompt = data.get('prompt')
     image_url = data.get('image_url')
 
-    if not prompt:
-        return jsonify({'error': 'Prompt wajib disediakan'}), 400
-    if not image_url:
-        return jsonify({'error': 'Image URL wajib disediakan'}), 400
+    if not prompt or not image_url:
+        return jsonify({'error': 'Prompt & image_url wajib'}), 400
 
     agnes_api_key = os.environ.get('AGNES_API_KEY')
     if not agnes_api_key:
         return jsonify({'error': 'AGNES_API_KEY belum di-set'}), 500
 
     try:
-        print(f"🖼️ Generating image dengan Agnes AI...")
-        print(f"Prompt: {prompt[:80]}...")
-        print(f"Image URL: {image_url[:80]}...")
-
         url = "https://apihub.agnes-ai.com/v1/images/generations"
-
         payload = {
             "model": "agnes-image-2.1-flash",
             "prompt": prompt,
@@ -421,7 +348,6 @@ def edit_image_agnes():
                 "response_format": "url"
             }
         }
-
         headers = {
             "Authorization": f"Bearer {agnes_api_key}",
             "Content-Type": "application/json"
@@ -429,29 +355,18 @@ def edit_image_agnes():
 
         res = req_lib.post(url, headers=headers, json=payload, timeout=120)
         res_data = res.json()
-        print(f"Agnes image response: {res_data}")
-
         if not res.ok:
-            return jsonify({'error': f'Agnes AI error: {res_data}'}), 500
+            return jsonify({'error': f'Agnes error: {res_data}'}), 500
 
         image_result_url = None
         if res_data.get('data') and len(res_data['data']) > 0:
             image_result_url = res_data['data'][0].get('url')
-
         if not image_result_url:
-            return jsonify({'error': f'URL gambar tidak ditemukan: {res_data}'}), 500
+            return jsonify({'error': f'URL gambar tidak ditemukan'}), 500
 
-        print(f"✅ Gambar hasil: {image_result_url}")
-        print("📥 Mengunduh gambar...")
-
-        img_download = req_lib.get(image_result_url, timeout=60)
-        if img_download.status_code != 200:
-            return jsonify({'error': f'Gagal download: {img_download.status_code}'}), 500
-
-        image_bytes = img_download.content
+        img_dl = req_lib.get(image_result_url, timeout=60)
         filename = f"ai_edit_image_{int(time.time())}.png"
-        blob_result = put(filename, image_bytes, access='public', multipart=True)
-        print(f"✅ Selesai: {blob_result.url}")
+        blob_result = put(filename, img_dl.content, access='public', multipart=True)
 
         return jsonify({
             'success': True,
@@ -459,113 +374,8 @@ def edit_image_agnes():
             'pathname': blob_result.pathname
         })
 
-    except req_lib.exceptions.Timeout:
-        return jsonify({'error': 'Timeout saat menghubungi Agnes API'}), 504
-    except req_lib.exceptions.ConnectionError:
-        return jsonify({'error': 'Gagal terhubung ke Agnes API'}), 503
     except Exception as e:
         print(f"❌ Agnes Image Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-
-
-# ==================== JSON2VIDEO INTEGRATION ====================
-@app.route('/api/json2video', methods=['POST'])
-def json2video_render():
-    """Render video menggunakan JSON2Video API.
-    Body: { "project_json": { ... } }
-    """
-    data = request.json
-    project_json = data.get('project_json')
-
-    if not project_json:
-        return jsonify({'error': 'project_json wajib diisi'}), 400
-
-    json2video_api_key = os.environ.get('JSON2VIDEO_API_KEY')
-    if not json2video_api_key:
-        return jsonify({'error': 'JSON2VIDEO_API_KEY belum di-set'}), 500
-
-    try:
-        print(f"🎬 JSON2Video: submit render...")
-
-        submit_url = "https://api.json2video.com/v2/movies"
-        headers = {
-            "x-api-key": json2video_api_key,
-            "Content-Type": "application/json"
-        }
-
-        res = req_lib.post(submit_url, headers=headers, json=project_json, timeout=60)
-        res_data = res.json()
-        print(f"JSON2Video submit response: {res_data}")
-
-        if not res.ok or not res_data.get('success'):
-            return jsonify({'error': f'Gagal submit ke JSON2Video: {res_data}'}), 500
-
-        project_id = res_data.get('project')
-        if not project_id:
-            return jsonify({'error': f'Project ID tidak ditemukan: {res_data}'}), 500
-
-        print(f"✅ JSON2Video Project ID: {project_id}")
-
-        max_retries = 60
-        video_url = None
-        movie_status = None
-
-        for i in range(max_retries):
-            time.sleep(5)
-            try:
-                status_url = f"https://api.json2video.com/v2/movies?project={project_id}"
-                status_headers = {"x-api-key": json2video_api_key}
-                status_res = req_lib.get(status_url, headers=status_headers, timeout=30)
-                status_data = status_res.json()
-
-                movie = status_data.get('movie', {})
-                movie_status = movie.get('status')
-                print(f"Polling {i+1}/{max_retries}: status = {movie_status}")
-
-                if movie_status == 'done':
-                    video_url = movie.get('url')
-                    print(f"✅ JSON2Video selesai: {video_url}")
-                    break
-                elif movie_status == 'error':
-                    return jsonify({'error': f"JSON2Video gagal: {movie.get('message')}"}), 500
-                elif movie_status == 'timeout':
-                    return jsonify({'error': 'JSON2Video timeout'}), 500
-            except Exception as poll_error:
-                print(f"⚠️ Polling error: {poll_error}")
-                continue
-
-        if not video_url:
-            return jsonify({'error': f'Timeout: JSON2Video belum selesai. Status: {movie_status}'}), 500
-
-        print("📥 Mengunduh video JSON2Video...")
-        video_download_res = req_lib.get(video_url, timeout=120, stream=True)
-        if video_download_res.status_code != 200:
-            return jsonify({'error': f'Gagal download: {video_download_res.status_code}'}), 500
-
-        video_bytes = video_download_res.content
-        filename = f"json2video_{int(time.time())}.mp4"
-        print(f"📤 Upload ke Vercel Blob: {filename}...")
-
-        blob_result = put(filename, video_bytes, access='public', multipart=True)
-        print(f"✅ JSON2Video selesai: {blob_result.url}")
-
-        return jsonify({
-            'success': True,
-            'video_url': blob_result.url,
-            'pathname': blob_result.pathname,
-            'project_id': project_id
-        })
-
-    except req_lib.exceptions.Timeout:
-        return jsonify({'error': 'Timeout saat menghubungi JSON2Video API'}), 504
-    except req_lib.exceptions.ConnectionError:
-        return jsonify({'error': 'Gagal terhubung ke JSON2Video API'}), 503
-    except Exception as e:
-        print(f"❌ JSON2Video Error: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -584,7 +394,6 @@ def has_any_user():
         conn.close()
         return jsonify({'success': True, 'has_users': count > 0, 'count': count, 'db_available': True})
     except Exception as e:
-        print(f"Error has_any_user: {e}")
         return jsonify({'success': True, 'has_users': False, 'count': 0, 'db_available': False})
 
 
@@ -625,19 +434,15 @@ def add_user():
         cur = conn.cursor()
         cur.execute("SELECT id FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
         if cur.fetchone():
-            cur.close()
-            conn.close()
+            cur.close(); conn.close()
             return jsonify({'error': 'Username sudah digunakan'}), 400
 
         password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         cur.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (username, password_hash))
         conn.commit()
-        cur.close()
-        conn.close()
+        cur.close(); conn.close()
         return jsonify({'success': True, 'message': 'User berhasil ditambahkan'})
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -658,8 +463,7 @@ def login_user():
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("SELECT username, password_hash FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
         row = cur.fetchone()
-        cur.close()
-        conn.close()
+        cur.close(); conn.close()
 
         if not row:
             return jsonify({'error': 'Username atau password salah'}), 401
@@ -685,8 +489,7 @@ def delete_user():
         cur = conn.cursor()
         cur.execute("DELETE FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
         conn.commit()
-        cur.close()
-        conn.close()
+        cur.close(); conn.close()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -703,8 +506,7 @@ def list_schedules():
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("SELECT * FROM schedules ORDER BY time ASC")
         rows = cur.fetchall()
-        cur.close()
-        conn.close()
+        cur.close(); conn.close()
         schedules = []
         for r in rows:
             try:
@@ -762,12 +564,9 @@ def add_schedule():
         ))
         new_id = cur.fetchone()[0]
         conn.commit()
-        cur.close()
-        conn.close()
+        cur.close(); conn.close()
         return jsonify({'success': True, 'id': new_id})
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -785,8 +584,7 @@ def delete_schedule():
         cur = conn.cursor()
         cur.execute("DELETE FROM schedules WHERE id = %s", (schedule_id,))
         conn.commit()
-        cur.close()
-        conn.close()
+        cur.close(); conn.close()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -803,8 +601,7 @@ def list_medsos():
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("SELECT platform, username, connected_at FROM medsos_accounts ORDER BY connected_at ASC")
         rows = cur.fetchall()
-        cur.close()
-        conn.close()
+        cur.close(); conn.close()
         accounts = []
         for r in rows:
             accounts.append({
@@ -832,19 +629,15 @@ def add_medsos():
         if not conn:
             return jsonify({'error': 'Database tidak tersedia'}), 500
         cur = conn.cursor()
-        cur.execute(
-            "SELECT id FROM medsos_accounts WHERE platform = %s AND LOWER(username) = LOWER(%s)",
-            (platform, username)
-        )
+        cur.execute("SELECT id FROM medsos_accounts WHERE platform = %s AND LOWER(username) = LOWER(%s)",
+                    (platform, username))
         if cur.fetchone():
-            cur.close()
-            conn.close()
+            cur.close(); conn.close()
             return jsonify({'error': 'Akun sudah terhubung'}), 400
 
         cur.execute("INSERT INTO medsos_accounts (platform, username) VALUES (%s, %s)", (platform, username))
         conn.commit()
-        cur.close()
-        conn.close()
+        cur.close(); conn.close()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -863,13 +656,10 @@ def delete_medsos():
         if not conn:
             return jsonify({'error': 'Database tidak tersedia'}), 500
         cur = conn.cursor()
-        cur.execute(
-            "DELETE FROM medsos_accounts WHERE platform = %s AND LOWER(username) = LOWER(%s)",
-            (platform, username)
-        )
+        cur.execute("DELETE FROM medsos_accounts WHERE platform = %s AND LOWER(username) = LOWER(%s)",
+                    (platform, username))
         conn.commit()
-        cur.close()
-        conn.close()
+        cur.close(); conn.close()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -897,72 +687,12 @@ def upload_media():
             return jsonify({'error': f'Tipe file tidak didukung: .{ext}'}), 400
 
         safe_name = sanitize_filename(file.filename, default_ext)
-        print(f"📤 Upload {media_type}: {file.filename} → {safe_name}")
-
-        file_content = file.read()
-        result = put(safe_name, file_content, access='public', multipart=True)
-        print(f"✅ Upload selesai: {result.url}")
-
-        return jsonify({
-            'success': True,
-            'url': result.url,
-            'pathname': result.pathname,
-            'filename': safe_name,
-            'size': len(file_content),
-            'type': media_type
-        })
-    except Exception as e:
-        print(f"❌ Upload error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/upload', methods=['POST'])
-def upload_video_legacy():
-    try:
-        if 'video' not in request.files:
-            return jsonify({'error': 'Tidak ada file video'}), 400
-        file = request.files['video']
-        if file.filename == '':
-            return jsonify({'error': 'Nama file kosong'}), 400
-
-        safe_name = sanitize_filename(file.filename, 'mp4')
         file_content = file.read()
         result = put(safe_name, file_content, access='public', multipart=True)
 
         return jsonify({
-            'success': True,
-            'url': result.url,
-            'pathname': result.pathname,
-            'filename': safe_name,
-            'size': len(file_content),
-            'type': 'video'
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/upload-image', methods=['POST'])
-def upload_image():
-    try:
-        if 'image' not in request.files:
-            return jsonify({'error': 'Tidak ada file gambar'}), 400
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({'error': 'Nama file kosong'}), 400
-
-        safe_name = sanitize_filename(file.filename, 'jpg')
-        file_content = file.read()
-        result = put(safe_name, file_content, access='public', multipart=True)
-
-        return jsonify({
-            'success': True,
-            'url': result.url,
-            'pathname': result.pathname,
-            'filename': safe_name,
-            'size': len(file_content),
-            'type': 'image'
+            'success': True, 'url': result.url, 'pathname': result.pathname,
+            'filename': safe_name, 'size': len(file_content), 'type': media_type
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -978,7 +708,6 @@ def upload_chunk():
         chunk_index = int(request.form.get('chunk_index', 0))
 
         safe_session_id = re.sub(r'[^\w]', '_', str(session_id))[:30] or 'session'
-
         file_content = file.read()
         chunk_filename = f"cut_{safe_session_id}_{chunk_index:03d}.webm"
         result = put(chunk_filename, file_content, access='public', multipart=True)
@@ -1025,8 +754,8 @@ def list_files_grouped():
                 })
                 continue
 
-            if (pathname.startswith('ai_edit_') or pathname.startswith('json2video_')) and is_video:
-                sid = pathname.replace('ai_edit_', '').replace('json2video_', '').rsplit('.', 1)[0]
+            if pathname.startswith('ai_edit_') and is_video:
+                sid = pathname.replace('ai_edit_', '').rsplit('.', 1)[0]
                 video_ai_edits[sid] = {
                     'pathname': pathname, 'url': url, 'size': size,
                     'uploadedAt': uploaded_at

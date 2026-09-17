@@ -244,11 +244,6 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                             <span id="submitAILabel">🎬 Kirim Video ke AI</span>
                         </button>
-
-                        <button onclick="submitJson2Video()" id="submitJson2VideoBtn" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            <span>🎬 Render dengan JSON2Video</span>
-                        </button>
                     </div>
                 </div>
             </div>
@@ -832,7 +827,7 @@
                 (data.videos_ai || []).forEach(file => {
                     allFiles.push({
                         ...file, type: 'video_ai', media_type: 'video',
-                        displayName: file.pathname.replace('ai_edit_', '').replace('json2video_', 'J2V_'),
+                        displayName: file.pathname.replace('ai_edit_', ''),
                         displayStatus: 'Video AI',
                         unique_id: `vai_${file.session_id}_${file.pathname}`,
                     });
@@ -997,12 +992,10 @@
             const imgEditBtn = document.getElementById('submitImageEditBtn');
             const imgToVidBtn = document.getElementById('submitImageToVideoBtn');
             const vidBtn = document.getElementById('submitVideoAIBtn');
-            const j2vBtn = document.getElementById('submitJson2VideoBtn');
 
             if (imgEditBtn) imgEditBtn.classList.toggle('hidden', !hasImage);
             if (imgToVidBtn) imgToVidBtn.classList.toggle('hidden', !hasImage);
             if (vidBtn) vidBtn.classList.toggle('hidden', hasImage && !hasVideo);
-            if (j2vBtn) j2vBtn.classList.toggle('hidden', checkedVideos.length === 0);
         }
 
         function selectVideoByUniqueId(uniqueId) {
@@ -1537,6 +1530,56 @@
             });
         }
 
+        // ==================== KONVERSI WEBM → MP4 (STABIL, SINGLE-THREAD) ====================
+        async function convertToMp4(webmBlob) {
+            try {
+                console.log('🎬 Memuat FFmpeg (single-thread)...');
+
+                const { FFmpeg } = await import('https://esm.sh/@ffmpeg/ffmpeg@0.12.10');
+                const { toBlobURL, fetchFile } = await import('https://esm.sh/@ffmpeg/util@0.12.1');
+
+                const ffmpeg = new FFmpeg();
+                ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
+                ffmpeg.on('error', (err) => console.error('[FFmpeg Error]', err));
+
+                // core-st = single thread, tidak butuh SharedArrayBuffer
+                const coreBaseURL = 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/umd';
+
+                console.log('📦 Download core-st...');
+                const coreURL = await toBlobURL(`${coreBaseURL}/ffmpeg-core.js`, 'text/javascript');
+                const wasmURL = await toBlobURL(`${coreBaseURL}/ffmpeg-core.wasm`, 'application/wasm');
+
+                console.log('⚙️ Loading FFmpeg core-st...');
+                await ffmpeg.load({ coreURL, wasmURL });
+
+                console.log('✅ FFmpeg siap');
+
+                await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
+
+                console.log('🔄 Konversi WEBM → MP4...');
+                await ffmpeg.exec([
+                    '-i', 'input.webm',
+                    '-c:v', 'libx264',
+                    '-preset', 'ultrafast',
+                    '-crf', '28',
+                    '-c:a', 'aac',
+                    '-b:a', '96k',
+                    '-movflags', '+faststart',
+                    'output.mp4'
+                ]);
+
+                const data = await ffmpeg.readFile('output.mp4');
+                const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
+
+                console.log(`✅ Konversi selesai: ${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB`);
+                return mp4Blob;
+
+            } catch (err) {
+                console.error('❌ Konversi gagal:', err);
+                throw new Error(`Gagal konversi: ${err.message}`);
+            }
+        }
+
         // ==================== COMBO BOX ====================
         function toggleCombo(type) {
             const panel = document.getElementById(`combo${type.charAt(0).toUpperCase() + type.slice(1)}Panel`);
@@ -2025,92 +2068,6 @@
             }
         }
 
-        async function submitJson2Video() {
-            const prompt = document.getElementById('promptInput').value.trim();
-            if (!prompt) { alert('Isi prompt dulu!'); return; }
-
-            const mediaList = checkedVideos;
-            const imageUrls = mediaList.filter(m => m.media_type === 'image').map(m => m.url);
-            const videoUrls = mediaList.filter(m => m.media_type === 'video').map(m => m.url);
-
-            if (imageUrls.length === 0 && videoUrls.length === 0) {
-                alert('Pilih minimal 1 gambar atau video dulu!');
-                return;
-            }
-
-            const elements = [];
-
-            if (videoUrls.length > 0) {
-                elements.push({
-                    type: 'video',
-                    src: videoUrls[0],
-                    duration: 10
-                });
-            } else if (imageUrls.length > 0) {
-                elements.push({
-                    type: 'image',
-                    src: imageUrls[0],
-                    duration: 5
-                });
-            }
-
-            elements.push({
-                type: 'text',
-                text: prompt.substring(0, 100),
-                duration: 5,
-                position: 'bottom',
-                style: '001'
-            });
-
-            const projectJson = {
-                resolution: 'full-hd',
-                quality: 'high',
-                scenes: [{ elements: elements }]
-            };
-
-            openAIResultModal('video');
-            setAIResultLoading(true);
-
-            const submitBtn = document.getElementById('submitJson2VideoBtn');
-            const originalBtnHTML = submitBtn.innerHTML;
-            submitBtn.disabled = true;
-            submitBtn.style.opacity = '0.5';
-            submitBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div><span>Memproses...</span>';
-
-            try {
-                document.getElementById('aiResultLoading').innerHTML = `
-                    <div class="spinner mx-auto mb-4"></div>
-                    <p class="text-purple-400 font-medium">🎬 JSON2Video sedang render...</p>
-                    <p class="text-gray-500 text-xs mt-2">30-90 detik</p>
-                `;
-
-                const response = await fetch('/api/json2video', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ project_json: projectJson })
-                });
-
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Gagal render JSON2Video');
-
-                setAIResultLoading(false);
-                document.getElementById('aiResultContent').classList.remove('hidden');
-                document.getElementById('aiResultLabel').textContent = '🎬 Hasil JSON2Video:';
-                document.getElementById('aiResultText').innerHTML = `
-                    <video src="${data.video_url}" controls class="w-full rounded-lg"></video>
-                    <p class="text-xs text-gray-400 mt-2">Video berhasil dirender. Cek tab <strong>Video AI</strong>.</p>
-                `;
-            } catch (error) {
-                console.error('JSON2Video error:', error);
-                setAIResultLoading(false);
-                setAIResultError(error.message);
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.style.opacity = '1';
-                submitBtn.innerHTML = originalBtnHTML;
-            }
-        }
-
         function openAIResultModal(type) {
             document.getElementById('aiResultModal').classList.remove('hidden');
             document.getElementById('aiResultModal').classList.add('flex');
@@ -2260,7 +2217,6 @@
         window.submitToAI = submitToAI;
         window.submitImageEdit = submitImageToAI;
         window.submitImageToVideo = submitImageToVideo;
-        window.submitJson2Video = submitJson2Video;
         window.openAIResultModal = openAIResultModal;
         window.closeAIResultModal = closeAIResultModal;
         window.setFilter = setFilter;
