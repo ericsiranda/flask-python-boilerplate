@@ -5,13 +5,17 @@ import json
 import bcrypt
 import psycopg2
 import psycopg2.extras
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask import Flask, render_template, jsonify, request
 from vercel.blob import put
 import vercel_blob
 import requests as req_lib
 
 app = Flask(__name__)
+
+# ==================== TIMEZONE WIB (UTC+7) ====================
+# Vercel server pakai UTC secara default. Kita konversi manual ke WIB.
+WIB = timezone(timedelta(hours=7))
 
 
 # ==================== DATABASE CONNECTION ====================
@@ -208,8 +212,12 @@ def cron_execute_schedules():
         if not conn:
             return jsonify({'error': 'DB tidak tersedia'}), 500
 
-        now = datetime.now()
+        # ✅ FIX TIMEZONE: pakai WIB bukan UTC
+        now = datetime.now(WIB).replace(tzinfo=None)
         window_start = now - timedelta(minutes=15)
+
+        print(f"[CRON] Server time (WIB): {now.isoformat()}")
+        print(f"[CRON] Window: {window_start.isoformat()} → {now.isoformat()}")
 
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("""
