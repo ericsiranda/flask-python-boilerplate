@@ -212,13 +212,37 @@ def cron_execute_schedules():
         if not conn:
             return jsonify({'error': 'DB tidak tersedia'}), 500
 
-        # ✅ FIX TIMEZONE: pakai WIB bukan UTC
+        # ✅ Pakai WIB
         now = datetime.now(WIB).replace(tzinfo=None)
-        window_start = now - timedelta(minutes=15)
+        # ✅ Window 24 jam — jadwal yang sudah lewat tetap diproses
+        window_start = now - timedelta(hours=24)
 
-        print(f"[CRON] Server time (WIB): {now.isoformat()}")
-        print(f"[CRON] Window: {window_start.isoformat()} → {now.isoformat()}")
+        now_str = now.strftime('%Y-%m-%dT%H:%M')
+        window_str = window_start.strftime('%Y-%m-%dT%H:%M')
 
+        print(f"[CRON] ========== START ==========")
+        print(f"[CRON] Server time (WIB): {now_str}")
+        print(f"[CRON] Window: {window_str} → {now_str}")
+
+        # ✅ DEBUG: cek dulu semua jadwal pending yang ada
+        cur_debug = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur_debug.execute("SELECT id, time, status FROM schedules WHERE status = 'pending'")
+        all_pending = cur_debug.fetchall()
+        print(f"[CRON DEBUG] Total pending schedules: {len(all_pending)}")
+        for s in all_pending:
+            t = s.get('time') or ''
+            # Bandingkan manual untuk debug
+            try:
+                t_clean = str(t).strip()
+                lewat = t_clean <= now_str
+                dalam_window = t_clean >= window_str
+                print(f"[CRON DEBUG]   id={s['id']}, time='{t_clean}', "
+                      f"lewat={lewat}, dalam_window={dalam_window}")
+            except Exception as ex:
+                print(f"[CRON DEBUG]   id={s['id']}, error debug: {ex}")
+        cur_debug.close()
+
+        # Query utama
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("""
             SELECT * FROM schedules 
@@ -226,10 +250,12 @@ def cron_execute_schedules():
             AND time <= %s 
             AND time >= %s
             ORDER BY time ASC
-        """, (now.strftime('%Y-%m-%dT%H:%M'), window_start.strftime('%Y-%m-%dT%H:%M')))
+        """, (now_str, window_str))
 
         due_schedules = cur.fetchall()
         cur.close()
+
+        print(f"[CRON DEBUG] Query result: {len(due_schedules)} jadwal due")
 
         if not due_schedules:
             conn.close()
@@ -237,7 +263,13 @@ def cron_execute_schedules():
                 'success': True,
                 'checked_at': now.isoformat(),
                 'due_count': 0,
-                'message': 'Tidak ada jadwal yang waktunya tayang'
+                'message': 'Tidak ada jadwal yang waktunya tayang',
+                'debug': {
+                    'now_wib': now_str,
+                    'window_start': window_str,
+                    'total_pending': len(all_pending),
+                    'pending_times': [s.get('time') for s in all_pending]
+                }
             })
 
         results = []
@@ -357,6 +389,7 @@ def cron_execute_schedules():
             results.append(result)
 
         conn.close()
+        print(f"[CRON] ========== END ({len(results)} processed) ==========")
         return jsonify({
             'success': True,
             'checked_at': now.isoformat(),
