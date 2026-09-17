@@ -129,7 +129,7 @@ def sanitize_filename(original_name, default_ext='mp4'):
     return f"{safe_base}_{int(time.time())}.{safe_ext}"
 
 
-# ==================== AGNES AI VIDEO GENERATION (VIDEO-TO-VIDEO / IMAGE-TO-VIDEO) ====================
+# ==================== AGNES AI VIDEO (VIDEO-TO-VIDEO / IMAGE-TO-VIDEO) ====================
 @app.route('/api/edit-video', methods=['POST'])
 def edit_video_agnes():
     data = request.json
@@ -164,12 +164,7 @@ def edit_video_agnes():
                 "width": 1152,
                 "num_frames": 121,
                 "frame_rate": 24,
-                "videos": [
-                    {
-                        "url": source_url,
-                        "role": "reference"
-                    }
-                ]
+                "videos": [{"url": source_url, "role": "reference"}]
             }
         else:
             submit_payload = {
@@ -187,15 +182,13 @@ def edit_video_agnes():
             "Content-Type": "application/json"
         }
 
-        print(f"📤 Payload: {submit_payload}")
-
         submit_res = req_lib.post(submit_url, headers=submit_headers, json=submit_payload, timeout=60)
         submit_data = submit_res.json()
         print(f"Agnes submit response: {submit_data}")
 
         video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
         if (not submit_res.ok or not video_id) and is_video_input:
-            print("⚠️ Mode video-to-video gagal, coba fallback kirim sebagai image...")
+            print("⚠️ Mode video-to-video gagal, coba fallback sebagai image...")
             fallback_payload = {
                 "model": "agnes-video-v2.0",
                 "prompt": prompt,
@@ -205,7 +198,6 @@ def edit_video_agnes():
             }
             submit_res = req_lib.post(submit_url, headers=submit_headers, json=fallback_payload, timeout=60)
             submit_data = submit_res.json()
-            print(f"Fallback response: {submit_data}")
             video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
 
         if not video_id:
@@ -225,7 +217,6 @@ def edit_video_agnes():
                 result_res = req_lib.get(result_url, headers=result_headers, timeout=30)
                 result_data = result_res.json()
                 status = result_data.get('status') or result_data.get('data', {}).get('status')
-
                 print(f"Polling {i+1}/{max_retries}: status = {status}")
 
                 if status == 'completed':
@@ -285,7 +276,6 @@ def edit_video_agnes():
 # ==================== AGNES AI IMAGE-TO-VIDEO ====================
 @app.route('/api/image-to-video', methods=['POST'])
 def image_to_video_agnes():
-    """Convert gambar menjadi video animasi menggunakan Agnes AI."""
     data = request.json
     prompt = data.get('prompt')
     image_url = data.get('image_url')
@@ -378,8 +368,6 @@ def image_to_video_agnes():
 
         video_bytes = video_download_res.content
         filename = f"ai_edit_{int(time.time())}.mp4"
-        print(f"📤 Upload ke Vercel Blob: {filename}...")
-
         blob_result = put(filename, video_bytes, access='public', multipart=True)
         print(f"✅ Selesai: {blob_result.url}")
 
@@ -461,11 +449,7 @@ def edit_image_agnes():
             return jsonify({'error': f'Gagal download: {img_download.status_code}'}), 500
 
         image_bytes = img_download.content
-        print(f"✅ Gambar diunduh: {len(image_bytes)} bytes")
-
         filename = f"ai_edit_image_{int(time.time())}.png"
-        print(f"📤 Upload ke Vercel Blob: {filename}...")
-
         blob_result = put(filename, image_bytes, access='public', multipart=True)
         print(f"✅ Selesai: {blob_result.url}")
 
@@ -481,6 +465,105 @@ def edit_image_agnes():
         return jsonify({'error': 'Gagal terhubung ke Agnes API'}), 503
     except Exception as e:
         print(f"❌ Agnes Image Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== JSON2VIDEO INTEGRATION ====================
+@app.route('/api/json2video', methods=['POST'])
+def json2video_render():
+    """Render video menggunakan JSON2Video API.
+    Body: { "project_json": { ... } }
+    """
+    data = request.json
+    project_json = data.get('project_json')
+
+    if not project_json:
+        return jsonify({'error': 'project_json wajib diisi'}), 400
+
+    json2video_api_key = os.environ.get('JSON2VIDEO_API_KEY')
+    if not json2video_api_key:
+        return jsonify({'error': 'JSON2VIDEO_API_KEY belum di-set'}), 500
+
+    try:
+        print(f"🎬 JSON2Video: submit render...")
+
+        submit_url = "https://api.json2video.com/v2/movies"
+        headers = {
+            "x-api-key": json2video_api_key,
+            "Content-Type": "application/json"
+        }
+
+        res = req_lib.post(submit_url, headers=headers, json=project_json, timeout=60)
+        res_data = res.json()
+        print(f"JSON2Video submit response: {res_data}")
+
+        if not res.ok or not res_data.get('success'):
+            return jsonify({'error': f'Gagal submit ke JSON2Video: {res_data}'}), 500
+
+        project_id = res_data.get('project')
+        if not project_id:
+            return jsonify({'error': f'Project ID tidak ditemukan: {res_data}'}), 500
+
+        print(f"✅ JSON2Video Project ID: {project_id}")
+
+        max_retries = 60
+        video_url = None
+        movie_status = None
+
+        for i in range(max_retries):
+            time.sleep(5)
+            try:
+                status_url = f"https://api.json2video.com/v2/movies?project={project_id}"
+                status_headers = {"x-api-key": json2video_api_key}
+                status_res = req_lib.get(status_url, headers=status_headers, timeout=30)
+                status_data = status_res.json()
+
+                movie = status_data.get('movie', {})
+                movie_status = movie.get('status')
+                print(f"Polling {i+1}/{max_retries}: status = {movie_status}")
+
+                if movie_status == 'done':
+                    video_url = movie.get('url')
+                    print(f"✅ JSON2Video selesai: {video_url}")
+                    break
+                elif movie_status == 'error':
+                    return jsonify({'error': f"JSON2Video gagal: {movie.get('message')}"}), 500
+                elif movie_status == 'timeout':
+                    return jsonify({'error': 'JSON2Video timeout'}), 500
+            except Exception as poll_error:
+                print(f"⚠️ Polling error: {poll_error}")
+                continue
+
+        if not video_url:
+            return jsonify({'error': f'Timeout: JSON2Video belum selesai. Status: {movie_status}'}), 500
+
+        print("📥 Mengunduh video JSON2Video...")
+        video_download_res = req_lib.get(video_url, timeout=120, stream=True)
+        if video_download_res.status_code != 200:
+            return jsonify({'error': f'Gagal download: {video_download_res.status_code}'}), 500
+
+        video_bytes = video_download_res.content
+        filename = f"json2video_{int(time.time())}.mp4"
+        print(f"📤 Upload ke Vercel Blob: {filename}...")
+
+        blob_result = put(filename, video_bytes, access='public', multipart=True)
+        print(f"✅ JSON2Video selesai: {blob_result.url}")
+
+        return jsonify({
+            'success': True,
+            'video_url': blob_result.url,
+            'pathname': blob_result.pathname,
+            'project_id': project_id
+        })
+
+    except req_lib.exceptions.Timeout:
+        return jsonify({'error': 'Timeout saat menghubungi JSON2Video API'}), 504
+    except req_lib.exceptions.ConnectionError:
+        return jsonify({'error': 'Gagal terhubung ke JSON2Video API'}), 503
+    except Exception as e:
+        print(f"❌ JSON2Video Error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
@@ -942,8 +1025,8 @@ def list_files_grouped():
                 })
                 continue
 
-            if pathname.startswith('ai_edit_') and is_video:
-                sid = pathname.replace('ai_edit_', '').rsplit('.', 1)[0]
+            if (pathname.startswith('ai_edit_') or pathname.startswith('json2video_')) and is_video:
+                sid = pathname.replace('ai_edit_', '').replace('json2video_', '').rsplit('.', 1)[0]
                 video_ai_edits[sid] = {
                     'pathname': pathname, 'url': url, 'size': size,
                     'uploadedAt': uploaded_at
