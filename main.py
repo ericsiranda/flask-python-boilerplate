@@ -105,7 +105,7 @@ def init_tables():
             )
         """)
 
-        # === BARU: TABEL PROMPT SCHEDULES ===
+        # === TABEL PROMPT SCHEDULES ===
         cur.execute("""
             CREATE TABLE IF NOT EXISTS prompt_schedules (
                 id SERIAL PRIMARY KEY,
@@ -135,6 +135,29 @@ def init_tables():
             cur.execute("CREATE INDEX IF NOT EXISTS idx_prompt_schedules_next_run ON prompt_schedules(next_run_at) WHERE is_active = TRUE")
         except Exception as e:
             print(f"Index note: {e}")
+            conn.rollback()
+
+        # === TABEL POSTING HISTORY (untuk anti-duplikat & log) ===
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS posting_history (
+                id SERIAL PRIMARY KEY,
+                schedule_id INT,
+                media_url TEXT NOT NULL,
+                media_name VARCHAR(255),
+                platform VARCHAR(50),
+                account VARCHAR(100),
+                caption TEXT,
+                media_id VARCHAR(255),
+                container_id VARCHAR(255),
+                posted_at TIMESTAMP DEFAULT NOW(),
+                source VARCHAR(50) DEFAULT 'cron'
+            )
+        """)
+        try:
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_posting_history_media_url ON posting_history(media_url)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_posting_history_posted_at ON posting_history(posted_at DESC)")
+        except Exception as e:
+            print(f"Index history note: {e}")
             conn.rollback()
 
         conn.commit()
@@ -252,6 +275,55 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
         return {'success': False, 'error': str(e)}
 
 
+# ==================== ANTI-DUPLIKAT: CEK MEDIA SUDAH PERNAH DIPOSTING ====================
+def media_already_posted(media_url, within_hours=24):
+    """
+    Cek apakah media_url yang sama sudah pernah diposting dalam X jam terakhir.
+    Return: dict info posting lama, atau None kalau belum pernah.
+    """
+    try:
+        conn = get_db()
+        if not conn:
+            return None
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT id, schedule_id, media_name, platform, account, media_id, posted_at
+            FROM posting_history
+            WHERE media_url = %s
+              AND posted_at >= NOW() - INTERVAL '%s hours'
+            ORDER BY posted_at DESC
+            LIMIT 1
+        """, (media_url, within_hours))
+        row = cur.fetchone()
+        cur.close(); conn.close()
+        return dict(row) if row else None
+    except Exception as e:
+        print(f"[AntiDup] Cek error: {e}")
+        return None
+
+
+def record_posting_history(schedule_id, media_url, media_name, platform, account,
+                            caption, media_id, container_id, source='cron'):
+    """Catat posting yang berhasil ke tabel posting_history."""
+    try:
+        conn = get_db()
+        if not conn:
+            return False
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO posting_history
+            (schedule_id, media_url, media_name, platform, account, caption,
+             media_id, container_id, source)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (schedule_id, media_url, media_name, platform, account,
+              caption, media_id, container_id, source))
+        conn.commit(); cur.close(); conn.close()
+        return True
+    except Exception as e:
+        print(f"[AntiDup] Record error: {e}")
+        return False
+
+
 # ==================== HITUNG NEXT RUN ====================
 def calculate_next_run(sched, from_time=None):
     """
@@ -283,8 +355,7 @@ def calculate_next_run(sched, from_time=None):
         return candidate
 
     if repeat_type == 'weekly':
-        target_dow = int(sched.get('day_of_week') or 0)  # 0=Minggu, 1=Senin, ... 6=Sabtu
-        # Konversi: JS(0=Minggu) → Python(6=Minggu)
+        target_dow = int(sched.get('day_of_week') or 0)
         py_target = 6 if target_dow == 0 else (target_dow - 1)
         candidate = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
         days_ahead = (py_target - candidate.weekday()) % 7
@@ -312,7 +383,7 @@ def calculate_next_run(sched, from_time=None):
     return None
 
 
-# ==================== CORE EKSEKUSI PROMPT SCHEDULE (REVISED) ====================
+# ==================== CORE EKSEKUSI PROMPT SCHEDULE ====================
 def execute_prompt_schedule(sched):
     """
     1. Kirim prompt ke Agnes AI (dengan retry + timeout lebih panjang)
@@ -359,7 +430,6 @@ def execute_prompt_schedule(sched):
             if default_img:
                 payload["image"] = default_img
 
-        # Retry submit hingga 3x dengan timeout lebih panjang
         submit_data = None
         last_submit_error = None
         for attempt in range(3):
@@ -367,7 +437,7 @@ def execute_prompt_schedule(sched):
                 print(f"[PromptSched] Submit ke Agnes attempt {attempt+1}/3 (timeout=180s)...")
                 submit_res = req_lib.post(
                     submit_url, headers=headers, json=payload,
-                    timeout=(30, 180)  # (connect_timeout, read_timeout)
+                    timeout=(30, 180)
                 )
                 submit_data = submit_res.json()
                 print(f"[PromptSched] Submit response: {str(submit_data)[:300]}")
@@ -406,7 +476,7 @@ def execute_prompt_schedule(sched):
         result_url = f"https://apihub.agnes-ai.com/agnesapi?video_id={video_id}"
         result_data = None
 
-        for i in range(60):  # max 10 menit
+        for i in range(60):
             time.sleep(10)
             try:
                 r = req_lib.get(
@@ -558,7 +628,6 @@ def cron_execute_schedules():
             res = execute_prompt_schedule(ps)
             prompt_results.append(res)
 
-            # Simpan last_result
             try:
                 cur_lr = conn.cursor()
                 cur_lr.execute("UPDATE prompt_schedules SET last_result = %s WHERE id = %s",
@@ -617,10 +686,25 @@ def cron_execute_schedules():
                 'status': 'pending'
             }
 
-            cur2 = conn.cursor()
-            cur2.execute("UPDATE schedules SET status = 'processing' WHERE id = %s", (sched['id'],))
-            conn.commit()
-            cur2.close()
+            # === LOCK ATOMIK: hanya 1 proses yang bisa ambil schedule ini ===
+            try:
+                cur_lock = conn.cursor()
+                cur_lock.execute("""
+                    UPDATE schedules 
+                    SET status = 'processing' 
+                    WHERE id = %s AND status = 'pending'
+                    RETURNING id
+                """, (sched['id'],))
+                locked = cur_lock.fetchone()
+                conn.commit()
+                cur_lock.close()
+
+                if not locked:
+                    print(f"[CRON] Schedule {sched['id']} sudah diambil proses lain, skip.")
+                    continue
+            except Exception as e:
+                print(f"[CRON] Lock error: {e}")
+                continue
 
             try:
                 try:
@@ -641,11 +725,16 @@ def cron_execute_schedules():
                     continue
 
                 media_url = None
+                media_name = None
                 is_video = True
                 if videos:
-                    media_url = videos[0]['url']; is_video = True
+                    media_url = videos[0]['url']
+                    media_name = videos[0].get('name') or sched.get('video_name') or ''
+                    is_video = True
                 elif images:
-                    media_url = images[0]['url']; is_video = False
+                    media_url = images[0]['url']
+                    media_name = images[0].get('name') or ''
+                    is_video = False
 
                 if not media_url:
                     result['status'] = 'failed'
@@ -654,31 +743,70 @@ def cron_execute_schedules():
                     cur4.execute("UPDATE schedules SET status='failed', post_result=%s WHERE id=%s",
                                  (json.dumps(result), sched['id']))
                     conn.commit(); cur4.close()
-                else:
-                    ig_result = post_to_instagram(
-                        media_url=media_url,
-                        caption=sched.get('caption', ''),
-                        media_type='REELS' if is_video else 'IMAGE',
-                        ig_user_id=ig_user_id,
-                        access_token=ig_token,
-                        is_video=is_video
-                    )
+                    results.append(result)
+                    continue
 
-                    if ig_result['success']:
-                        result['status'] = 'posted'
-                        result['media_id'] = ig_result['media_id']
-                        result['container_id'] = ig_result['container_id']
-                        cur5 = conn.cursor()
-                        cur5.execute("UPDATE schedules SET status='posted', posted_at=NOW(), post_result=%s WHERE id=%s",
-                                     (json.dumps(result), sched['id']))
-                        conn.commit(); cur5.close()
-                    else:
-                        result['status'] = 'failed'
-                        result['error'] = ig_result.get('error', 'Unknown error')
-                        cur6 = conn.cursor()
-                        cur6.execute("UPDATE schedules SET status='failed', post_result=%s WHERE id=%s",
-                                     (json.dumps(result), sched['id']))
-                        conn.commit(); cur6.close()
+                # === CEK DUPLIKAT: media yang sama sudah pernah diposting? ===
+                duplicate = media_already_posted(media_url, within_hours=24)
+                if duplicate:
+                    dup_time = duplicate['posted_at'].strftime('%Y-%m-%d %H:%M') if duplicate.get('posted_at') else '?'
+                    result['status'] = 'skipped'
+                    result['error'] = f"Duplikat: media ini sudah diposting pada {dup_time} (media_id: {duplicate.get('media_id')})"
+                    result['duplicate_of'] = duplicate.get('media_id')
+                    print(f"[CRON] ⚠️ Skip schedule {sched['id']} — {result['error']}")
+
+                    cur_dup = conn.cursor()
+                    cur_dup.execute("""
+                        UPDATE schedules 
+                        SET status='skipped', post_result=%s, posted_at=NOW()
+                        WHERE id=%s
+                    """, (json.dumps(result), sched['id']))
+                    conn.commit(); cur_dup.close()
+                    results.append(result)
+                    continue
+
+                # === POSTING KE INSTAGRAM ===
+                ig_result = post_to_instagram(
+                    media_url=media_url,
+                    caption=sched.get('caption', ''),
+                    media_type='REELS' if is_video else 'IMAGE',
+                    ig_user_id=ig_user_id,
+                    access_token=ig_token,
+                    is_video=is_video
+                )
+
+                if ig_result['success']:
+                    result['status'] = 'posted'
+                    result['media_id'] = ig_result['media_id']
+                    result['container_id'] = ig_result['container_id']
+
+                    cur5 = conn.cursor()
+                    cur5.execute("""
+                        UPDATE schedules 
+                        SET status='posted', posted_at=NOW(), post_result=%s 
+                        WHERE id=%s
+                    """, (json.dumps(result), sched['id']))
+                    conn.commit(); cur5.close()
+
+                    # === CATAT KE HISTORY (untuk anti-duplikat) ===
+                    record_posting_history(
+                        schedule_id=sched['id'],
+                        media_url=media_url,
+                        media_name=media_name,
+                        platform=sched.get('platform') or '',
+                        account=sched.get('account') or '',
+                        caption=sched.get('caption') or '',
+                        media_id=ig_result['media_id'],
+                        container_id=ig_result['container_id'],
+                        source='cron'
+                    )
+                else:
+                    result['status'] = 'failed'
+                    result['error'] = ig_result.get('error', 'Unknown error')
+                    cur6 = conn.cursor()
+                    cur6.execute("UPDATE schedules SET status='failed', post_result=%s WHERE id=%s",
+                                 (json.dumps(result), sched['id']))
+                    conn.commit(); cur6.close()
             except Exception as e:
                 result['status'] = 'failed'
                 result['error'] = str(e)
@@ -712,7 +840,7 @@ def cron_execute_schedules():
         return jsonify({'error': str(e)}), 500
 
 
-# ==================== MANUAL POST ====================
+# ==================== MANUAL POST (REVISED: anti-duplikat) ====================
 @app.route('/api/schedules/post-now', methods=['POST'])
 def post_schedule_now():
     cron_secret = os.environ.get('CRON_SECRET')
@@ -723,6 +851,7 @@ def post_schedule_now():
 
     data = request.json
     schedule_id = data.get('id')
+    force = bool(data.get('force', False))
     if not schedule_id:
         return jsonify({'error': 'ID wajib'}), 400
 
@@ -758,16 +887,32 @@ def post_schedule_now():
         except: images = []
 
         media_url = None
+        media_name = None
         is_video = True
         if videos:
             media_url = videos[0]['url']
+            media_name = videos[0].get('name') or sched.get('video_name') or ''
         elif images:
             media_url = images[0]['url']
+            media_name = images[0].get('name') or ''
             is_video = False
 
         if not media_url:
             conn.close()
             return jsonify({'success': False, 'error': 'Tidak ada media'}), 400
+
+        # === CEK DUPLIKAT (kecuali force=true) ===
+        if not force:
+            duplicate = media_already_posted(media_url, within_hours=24)
+            if duplicate:
+                dup_time = duplicate['posted_at'].strftime('%Y-%m-%d %H:%M') if duplicate.get('posted_at') else '?'
+                conn.close()
+                return jsonify({
+                    'success': False,
+                    'error': f'Media ini sudah diposting pada {dup_time}. Gunakan force=true untuk tetap posting.',
+                    'duplicate': True,
+                    'duplicate_of': duplicate.get('media_id')
+                }), 409
 
         ig_result = post_to_instagram(
             media_url=media_url,
@@ -787,6 +932,18 @@ def post_schedule_now():
             """, (json.dumps(ig_result), schedule_id))
             conn.commit()
             cur2.close()
+
+            record_posting_history(
+                schedule_id=schedule_id,
+                media_url=media_url,
+                media_name=media_name,
+                platform=sched.get('platform') or '',
+                account=sched.get('account') or '',
+                caption=sched.get('caption') or '',
+                media_id=ig_result['media_id'],
+                container_id=ig_result['container_id'],
+                source='manual'
+            )
         else:
             cur2 = conn.cursor()
             cur2.execute("""
@@ -806,7 +963,7 @@ def post_schedule_now():
         return jsonify({'error': str(e)}), 500
 
 
-# ==================== AGNES AI VIDEO (REVISED: timeout & retry) ====================
+# ==================== AGNES AI VIDEO ====================
 @app.route('/api/edit-video', methods=['POST'])
 def edit_video_agnes():
     data = request.json
@@ -912,7 +1069,7 @@ def edit_video_agnes():
         return jsonify({'error': str(e)}), 500
 
 
-# ==================== AGNES IMAGE-TO-VIDEO (REVISED) ====================
+# ==================== AGNES IMAGE-TO-VIDEO ====================
 @app.route('/api/image-to-video', methods=['POST'])
 def image_to_video_agnes():
     data = request.json
@@ -1260,7 +1417,6 @@ def run_prompt_schedule_now():
 
         result = execute_prompt_schedule(row)
 
-        # Simpan last_result
         try:
             conn2 = get_db()
             if conn2:
@@ -1455,6 +1611,43 @@ def delete_schedule():
         conn.commit(); cur.close(); conn.close()
         return jsonify({'success': True})
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== POSTING HISTORY ====================
+@app.route('/api/posting-history', methods=['GET'])
+def get_posting_history():
+    """Ambil history posting untuk cek duplikat & audit."""
+    try:
+        limit = int(request.args.get('limit', 100))
+        conn = get_db()
+        if not conn:
+            return jsonify({'error': 'DB tidak tersedia'}), 500
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT id, schedule_id, media_url, media_name, platform, account,
+                   media_id, container_id, posted_at, source
+            FROM posting_history
+            ORDER BY posted_at DESC
+            LIMIT %s
+        """, (limit,))
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+
+        items = [{
+            'id': r['id'],
+            'schedule_id': r['schedule_id'],
+            'media_url': r['media_url'],
+            'media_name': r['media_name'] or '',
+            'platform': r['platform'] or '',
+            'account': r['account'] or '',
+            'media_id': r['media_id'] or '',
+            'posted_at': r['posted_at'].isoformat() if r['posted_at'] else '',
+            'source': r['source'] or ''
+        } for r in rows]
+        return jsonify({'success': True, 'items': items})
+    except Exception as e:
+        import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
