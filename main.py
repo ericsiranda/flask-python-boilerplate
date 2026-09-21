@@ -2,6 +2,7 @@ import os
 import time
 import re
 import json
+import calendar
 import bcrypt
 import psycopg2
 import psycopg2.extras
@@ -103,6 +104,39 @@ def init_tables():
                 UNIQUE(platform, username)
             )
         """)
+
+        # === BARU: TABEL PROMPT SCHEDULES ===
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS prompt_schedules (
+                id SERIAL PRIMARY KEY,
+                title VARCHAR(255),
+                prompt TEXT NOT NULL,
+                source_type VARCHAR(20) DEFAULT 'text',
+                source_image_url TEXT,
+                repeat_type VARCHAR(20) DEFAULT 'once',
+                repeat_interval_min INT DEFAULT 0,
+                time VARCHAR(50),
+                day_of_week INT,
+                day_of_month INT,
+                next_run_at TIMESTAMP,
+                last_run_at TIMESTAMP,
+                is_active BOOLEAN DEFAULT TRUE,
+                auto_post BOOLEAN DEFAULT TRUE,
+                platform VARCHAR(50),
+                account VARCHAR(100),
+                caption TEXT,
+                post_delay_min INT DEFAULT 5,
+                posted_schedule_id INT,
+                last_result TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        try:
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_prompt_schedules_next_run ON prompt_schedules(next_run_at) WHERE is_active = TRUE")
+        except Exception as e:
+            print(f"Index note: {e}")
+            conn.rollback()
+
         conn.commit()
         cur.close()
         conn.close()
@@ -129,10 +163,9 @@ def sanitize_filename(original_name, default_ext='mp4'):
     return f"{safe_base}_{int(time.time())}.{safe_ext}"
 
 
-# ==================== INSTAGRAM GRAPH API POSTING (REVISED) ====================
+# ==================== INSTAGRAM GRAPH API POSTING ====================
 def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, is_video=True):
     try:
-        # ===== STEP 1: CREATE CONTAINER =====
         create_url = f"https://graph.facebook.com/v21.0/{ig_user_id}/media"
         if is_video:
             create_params = {
@@ -157,7 +190,6 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
 
         container_id = create_data['id']
 
-        # ===== STEP 2: POLLING STATUS (khusus video) =====
         if is_video:
             finished = False
             for i in range(30):
@@ -173,7 +205,6 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
 
                 if status_code == 'FINISHED':
                     finished = True
-                    # ✅ TAMBAHAN: delay ekstra 15 detik untuk sinkronisasi internal IG
                     print(f"[IG] Container FINISHED, tambah delay 15 detik untuk safety...")
                     time.sleep(15)
                     break
@@ -183,7 +214,6 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
             if not finished:
                 return {'success': False, 'error': 'Timeout: container tidak selesai diproses IG'}
 
-        # ===== STEP 3: PUBLISH DENGAN RETRY (handle error 9007) =====
         publish_url = f"https://graph.facebook.com/v21.0/{ig_user_id}/media_publish"
 
         for attempt in range(5):
@@ -194,7 +224,6 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
             publish_data = publish_res.json()
             print(f"[IG] Publish attempt {attempt+1}/5: {publish_data}")
 
-            # Sukses
             if 'id' in publish_data:
                 return {
                     'success': True,
@@ -202,18 +231,15 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
                     'media_id': publish_data['id']
                 }
 
-            # Kalau error 9007 (media belum ready), tunggu & retry
             error_code = publish_data.get('error', {}).get('code')
             if error_code == 9007 and attempt < 4:
-                wait_time = 10 + (attempt * 5)  # 10s, 15s, 20s, 25s
+                wait_time = 10 + (attempt * 5)
                 print(f"[IG] Media belum ready (9007), retry dalam {wait_time} detik...")
                 time.sleep(wait_time)
                 continue
             else:
-                # Error lain, langsung return
                 return {'success': False, 'error': f"Gagal publish: {publish_data}"}
 
-        # Kalau 5x retry masih gagal
         return {
             'success': False,
             'error': 'Gagal publish setelah 5x retry (error 9007 persistent). Coba tunggu 1-2 menit lalu retry manual dari UI.'
@@ -226,7 +252,224 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
         return {'success': False, 'error': str(e)}
 
 
-# ==================== CRON: EXECUTE SCHEDULES ====================
+# ==================== BARU: HITUNG NEXT RUN ====================
+def calculate_next_run(sched, from_time=None):
+    """
+    Hitung kapan prompt schedule berikutnya harus jalan.
+    Return: datetime (WIB naive) atau None kalau 'once' dan sudah selesai.
+    """
+    now = from_time or datetime.now(WIB).replace(tzinfo=None)
+    repeat_type = (sched.get('repeat_type') or 'once').lower()
+
+    if repeat_type == 'once':
+        return None
+
+    if repeat_type == 'interval':
+        minutes = int(sched.get('repeat_interval_min') or 0)
+        if minutes <= 0:
+            return None
+        return now + timedelta(minutes=minutes)
+
+    time_str = (sched.get('time') or '00:00').strip()
+    try:
+        hh, mm = map(int, time_str.split(':'))
+    except:
+        hh, mm = 0, 0
+
+    if repeat_type == 'daily':
+        candidate = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if candidate <= now:
+            candidate += timedelta(days=1)
+        return candidate
+
+    if repeat_type == 'weekly':
+        target_dow = int(sched.get('day_of_week') or 0)  # 0=Minggu, 1=Senin, ... 6=Sabtu
+        # Konversi: JS(0=Minggu) → Python(6=Minggu)
+        py_target = 6 if target_dow == 0 else (target_dow - 1)
+        candidate = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        days_ahead = (py_target - candidate.weekday()) % 7
+        candidate += timedelta(days=days_ahead)
+        if candidate <= now:
+            candidate += timedelta(days=7)
+        return candidate
+
+    if repeat_type == 'monthly':
+        target_dom = int(sched.get('day_of_month') or 1)
+        try:
+            candidate = now.replace(day=target_dom, hour=hh, minute=mm, second=0, microsecond=0)
+        except ValueError:
+            last_day = calendar.monthrange(now.year, now.month)[1]
+            candidate = now.replace(day=min(target_dom, last_day), hour=hh, minute=mm, second=0, microsecond=0)
+        if candidate <= now:
+            if now.month == 12:
+                y, m = now.year + 1, 1
+            else:
+                y, m = now.year, now.month + 1
+            last_day = calendar.monthrange(y, m)[1]
+            candidate = datetime(y, m, min(target_dom, last_day), hh, mm)
+        return candidate
+
+    return None
+
+
+# ==================== BARU: CORE EKSEKUSI PROMPT SCHEDULE ====================
+def execute_prompt_schedule(sched):
+    """
+    1. Kirim prompt ke Agnes AI
+    2. Tunggu sampai selesai
+    3. Simpan hasil ke Vercel Blob (Video AI)
+    4. Kalau auto_post: buat entry baru di tabel schedules untuk posting IG
+    """
+    result = {
+        'prompt_schedule_id': sched['id'],
+        'title': sched.get('title') or '',
+        'success': False,
+        'step': 'start'
+    }
+
+    try:
+        agnes_api_key = os.environ.get('AGNES_API_KEY')
+        if not agnes_api_key:
+            result['error'] = 'AGNES_API_KEY belum di-set'
+            return result
+
+        prompt = sched.get('prompt') or ''
+        source_type = (sched.get('source_type') or 'text').lower()
+        source_image_url = sched.get('source_image_url') or ''
+
+        # === STEP 1: SUBMIT KE AGNES ===
+        result['step'] = 'submit_agnes'
+        submit_url = "https://apihub.agnes-ai.com/v1/videos"
+        headers = {"Authorization": f"Bearer {agnes_api_key}", "Content-Type": "application/json"}
+
+        if source_type == 'image' and source_image_url:
+            payload = {
+                "model": "agnes-video-v2.0", "prompt": prompt,
+                "height": 768, "width": 1152,
+                "num_frames": 121, "frame_rate": 24,
+                "image": source_image_url
+            }
+        else:
+            # text-to-video
+            payload = {
+                "model": "agnes-video-v2.0", "prompt": prompt,
+                "height": 768, "width": 1152,
+                "num_frames": 121, "frame_rate": 24,
+            }
+            # Kalau ada default image di env, pakai sebagai referensi
+            default_img = os.environ.get('AGNES_DEFAULT_IMAGE')
+            if default_img:
+                payload["image"] = default_img
+
+        submit_res = req_lib.post(submit_url, headers=headers, json=payload, timeout=60)
+        submit_data = submit_res.json()
+        video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
+
+        if not video_id:
+            result['error'] = f'Gagal submit ke Agnes: {submit_data}'
+            return result
+
+        result['agnes_video_id'] = video_id
+
+        # === STEP 2: POLLING STATUS ===
+        result['step'] = 'polling'
+        result_url = f"https://apihub.agnes-ai.com/agnesapi?video_id={video_id}"
+        result_data = None
+
+        for i in range(60):  # max 10 menit
+            time.sleep(10)
+            try:
+                r = req_lib.get(result_url, headers={"Authorization": f"Bearer {agnes_api_key}"}, timeout=30)
+                result_data = r.json()
+                status = result_data.get('status') or result_data.get('data', {}).get('status')
+                if status == 'completed':
+                    break
+                elif status == 'failed':
+                    result['error'] = f'Agnes gagal: {result_data}'
+                    return result
+            except Exception as ex:
+                print(f"[PromptSched] Polling error: {ex}")
+
+        if not result_data or (result_data.get('status') != 'completed'):
+            result['error'] = 'Timeout menunggu Agnes AI'
+            return result
+
+        output_url = (result_data.get('video_url') or result_data.get('url') or
+                      result_data.get('data', {}).get('video_url') or
+                      result_data.get('data', {}).get('url'))
+        if not output_url:
+            result['error'] = 'URL video tidak ditemukan di response Agnes'
+            return result
+
+        # === STEP 3: DOWNLOAD & UPLOAD KE BLOB ===
+        result['step'] = 'upload_blob'
+        video_dl = req_lib.get(output_url, timeout=180)
+        if video_dl.status_code != 200:
+            result['error'] = f'Gagal download video: HTTP {video_dl.status_code}'
+            return result
+
+        filename = f"ai_edit_{int(time.time())}_{sched['id']}.mp4"
+        blob_result = put(filename, video_dl.content, access='public', multipart=True)
+
+        result['video_url'] = blob_result.url
+        result['pathname'] = blob_result.pathname
+        result['success'] = True
+
+        # === STEP 4: AUTO-POST KE SCHEDULES (IG) ===
+        if sched.get('auto_post'):
+            result['step'] = 'schedule_ig'
+            try:
+                conn = get_db()
+                if conn:
+                    delay = int(sched.get('post_delay_min') or 5)
+                    post_time = datetime.now(WIB).replace(tzinfo=None) + timedelta(minutes=delay)
+                    post_time_str = post_time.strftime('%Y-%m-%dT%H:%M')
+
+                    videos_json = json.dumps([{
+                        'url': blob_result.url,
+                        'name': filename,
+                        'is_primary': True
+                    }])
+
+                    cur = conn.cursor()
+                    cur.execute("""
+                        INSERT INTO schedules
+                        (session_id, video_name, video_url, videos_json, images_json,
+                         time, platform, account, caption, status)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending') RETURNING id
+                    """, (
+                        f"promptsched_{sched['id']}_{int(time.time())}",
+                        filename,
+                        blob_result.url,
+                        videos_json,
+                        json.dumps([]),
+                        post_time_str,
+                        sched.get('platform') or '',
+                        sched.get('account') or '',
+                        sched.get('caption') or ''
+                    ))
+                    new_sched_id = cur.fetchone()[0]
+
+                    cur.execute("UPDATE prompt_schedules SET posted_schedule_id = %s WHERE id = %s",
+                                (new_sched_id, sched['id']))
+                    conn.commit()
+                    cur.close()
+                    conn.close()
+
+                    result['posted_schedule_id'] = new_sched_id
+                    result['post_at'] = post_time_str
+            except Exception as e:
+                print(f"[PromptSched] Auto-post scheduling error: {e}")
+                result['auto_post_error'] = str(e)
+
+        return result
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        result['error'] = str(e)
+        return result
+
+
+# ==================== CRON: EXECUTE (UPDATED) ====================
 @app.route('/api/cron/execute-schedules', methods=['GET'])
 def cron_execute_schedules():
     cron_secret = os.environ.get('CRON_SECRET')
@@ -236,38 +479,80 @@ def cron_execute_schedules():
             return jsonify({'error': 'Unauthorized'}), 401
 
     try:
+        init_tables()
         conn = get_db()
         if not conn:
             return jsonify({'error': 'DB tidak tersedia'}), 500
 
         now = datetime.now(WIB).replace(tzinfo=None)
-        window_start = now - timedelta(hours=24)
-
         now_str = now.strftime('%Y-%m-%dT%H:%M')
+
+        print(f"[CRON] ========== START ({now_str}) ==========")
+
+        # ============ BAGIAN 1: PROMPT SCHEDULES (AI) ============
+        prompt_results = []
+        cur_ps = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur_ps.execute("""
+            SELECT * FROM prompt_schedules
+            WHERE is_active = TRUE
+              AND next_run_at IS NOT NULL
+              AND next_run_at <= %s
+            ORDER BY next_run_at ASC
+            LIMIT 5
+        """, (now,))
+        due_prompts = cur_ps.fetchall()
+        cur_ps.close()
+
+        print(f"[CRON] Prompt schedules due: {len(due_prompts)}")
+
+        for ps in due_prompts:
+            print(f"[CRON] Executing prompt_schedule id={ps['id']} '{ps.get('title')}'")
+
+            try:
+                cur_u = conn.cursor()
+                cur_u.execute("UPDATE prompt_schedules SET last_run_at = %s WHERE id = %s",
+                              (now, ps['id']))
+                conn.commit()
+                cur_u.close()
+            except: pass
+
+            res = execute_prompt_schedule(ps)
+            prompt_results.append(res)
+
+            # Simpan last_result
+            try:
+                cur_lr = conn.cursor()
+                cur_lr.execute("UPDATE prompt_schedules SET last_result = %s WHERE id = %s",
+                               (json.dumps(res)[:4000], ps['id']))
+                conn.commit()
+                cur_lr.close()
+            except: pass
+
+            next_run = calculate_next_run(ps, now)
+
+            try:
+                cur_u2 = conn.cursor()
+                if next_run:
+                    cur_u2.execute("""
+                        UPDATE prompt_schedules 
+                        SET next_run_at = %s, is_active = TRUE 
+                        WHERE id = %s
+                    """, (next_run, ps['id']))
+                else:
+                    cur_u2.execute("""
+                        UPDATE prompt_schedules 
+                        SET next_run_at = NULL, is_active = FALSE 
+                        WHERE id = %s
+                    """, (ps['id'],))
+                conn.commit()
+                cur_u2.close()
+            except Exception as e:
+                print(f"[CRON] Update next_run error: {e}")
+
+        # ============ BAGIAN 2: SCHEDULES BIASA (IG POSTING) ============
+        window_start = now - timedelta(hours=24)
         window_str = window_start.strftime('%Y-%m-%dT%H:%M')
 
-        print(f"[CRON] ========== START ==========")
-        print(f"[CRON] Server time (WIB): {now_str}")
-        print(f"[CRON] Window: {window_str} → {now_str}")
-
-        # DEBUG: cek semua jadwal pending
-        cur_debug = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur_debug.execute("SELECT id, time, status FROM schedules WHERE status = 'pending'")
-        all_pending = cur_debug.fetchall()
-        print(f"[CRON DEBUG] Total pending schedules: {len(all_pending)}")
-        for s in all_pending:
-            t = s.get('time') or ''
-            try:
-                t_clean = str(t).strip()
-                lewat = t_clean <= now_str
-                dalam_window = t_clean >= window_str
-                print(f"[CRON DEBUG]   id={s['id']}, time='{t_clean}', "
-                      f"lewat={lewat}, dalam_window={dalam_window}")
-            except Exception as ex:
-                print(f"[CRON DEBUG]   id={s['id']}, error debug: {ex}")
-        cur_debug.close()
-
-        # Query utama
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("""
             SELECT * FROM schedules 
@@ -276,26 +561,10 @@ def cron_execute_schedules():
             AND time >= %s
             ORDER BY time ASC
         """, (now_str, window_str))
-
         due_schedules = cur.fetchall()
         cur.close()
 
-        print(f"[CRON DEBUG] Query result: {len(due_schedules)} jadwal due")
-
-        if not due_schedules:
-            conn.close()
-            return jsonify({
-                'success': True,
-                'checked_at': now.isoformat(),
-                'due_count': 0,
-                'message': 'Tidak ada jadwal yang waktunya tayang',
-                'debug': {
-                    'now_wib': now_str,
-                    'window_start': window_str,
-                    'total_pending': len(all_pending),
-                    'pending_times': [s.get('time') for s in all_pending]
-                }
-            })
+        print(f"[CRON] IG schedules due: {len(due_schedules)}")
 
         results = []
         ig_user_id = os.environ.get('IG_USER_ID')
@@ -317,51 +586,35 @@ def cron_execute_schedules():
             try:
                 try:
                     videos = json.loads(sched.get('videos_json') or '[]')
-                except:
-                    videos = []
+                except: videos = []
                 try:
                     images = json.loads(sched.get('images_json') or '[]')
-                except:
-                    images = []
+                except: images = []
 
                 if not ig_user_id or not ig_token:
                     result['status'] = 'failed'
                     result['error'] = 'IG_USER_ID / IG_ACCESS_TOKEN belum di-set'
-                    result['media'] = {
-                        'videos': [v.get('name') for v in videos],
-                        'images': [i.get('name') for i in images]
-                    }
                     cur3 = conn.cursor()
-                    cur3.execute("""
-                        UPDATE schedules 
-                        SET status = 'failed', post_result = %s 
-                        WHERE id = %s
-                    """, (json.dumps(result), sched['id']))
-                    conn.commit()
-                    cur3.close()
+                    cur3.execute("UPDATE schedules SET status='failed', post_result=%s WHERE id=%s",
+                                 (json.dumps(result), sched['id']))
+                    conn.commit(); cur3.close()
                     results.append(result)
                     continue
 
                 media_url = None
                 is_video = True
                 if videos:
-                    media_url = videos[0]['url']
-                    is_video = True
+                    media_url = videos[0]['url']; is_video = True
                 elif images:
-                    media_url = images[0]['url']
-                    is_video = False
+                    media_url = images[0]['url']; is_video = False
 
                 if not media_url:
                     result['status'] = 'failed'
-                    result['error'] = 'Tidak ada media (video/gambar) di jadwal ini'
+                    result['error'] = 'Tidak ada media'
                     cur4 = conn.cursor()
-                    cur4.execute("""
-                        UPDATE schedules 
-                        SET status = 'failed', post_result = %s 
-                        WHERE id = %s
-                    """, (json.dumps(result), sched['id']))
-                    conn.commit()
-                    cur4.close()
+                    cur4.execute("UPDATE schedules SET status='failed', post_result=%s WHERE id=%s",
+                                 (json.dumps(result), sched['id']))
+                    conn.commit(); cur4.close()
                 else:
                     ig_result = post_to_instagram(
                         media_url=media_url,
@@ -377,51 +630,43 @@ def cron_execute_schedules():
                         result['media_id'] = ig_result['media_id']
                         result['container_id'] = ig_result['container_id']
                         cur5 = conn.cursor()
-                        cur5.execute("""
-                            UPDATE schedules 
-                            SET status = 'posted', posted_at = NOW(), post_result = %s 
-                            WHERE id = %s
-                        """, (json.dumps(result), sched['id']))
-                        conn.commit()
-                        cur5.close()
+                        cur5.execute("UPDATE schedules SET status='posted', posted_at=NOW(), post_result=%s WHERE id=%s",
+                                     (json.dumps(result), sched['id']))
+                        conn.commit(); cur5.close()
                     else:
                         result['status'] = 'failed'
                         result['error'] = ig_result.get('error', 'Unknown error')
                         cur6 = conn.cursor()
-                        cur6.execute("""
-                            UPDATE schedules 
-                            SET status = 'failed', post_result = %s 
-                            WHERE id = %s
-                        """, (json.dumps(result), sched['id']))
-                        conn.commit()
-                        cur6.close()
-
+                        cur6.execute("UPDATE schedules SET status='failed', post_result=%s WHERE id=%s",
+                                     (json.dumps(result), sched['id']))
+                        conn.commit(); cur6.close()
             except Exception as e:
                 result['status'] = 'failed'
                 result['error'] = str(e)
-                print(f"Cron error for schedule {sched['id']}: {e}")
                 try:
                     cur7 = conn.cursor()
-                    cur7.execute("""
-                        UPDATE schedules 
-                        SET status = 'failed', post_result = %s 
-                        WHERE id = %s
-                    """, (json.dumps(result), sched['id']))
-                    conn.commit()
-                    cur7.close()
+                    cur7.execute("UPDATE schedules SET status='failed', post_result=%s WHERE id=%s",
+                                 (json.dumps(result), sched['id']))
+                    conn.commit(); cur7.close()
                 except: pass
 
             results.append(result)
 
         conn.close()
-        print(f"[CRON] ========== END ({len(results)} processed) ==========")
+        print(f"[CRON] ========== END ==========")
+
         return jsonify({
             'success': True,
             'checked_at': now.isoformat(),
-            'due_count': len(due_schedules),
-            'results': results
+            'prompt_schedules': {
+                'due_count': len(due_prompts),
+                'results': prompt_results
+            },
+            'ig_schedules': {
+                'due_count': len(due_schedules),
+                'results': results
+            }
         })
-
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -468,12 +713,10 @@ def post_schedule_now():
 
         try:
             videos = json.loads(sched.get('videos_json') or '[]')
-        except:
-            videos = []
+        except: videos = []
         try:
             images = json.loads(sched.get('images_json') or '[]')
-        except:
-            images = []
+        except: images = []
 
         media_url = None
         is_video = True
@@ -714,6 +957,253 @@ def edit_image_agnes():
 
         return jsonify({'success': True, 'image_url': blob_result.url, 'pathname': blob_result.pathname})
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== BARU: PROMPT SCHEDULE CRUD ====================
+@app.route('/api/prompt-schedules/list', methods=['GET'])
+def list_prompt_schedules():
+    try:
+        init_tables()
+        conn = get_db()
+        if not conn: return jsonify({'error': 'DB tidak tersedia'}), 500
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM prompt_schedules ORDER BY created_at DESC")
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+
+        items = []
+        for r in rows:
+            items.append({
+                'id': r['id'],
+                'title': r['title'] or '',
+                'prompt': r['prompt'] or '',
+                'source_type': r['source_type'] or 'text',
+                'source_image_url': r['source_image_url'] or '',
+                'repeat_type': r['repeat_type'] or 'once',
+                'repeat_interval_min': r['repeat_interval_min'] or 0,
+                'time': r['time'] or '',
+                'day_of_week': r['day_of_week'],
+                'day_of_month': r['day_of_month'],
+                'next_run_at': r['next_run_at'].isoformat() if r.get('next_run_at') else '',
+                'last_run_at': r['last_run_at'].isoformat() if r.get('last_run_at') else '',
+                'is_active': bool(r['is_active']),
+                'auto_post': bool(r['auto_post']),
+                'platform': r['platform'] or '',
+                'account': r['account'] or '',
+                'caption': r['caption'] or '',
+                'post_delay_min': r['post_delay_min'] or 5,
+                'posted_schedule_id': r['posted_schedule_id'],
+                'last_result': r.get('last_result') or '',
+                'created_at': r['created_at'].isoformat() if r.get('created_at') else ''
+            })
+        return jsonify({'success': True, 'items': items})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/prompt-schedules/add', methods=['POST'])
+def add_prompt_schedule():
+    try:
+        data = request.json
+        init_tables()
+        conn = get_db()
+        if not conn: return jsonify({'error': 'DB tidak tersedia'}), 500
+
+        prompt = (data.get('prompt') or '').strip()
+        if not prompt:
+            return jsonify({'error': 'Prompt wajib diisi'}), 400
+
+        repeat_type = (data.get('repeat_type') or 'once').lower()
+
+        sched_for_calc = {
+            'repeat_type': repeat_type,
+            'repeat_interval_min': int(data.get('repeat_interval_min') or 0),
+            'time': data.get('time') or '',
+            'day_of_week': data.get('day_of_week'),
+            'day_of_month': data.get('day_of_month'),
+        }
+
+        now = datetime.now(WIB).replace(tzinfo=None)
+
+        if repeat_type == 'once':
+            start_at = data.get('start_at') or ''
+            if start_at:
+                try:
+                    next_run = datetime.strptime(start_at, '%Y-%m-%dT%H:%M')
+                except:
+                    next_run = now + timedelta(minutes=5)
+            else:
+                next_run = now + timedelta(minutes=5)
+        elif repeat_type == 'interval':
+            minutes = int(data.get('repeat_interval_min') or 60)
+            next_run = now + timedelta(minutes=minutes)
+        else:
+            next_run = calculate_next_run(sched_for_calc, now)
+            if not next_run:
+                next_run = now + timedelta(days=1)
+
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO prompt_schedules
+            (title, prompt, source_type, source_image_url,
+             repeat_type, repeat_interval_min, time, day_of_week, day_of_month,
+             next_run_at, is_active, auto_post, platform, account, caption, post_delay_min)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+        """, (
+            data.get('title', ''),
+            prompt,
+            data.get('source_type', 'text'),
+            data.get('source_image_url', ''),
+            repeat_type,
+            int(data.get('repeat_interval_min') or 0),
+            data.get('time', ''),
+            data.get('day_of_week'),
+            data.get('day_of_month'),
+            next_run,
+            bool(data.get('is_active', True)),
+            bool(data.get('auto_post', True)),
+            data.get('platform', ''),
+            data.get('account', ''),
+            data.get('caption', ''),
+            int(data.get('post_delay_min') or 5)
+        ))
+        new_id = cur.fetchone()[0]
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({'success': True, 'id': new_id, 'next_run_at': next_run.isoformat()})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/prompt-schedules/update', methods=['POST'])
+def update_prompt_schedule():
+    try:
+        data = request.json
+        pid = data.get('id')
+        if not pid: return jsonify({'error': 'ID wajib'}), 400
+        conn = get_db()
+        if not conn: return jsonify({'error': 'DB tidak tersedia'}), 500
+
+        fields = []
+        values = []
+        allowed = ['title','prompt','source_type','source_image_url','repeat_type',
+                   'repeat_interval_min','time','day_of_week','day_of_month',
+                   'is_active','auto_post','platform','account','caption','post_delay_min']
+        for f in allowed:
+            if f in data:
+                fields.append(f"{f} = %s")
+                values.append(data[f])
+
+        if not fields:
+            return jsonify({'error': 'Tidak ada field yang diupdate'}), 400
+
+        if any(k in data for k in ['repeat_type','repeat_interval_min','time','day_of_week','day_of_month']):
+            cur_get = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur_get.execute("SELECT * FROM prompt_schedules WHERE id = %s", (pid,))
+            row = cur_get.fetchone()
+            cur_get.close()
+            if row:
+                merged = dict(row)
+                merged.update(data)
+                now = datetime.now(WIB).replace(tzinfo=None)
+                if merged.get('repeat_type') == 'interval':
+                    next_run = now + timedelta(minutes=int(merged.get('repeat_interval_min') or 60))
+                else:
+                    next_run = calculate_next_run(merged, now)
+                if next_run:
+                    fields.append("next_run_at = %s")
+                    values.append(next_run)
+
+        values.append(pid)
+        cur = conn.cursor()
+        cur.execute(f"UPDATE prompt_schedules SET {', '.join(fields)} WHERE id = %s", values)
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/prompt-schedules/toggle', methods=['POST'])
+def toggle_prompt_schedule():
+    try:
+        data = request.json
+        pid = data.get('id')
+        if not pid: return jsonify({'error': 'ID wajib'}), 400
+        conn = get_db()
+        if not conn: return jsonify({'error': 'DB tidak tersedia'}), 500
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM prompt_schedules WHERE id = %s", (pid,))
+        row = cur.fetchone()
+        cur.close()
+        if not row:
+            conn.close()
+            return jsonify({'error': 'Tidak ditemukan'}), 404
+
+        new_active = not bool(row['is_active'])
+        next_run = row.get('next_run_at')
+
+        now = datetime.now(WIB).replace(tzinfo=None)
+        if new_active and (not next_run or next_run < now):
+            if row['repeat_type'] == 'interval':
+                next_run = now + timedelta(minutes=int(row['repeat_interval_min'] or 60))
+            else:
+                next_run = calculate_next_run(row, now) or (now + timedelta(minutes=5))
+
+        cur2 = conn.cursor()
+        cur2.execute("UPDATE prompt_schedules SET is_active = %s, next_run_at = %s WHERE id = %s",
+                     (new_active, next_run, pid))
+        conn.commit(); cur2.close(); conn.close()
+        return jsonify({'success': True, 'is_active': new_active})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/prompt-schedules/delete', methods=['POST'])
+def delete_prompt_schedule():
+    try:
+        pid = request.json.get('id')
+        if not pid: return jsonify({'error': 'ID wajib'}), 400
+        conn = get_db()
+        if not conn: return jsonify({'error': 'DB tidak tersedia'}), 500
+        cur = conn.cursor()
+        cur.execute("DELETE FROM prompt_schedules WHERE id = %s", (pid,))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/prompt-schedules/run-now', methods=['POST'])
+def run_prompt_schedule_now():
+    try:
+        pid = request.json.get('id')
+        if not pid: return jsonify({'error': 'ID wajib'}), 400
+        conn = get_db()
+        if not conn: return jsonify({'error': 'DB tidak tersedia'}), 500
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM prompt_schedules WHERE id = %s", (pid,))
+        row = cur.fetchone()
+        cur.close(); conn.close()
+        if not row:
+            return jsonify({'error': 'Tidak ditemukan'}), 404
+
+        result = execute_prompt_schedule(row)
+
+        # Simpan last_result
+        try:
+            conn2 = get_db()
+            if conn2:
+                cur2 = conn2.cursor()
+                cur2.execute("UPDATE prompt_schedules SET last_run_at = NOW(), last_result = %s WHERE id = %s",
+                             (json.dumps(result)[:4000], pid))
+                conn2.commit(); cur2.close(); conn2.close()
+        except: pass
+
+        return jsonify(result)
+    except Exception as e:
+        import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 

@@ -340,6 +340,153 @@
             </div>
         </main>
 
+        <!-- === BARU: SECTION PROMPT SCHEDULER === -->
+        <div id="promptSchedulerSection" class="max-w-[1600px] mx-auto px-3 sm:px-4 pb-6">
+            <div class="bg-gray-800 rounded-2xl border border-amber-500/40 overflow-hidden">
+                <div class="px-4 py-3 border-b border-amber-500/20 flex justify-between items-center bg-amber-500/5">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <h2 class="font-bold text-amber-400 text-sm">🤖 Scheduler Prompt AI (Agnes)</h2>
+                        <span id="promptSchedCountBadge" class="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">0</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="refreshPromptSchedules()" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1.5 rounded-lg" title="Refresh">🔄</button>
+                        <button onclick="openPromptSchedulerModal()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            Tambah
+                        </button>
+                    </div>
+                </div>
+                <div id="promptSchedulerList" class="p-3 space-y-2 max-h-[500px] overflow-y-auto">
+                    <p class="text-xs text-gray-500 italic text-center py-4">Memuat...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- === BARU: MODAL PROMPT SCHEDULER === -->
+        <div id="promptSchedulerModal" class="fixed inset-0 bg-black/70 modal-backdrop z-50 hidden items-center justify-center p-4">
+            <div class="bg-gray-800 rounded-2xl border border-amber-500/40 w-full max-w-2xl overflow-hidden max-h-[92vh] flex flex-col">
+                <div class="p-4 border-b border-amber-500/20 flex justify-between items-center bg-amber-500/5 flex-shrink-0">
+                    <h3 class="font-bold text-amber-400 flex items-center gap-2">
+                        <span id="psModalTitle">➕ Tambah Scheduler Prompt</span>
+                    </h3>
+                    <button onclick="closePromptSchedulerModal()" class="text-gray-400 hover:text-white">✕</button>
+                </div>
+                <div class="p-4 space-y-3 overflow-y-auto flex-1">
+                    <input type="hidden" id="psEditId"/>
+
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Judul (opsional)</label>
+                        <input type="text" id="psTitle" placeholder="Contoh: Video Promo Harian" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none"/>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Prompt AI <span class="text-red-400">*</span></label>
+                        <textarea id="psPrompt" rows="3" placeholder="Contoh: Buat video cinematic dengan pemandangan pantai sunset..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none resize-none"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Tipe Sumber</label>
+                            <select id="psSourceType" onchange="togglePsSourceImage()" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none">
+                                <option value="text">📝 Text-to-Video</option>
+                                <option value="image">🖼️ Image-to-Video</option>
+                            </select>
+                        </div>
+                        <div id="psSourceImageWrap" class="hidden">
+                            <label class="block text-xs text-gray-400 mb-1">URL Gambar Sumber</label>
+                            <select id="psSourceImageUrl" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none">
+                                <option value="">- Pilih gambar dari library -</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <hr class="border-gray-700"/>
+                    <p class="text-xs font-bold text-amber-400">⏰ Pengulangan</p>
+
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Tipe Repeat</label>
+                        <select id="psRepeatType" onchange="togglePsRepeatFields()" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none">
+                            <option value="once">🕐 Sekali Jalan</option>
+                            <option value="interval">⏱️ Tiap Interval (menit)</option>
+                            <option value="daily">📅 Harian (Daily)</option>
+                            <option value="weekly">📆 Mingguan (Weekly)</option>
+                            <option value="monthly">🗓️ Bulanan (Monthly)</option>
+                        </select>
+                    </div>
+
+                    <div id="psStartAtWrap">
+                        <label class="block text-xs text-gray-400 mb-1">Mulai Jalan (Opsional, kosong = 5 menit lagi)</label>
+                        <input type="datetime-local" id="psStartAt" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none"/>
+                    </div>
+
+                    <div id="psIntervalWrap" class="hidden">
+                        <label class="block text-xs text-gray-400 mb-1">Interval (menit)</label>
+                        <input type="number" id="psIntervalMin" value="60" min="1" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none"/>
+                        <p class="text-xs text-gray-500 mt-1">Contoh: 60 = tiap 1 jam, 30 = tiap 30 menit</p>
+                    </div>
+
+                    <div id="psTimeWrap" class="hidden">
+                        <label class="block text-xs text-gray-400 mb-1">Jam Jalan (HH:MM)</label>
+                        <input type="time" id="psTime" value="09:00" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none"/>
+                    </div>
+
+                    <div id="psDayOfWeekWrap" class="hidden">
+                        <label class="block text-xs text-gray-400 mb-1">Hari</label>
+                        <select id="psDayOfWeek" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none">
+                            <option value="0">Minggu</option>
+                            <option value="1">Senin</option>
+                            <option value="2">Selasa</option>
+                            <option value="3">Rabu</option>
+                            <option value="4">Kamis</option>
+                            <option value="5">Jumat</option>
+                            <option value="6">Sabtu</option>
+                        </select>
+                    </div>
+
+                    <div id="psDayOfMonthWrap" class="hidden">
+                        <label class="block text-xs text-gray-400 mb-1">Tanggal</label>
+                        <input type="number" id="psDayOfMonth" value="1" min="1" max="31" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none"/>
+                    </div>
+
+                    <hr class="border-gray-700"/>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="psAutoPost" checked onchange="togglePsAutoPost()" class="checkbox-custom"/>
+                        <label for="psAutoPost" class="text-xs text-gray-300 font-medium cursor-pointer">Auto-post ke Instagram setelah video jadi</label>
+                    </div>
+
+                    <div id="psAutoPostFields" class="space-y-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Platform Tujuan</label>
+                            <select id="psPlatform" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none">
+                                <option value="">- Pilih Akun Medsos -</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Caption Instagram</label>
+                            <textarea id="psCaption" rows="2" placeholder="Caption untuk posting IG..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none resize-none"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Delay Posting (menit setelah video jadi)</label>
+                            <input type="number" id="psPostDelay" value="5" min="0" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none"/>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="psIsActive" checked class="checkbox-custom"/>
+                        <label for="psIsActive" class="text-xs text-gray-300 font-medium cursor-pointer">Aktifkan scheduler</label>
+                    </div>
+                </div>
+                <div class="p-4 border-t border-amber-500/20 flex gap-2 flex-shrink-0">
+                    <button onclick="closePromptSchedulerModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2.5 rounded-lg text-sm">Batal</button>
+                    <button onclick="savePromptSchedule()" id="psSaveBtn" class="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-lg text-sm">💾 Simpan</button>
+                </div>
+                <div id="psStatus" class="hidden text-xs p-2 rounded-lg bg-gray-700/50 text-center mx-4 mb-4"></div>
+            </div>
+        </div>
+
         <!-- MODAL: UPLOAD -->
         <div id="uploadModal" class="fixed inset-0 bg-black/70 modal-backdrop z-50 hidden items-center justify-center p-4">
             <div class="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-md overflow-hidden">
@@ -642,6 +789,7 @@
             await updateUserButton();
             await renderScheduleList();
             await renderConnectedAccounts();
+            await refreshPromptSchedules();
             updateGridLayout();
             setDefaultScheduleTime();
         }
@@ -1705,21 +1853,53 @@
 
             updateComboLabels();
 
+            // Platform select untuk jadwal IG
             const platformSelect = document.getElementById('schedulePlatform');
-            const currentVal = platformSelect.value;
-            platformSelect.innerHTML = '<option value="">- Pilih -</option>';
-            const accounts = await loadMedsosAccounts();
-            if (accounts.length > 0) {
+            if (platformSelect) {
+                const currentVal = platformSelect.value;
+                platformSelect.innerHTML = '<option value="">- Pilih -</option>';
+                const accounts = await loadMedsosAccounts();
+                if (accounts.length > 0) {
+                    accounts.forEach(acc => {
+                        const opt = document.createElement('option');
+                        opt.value = `${acc.platform}:${acc.username}`;
+                        opt.textContent = `${getPlatformIcon(acc.platform)} ${acc.platform} - ${acc.username}`;
+                        platformSelect.appendChild(opt);
+                    });
+                } else {
+                    platformSelect.innerHTML = '<option value="">- Belum ada akun -</option>';
+                }
+                if (currentVal) platformSelect.value = currentVal;
+            }
+
+            // Platform select untuk prompt scheduler
+            const psPlatform = document.getElementById('psPlatform');
+            if (psPlatform) {
+                const currentPs = psPlatform.value;
+                psPlatform.innerHTML = '<option value="">- Pilih Akun Medsos -</option>';
+                const accounts = await loadMedsosAccounts();
                 accounts.forEach(acc => {
                     const opt = document.createElement('option');
                     opt.value = `${acc.platform}:${acc.username}`;
                     opt.textContent = `${getPlatformIcon(acc.platform)} ${acc.platform} - ${acc.username}`;
-                    platformSelect.appendChild(opt);
+                    psPlatform.appendChild(opt);
                 });
-            } else {
-                platformSelect.innerHTML = '<option value="">- Belum ada akun -</option>';
+                if (currentPs) psPlatform.value = currentPs;
             }
-            if (currentVal) platformSelect.value = currentVal;
+
+            // Source image dropdown untuk prompt scheduler
+            const psSourceImg = document.getElementById('psSourceImageUrl');
+            if (psSourceImg) {
+                const currentImg = psSourceImg.value;
+                psSourceImg.innerHTML = '<option value="">- Pilih gambar dari library -</option>';
+                allFiles.filter(f => f.media_type === 'image').forEach(f => {
+                    const opt = document.createElement('option');
+                    opt.value = f.url;
+                    opt.textContent = `${f.type === 'image_ai' ? '✨' : '🖼️'} ${f.displayName}`;
+                    psSourceImg.appendChild(opt);
+                });
+                if (currentImg) psSourceImg.value = currentImg;
+            }
         }
 
         async function saveSchedule() {
@@ -1776,7 +1956,6 @@
             }
         }
 
-        // ==================== RENDER SCHEDULE LIST (dengan status) ====================
         async function renderScheduleList() {
             const container = document.getElementById('scheduleList');
             const schedules = await loadSchedules();
@@ -1793,7 +1972,6 @@
                     } catch(e) {}
                     const isPast = new Date(s.time) < new Date();
 
-                    // === STATUS BADGE ===
                     const statusMap = {
                         'pending':    { label: '⏳ Pending',    cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
                         'processing': { label: '🔄 Processing', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
@@ -1802,7 +1980,6 @@
                     };
                     const st = statusMap[s.status] || statusMap['pending'];
 
-                    // === PARSE ERROR DARI post_result ===
                     let errorMsg = '';
                     if (s.status === 'failed' && s.post_result) {
                         try {
@@ -1904,8 +2081,9 @@
             try {
                 const res = await fetch(url);
                 const data = await res.json();
-                alert('Cron result:\n' + JSON.stringify(data, null, 2).substring(0, 800));
+                alert('Cron result:\n' + JSON.stringify(data, null, 2).substring(0, 1500));
                 await renderScheduleList();
+                await refreshPromptSchedules();
             } catch(e) {
                 alert('Error: ' + e.message);
             }
@@ -1914,6 +2092,297 @@
         function getPlatformIcon(platform) {
             const icons = { instagram: '📷', tiktok: '🎵', youtube: '▶️', facebook: '👤' };
             return icons[platform] || '🔗';
+        }
+
+        // ==================== === BARU: PROMPT SCHEDULER ====================
+        async function refreshPromptSchedules() {
+            const container = document.getElementById('promptSchedulerList');
+            if (!container) return;
+            container.innerHTML = '<p class="text-xs text-gray-500 italic text-center py-4">Memuat...</p>';
+
+            try {
+                const res = await fetch('/api/prompt-schedules/list');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Gagal memuat');
+
+                const items = data.items || [];
+                document.getElementById('promptSchedCountBadge').textContent = items.length;
+
+                if (items.length === 0) {
+                    container.innerHTML = '<p class="text-xs text-gray-500 italic text-center py-6">Belum ada scheduler prompt. Klik "+ Tambah" untuk membuat.</p>';
+                    return;
+                }
+
+                container.innerHTML = items.map(item => {
+                    const repeatLabel = {
+                        'once': '🕐 Sekali',
+                        'interval': `⏱️ Tiap ${item.repeat_interval_min} menit`,
+                        'daily': `📅 Harian ${item.time || ''}`,
+                        'weekly': `📆 Mingguan ${['Min','Sen','Sel','Rab','Kam','Jum','Sab'][item.day_of_week || 0]} ${item.time || ''}`,
+                        'monthly': `🗓️ Tgl ${item.day_of_month || 1} ${item.time || ''}`
+                    }[item.repeat_type] || item.repeat_type;
+
+                    let nextRunStr = '-';
+                    if (item.next_run_at) {
+                        try {
+                            const d = new Date(item.next_run_at);
+                            nextRunStr = d.toLocaleString('id-ID', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
+                        } catch(e) {}
+                    }
+
+                    let lastRunStr = '';
+                    if (item.last_run_at) {
+                        try {
+                            const d = new Date(item.last_run_at);
+                            lastRunStr = d.toLocaleString('id-ID', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+                        } catch(e) {}
+                    }
+
+                    let lastResultMsg = '';
+                    let lastResultOk = false;
+                    if (item.last_result) {
+                        try {
+                            const lr = JSON.parse(item.last_result);
+                            lastResultOk = lr.success === true;
+                            lastResultMsg = lr.error || (lr.video_url ? 'Video AI berhasil dibuat' : '');
+                        } catch(e) { lastResultMsg = item.last_result.substring(0, 100); }
+                    }
+
+                    const activeBadge = item.is_active 
+                        ? '<span class="text-xs px-2 py-0.5 rounded border bg-green-500/20 text-green-400 border-green-500/30">✅ Aktif</span>'
+                        : '<span class="text-xs px-2 py-0.5 rounded border bg-gray-500/20 text-gray-400 border-gray-500/30">⏸️ Non-aktif</span>';
+
+                    const autoPostBadge = item.auto_post
+                        ? `<span class="text-xs px-2 py-0.5 rounded border bg-blue-500/20 text-blue-400 border-blue-500/30">📤 Auto-post</span>`
+                        : '';
+
+                    return `
+                        <div class="bg-gray-700/50 border border-amber-500/20 rounded-lg p-3">
+                            <div class="flex justify-between items-start gap-3">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap mb-1">
+                                        <p class="text-sm font-bold text-amber-300">${item.title || 'Untitled Scheduler'}</p>
+                                        ${activeBadge}
+                                        ${autoPostBadge}
+                                    </div>
+                                    <p class="text-xs text-gray-300 mb-1.5 line-clamp-2" title="${item.prompt}">📝 ${item.prompt}</p>
+                                    <div class="flex items-center gap-2 flex-wrap text-xs">
+                                        <span class="text-amber-400">${repeatLabel}</span>
+                                        ${item.platform ? `<span class="text-purple-400">${getPlatformIcon(item.platform)} ${item.platform} - @${item.account}</span>` : ''}
+                                    </div>
+                                    <div class="flex items-center gap-3 flex-wrap text-xs mt-1.5">
+                                        <span class="text-gray-400">⏰ Next: <span class="text-white">${nextRunStr}</span></span>
+                                        ${lastRunStr ? `<span class="text-gray-400">🔁 Last: <span class="text-gray-300">${lastRunStr}</span></span>` : ''}
+                                    </div>
+                                    ${lastResultMsg ? `
+                                        <div class="mt-1.5 text-xs ${lastResultOk ? 'text-green-400' : 'text-red-400'}">
+                                            ${lastResultOk ? '✅' : '❌'} ${lastResultMsg.substring(0, 150)}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                <div class="flex flex-col gap-1 flex-shrink-0">
+                                    <button onclick='runPromptScheduleNow(${item.id})' class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded" title="Jalankan sekarang">▶️ Run</button>
+                                    <button onclick='togglePromptSchedule(${item.id})' class="text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded" title="Aktif/Non-aktif">${item.is_active ? '⏸️' : '▶️'}</button>
+                                    <button onclick='editPromptSchedule(${item.id})' class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-2 py-1 rounded" title="Edit">✏️</button>
+                                    <button onclick='deletePromptSchedule(${item.id})' class="text-xs bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded" title="Hapus">🗑️</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch(e) {
+                container.innerHTML = `<p class="text-xs text-red-400 italic text-center py-4">Error: ${e.message}</p>`;
+            }
+        }
+
+        let editingPromptScheduleId = null;
+
+        async function openPromptSchedulerModal(item = null) {
+            editingPromptScheduleId = item ? item.id : null;
+            document.getElementById('psModalTitle').textContent = item ? '✏️ Edit Scheduler Prompt' : '➕ Tambah Scheduler Prompt';
+            document.getElementById('psEditId').value = item ? item.id : '';
+            document.getElementById('psTitle').value = item ? (item.title || '') : '';
+            document.getElementById('psPrompt').value = item ? (item.prompt || '') : '';
+            document.getElementById('psSourceType').value = item ? (item.source_type || 'text') : 'text';
+            document.getElementById('psRepeatType').value = item ? (item.repeat_type || 'once') : 'once';
+            document.getElementById('psIntervalMin').value = item ? (item.repeat_interval_min || 60) : 60;
+            document.getElementById('psTime').value = item ? (item.time || '09:00') : '09:00';
+            document.getElementById('psDayOfWeek').value = item ? (item.day_of_week || 0) : 0;
+            document.getElementById('psDayOfMonth').value = item ? (item.day_of_month || 1) : 1;
+            document.getElementById('psAutoPost').checked = item ? (item.auto_post !== false) : true;
+            document.getElementById('psCaption').value = item ? (item.caption || '') : '';
+            document.getElementById('psPostDelay').value = item ? (item.post_delay_min || 5) : 5;
+            document.getElementById('psIsActive').checked = item ? (item.is_active !== false) : true;
+            document.getElementById('psStartAt').value = '';
+
+            // Populate platform & source image
+            await populateMediaDropdowns();
+            if (item) {
+                if (item.platform && item.account) {
+                    document.getElementById('psPlatform').value = `${item.platform}:${item.account}`;
+                }
+                if (item.source_image_url) {
+                    document.getElementById('psSourceImageUrl').value = item.source_image_url;
+                }
+            }
+
+            togglePsSourceImage();
+            togglePsRepeatFields();
+            togglePsAutoPost();
+
+            document.getElementById('psStatus').classList.add('hidden');
+            document.getElementById('promptSchedulerModal').classList.remove('hidden');
+            document.getElementById('promptSchedulerModal').classList.add('flex');
+        }
+
+        function closePromptSchedulerModal() {
+            document.getElementById('promptSchedulerModal').classList.add('hidden');
+            document.getElementById('promptSchedulerModal').classList.remove('flex');
+            editingPromptScheduleId = null;
+        }
+
+        function togglePsSourceImage() {
+            const v = document.getElementById('psSourceType').value;
+            document.getElementById('psSourceImageWrap').classList.toggle('hidden', v !== 'image');
+        }
+
+        function togglePsRepeatFields() {
+            const v = document.getElementById('psRepeatType').value;
+            document.getElementById('psStartAtWrap').classList.toggle('hidden', v !== 'once');
+            document.getElementById('psIntervalWrap').classList.toggle('hidden', v !== 'interval');
+            document.getElementById('psTimeWrap').classList.toggle('hidden', !['daily','weekly','monthly'].includes(v));
+            document.getElementById('psDayOfWeekWrap').classList.toggle('hidden', v !== 'weekly');
+            document.getElementById('psDayOfMonthWrap').classList.toggle('hidden', v !== 'monthly');
+        }
+
+        function togglePsAutoPost() {
+            const checked = document.getElementById('psAutoPost').checked;
+            document.getElementById('psAutoPostFields').classList.toggle('hidden', !checked);
+        }
+
+        async function savePromptSchedule() {
+            const id = document.getElementById('psEditId').value;
+            const prompt = document.getElementById('psPrompt').value.trim();
+            if (!prompt) { alert('Prompt wajib diisi!'); return; }
+
+            const payload = {
+                title: document.getElementById('psTitle').value.trim(),
+                prompt: prompt,
+                source_type: document.getElementById('psSourceType').value,
+                source_image_url: document.getElementById('psSourceImageUrl').value,
+                repeat_type: document.getElementById('psRepeatType').value,
+                repeat_interval_min: parseInt(document.getElementById('psIntervalMin').value) || 0,
+                time: document.getElementById('psTime').value,
+                day_of_week: parseInt(document.getElementById('psDayOfWeek').value),
+                day_of_month: parseInt(document.getElementById('psDayOfMonth').value),
+                is_active: document.getElementById('psIsActive').checked,
+                auto_post: document.getElementById('psAutoPost').checked,
+                caption: document.getElementById('psCaption').value.trim(),
+                post_delay_min: parseInt(document.getElementById('psPostDelay').value) || 5,
+                start_at: document.getElementById('psStartAt').value,
+            };
+
+            const platformVal = document.getElementById('psPlatform').value;
+            if (platformVal) {
+                const [p, a] = platformVal.split(':');
+                payload.platform = p;
+                payload.account = a;
+            }
+
+            if (id) payload.id = parseInt(id);
+
+            const statusDiv = document.getElementById('psStatus');
+            statusDiv.classList.remove('hidden');
+            statusDiv.innerHTML = '<span class="text-blue-400">💾 Menyimpan...</span>';
+
+            const btn = document.getElementById('psSaveBtn');
+            btn.disabled = true; btn.style.opacity = '0.5';
+
+            try {
+                const url = id ? '/api/prompt-schedules/update' : '/api/prompt-schedules/add';
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Gagal');
+
+                statusDiv.innerHTML = '<span class="text-green-400">✅ Tersimpan!</span>';
+                setTimeout(() => {
+                    closePromptSchedulerModal();
+                    refreshPromptSchedules();
+                }, 800);
+            } catch(e) {
+                statusDiv.innerHTML = `<span class="text-red-400">❌ ${e.message}</span>`;
+            } finally {
+                btn.disabled = false; btn.style.opacity = '1';
+            }
+        }
+
+        async function editPromptSchedule(id) {
+            try {
+                const res = await fetch('/api/prompt-schedules/list');
+                const data = await res.json();
+                if (!data.success) throw new Error('Gagal memuat');
+                const item = (data.items || []).find(x => x.id === id);
+                if (!item) { alert('Tidak ditemukan'); return; }
+                await openPromptSchedulerModal(item);
+            } catch(e) { alert('❌ ' + e.message); }
+        }
+
+        async function togglePromptSchedule(id) {
+            try {
+                const res = await fetch('/api/prompt-schedules/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Gagal');
+                await refreshPromptSchedules();
+            } catch(e) { alert('❌ ' + e.message); }
+        }
+
+        async function deletePromptSchedule(id) {
+            if (!confirm('Hapus scheduler prompt ini?')) return;
+            try {
+                const res = await fetch('/api/prompt-schedules/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Gagal');
+                await refreshPromptSchedules();
+            } catch(e) { alert('❌ ' + e.message); }
+        }
+
+        async function runPromptScheduleNow(id) {
+            if (!confirm('Jalankan sekarang? Proses generate video AI bisa makan 1-3 menit.')) return;
+            const container = document.getElementById('promptSchedulerList');
+            const old = container.innerHTML;
+            container.innerHTML = '<div class="text-center py-6"><div class="spinner mx-auto mb-3"></div><p class="text-xs text-amber-400">Menjalankan scheduler... Mohon tunggu 1-3 menit...</p></div>';
+
+            try {
+                const res = await fetch('/api/prompt-schedules/run-now', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('✅ Berhasil! Video AI sudah dibuat.' + (data.posted_schedule_id ? `\nAuto-post dijadwalkan (schedule ID: ${data.posted_schedule_id}).` : ''));
+                } else {
+                    alert('❌ Gagal: ' + (data.error || 'Unknown error'));
+                }
+                await refreshPromptSchedules();
+                await loadFiles();
+                await renderScheduleList();
+            } catch(e) {
+                alert('❌ Error: ' + e.message);
+                container.innerHTML = old;
+            }
         }
 
         // ==================== SUBMIT TO AI ====================
@@ -2191,6 +2660,18 @@
         window.setPrimaryImage = setPrimaryImage;
         window.toggleCombo = toggleCombo;
         window.clearComboSelection = clearComboSelection;
+        // BARU
+        window.refreshPromptSchedules = refreshPromptSchedules;
+        window.openPromptSchedulerModal = openPromptSchedulerModal;
+        window.closePromptSchedulerModal = closePromptSchedulerModal;
+        window.togglePsSourceImage = togglePsSourceImage;
+        window.togglePsRepeatFields = togglePsRepeatFields;
+        window.togglePsAutoPost = togglePsAutoPost;
+        window.savePromptSchedule = savePromptSchedule;
+        window.editPromptSchedule = editPromptSchedule;
+        window.togglePromptSchedule = togglePromptSchedule;
+        window.deletePromptSchedule = deletePromptSchedule;
+        window.runPromptScheduleNow = runPromptScheduleNow;
     </script>
 </body>
 </html>
