@@ -181,7 +181,7 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
                 'access_token': access_token
             }
 
-        create_res = req_lib.post(create_url, data=create_params, timeout=60)
+        create_res = req_lib.post(create_url, data=create_params, timeout=(10, 90))
         create_data = create_res.json()
         print(f"[IG] Create container: {create_data}")
 
@@ -198,7 +198,7 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
                 status_res = req_lib.get(status_url, params={
                     'fields': 'status_code,status',
                     'access_token': access_token
-                }, timeout=30)
+                }, timeout=(10, 60))
                 status_data = status_res.json()
                 status_code = status_data.get('status_code')
                 print(f"[IG] Polling {i+1}/30: {status_code}")
@@ -220,7 +220,7 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
             publish_res = req_lib.post(publish_url, data={
                 'creation_id': container_id,
                 'access_token': access_token
-            }, timeout=60)
+            }, timeout=(10, 90))
             publish_data = publish_res.json()
             print(f"[IG] Publish attempt {attempt+1}/5: {publish_data}")
 
@@ -252,7 +252,7 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
         return {'success': False, 'error': str(e)}
 
 
-# ==================== BARU: HITUNG NEXT RUN ====================
+# ==================== HITUNG NEXT RUN ====================
 def calculate_next_run(sched, from_time=None):
     """
     Hitung kapan prompt schedule berikutnya harus jalan.
@@ -312,10 +312,10 @@ def calculate_next_run(sched, from_time=None):
     return None
 
 
-# ==================== BARU: CORE EKSEKUSI PROMPT SCHEDULE ====================
+# ==================== CORE EKSEKUSI PROMPT SCHEDULE (REVISED) ====================
 def execute_prompt_schedule(sched):
     """
-    1. Kirim prompt ke Agnes AI
+    1. Kirim prompt ke Agnes AI (dengan retry + timeout lebih panjang)
     2. Tunggu sampai selesai
     3. Simpan hasil ke Vercel Blob (Video AI)
     4. Kalau auto_post: buat entry baru di tabel schedules untuk posting IG
@@ -337,7 +337,7 @@ def execute_prompt_schedule(sched):
         source_type = (sched.get('source_type') or 'text').lower()
         source_image_url = sched.get('source_image_url') or ''
 
-        # === STEP 1: SUBMIT KE AGNES ===
+        # === STEP 1: SUBMIT KE AGNES (DENGAN RETRY) ===
         result['step'] = 'submit_agnes'
         submit_url = "https://apihub.agnes-ai.com/v1/videos"
         headers = {"Authorization": f"Bearer {agnes_api_key}", "Content-Type": "application/json"}
@@ -350,26 +350,56 @@ def execute_prompt_schedule(sched):
                 "image": source_image_url
             }
         else:
-            # text-to-video
             payload = {
                 "model": "agnes-video-v2.0", "prompt": prompt,
                 "height": 768, "width": 1152,
                 "num_frames": 121, "frame_rate": 24,
             }
-            # Kalau ada default image di env, pakai sebagai referensi
             default_img = os.environ.get('AGNES_DEFAULT_IMAGE')
             if default_img:
                 payload["image"] = default_img
 
-        submit_res = req_lib.post(submit_url, headers=headers, json=payload, timeout=60)
-        submit_data = submit_res.json()
-        video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
+        # Retry submit hingga 3x dengan timeout lebih panjang
+        submit_data = None
+        last_submit_error = None
+        for attempt in range(3):
+            try:
+                print(f"[PromptSched] Submit ke Agnes attempt {attempt+1}/3 (timeout=180s)...")
+                submit_res = req_lib.post(
+                    submit_url, headers=headers, json=payload,
+                    timeout=(30, 180)  # (connect_timeout, read_timeout)
+                )
+                submit_data = submit_res.json()
+                print(f"[PromptSched] Submit response: {str(submit_data)[:300]}")
+                break
+            except req_lib.exceptions.ReadTimeout as e:
+                last_submit_error = f"Read timeout attempt {attempt+1}: {e}"
+                print(f"[PromptSched] ⚠️ {last_submit_error}")
+                if attempt < 2:
+                    wait = 5 + (attempt * 5)
+                    print(f"[PromptSched] Retry dalam {wait} detik...")
+                    time.sleep(wait)
+            except req_lib.exceptions.ConnectionError as e:
+                last_submit_error = f"Connection error attempt {attempt+1}: {e}"
+                print(f"[PromptSched] ⚠️ {last_submit_error}")
+                if attempt < 2:
+                    time.sleep(5)
+            except Exception as e:
+                last_submit_error = str(e)
+                print(f"[PromptSched] ⚠️ Submit error: {last_submit_error}")
+                break
 
+        if not submit_data:
+            result['error'] = f'Gagal submit ke Agnes setelah 3x retry: {last_submit_error}'
+            return result
+
+        video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
         if not video_id:
             result['error'] = f'Gagal submit ke Agnes: {submit_data}'
             return result
 
         result['agnes_video_id'] = video_id
+        print(f"[PromptSched] ✅ Video ID: {video_id}")
 
         # === STEP 2: POLLING STATUS ===
         result['step'] = 'polling'
@@ -379,16 +409,25 @@ def execute_prompt_schedule(sched):
         for i in range(60):  # max 10 menit
             time.sleep(10)
             try:
-                r = req_lib.get(result_url, headers={"Authorization": f"Bearer {agnes_api_key}"}, timeout=30)
+                r = req_lib.get(
+                    result_url,
+                    headers={"Authorization": f"Bearer {agnes_api_key}"},
+                    timeout=(10, 60)
+                )
                 result_data = r.json()
                 status = result_data.get('status') or result_data.get('data', {}).get('status')
+                print(f"[PromptSched] Polling {i+1}/60: {status}")
                 if status == 'completed':
                     break
                 elif status == 'failed':
                     result['error'] = f'Agnes gagal: {result_data}'
                     return result
+            except req_lib.exceptions.ReadTimeout:
+                print(f"[PromptSched] Polling {i+1}/60: timeout, lanjut polling...")
+                continue
             except Exception as ex:
                 print(f"[PromptSched] Polling error: {ex}")
+                continue
 
         if not result_data or (result_data.get('status') != 'completed'):
             result['error'] = 'Timeout menunggu Agnes AI'
@@ -403,7 +442,7 @@ def execute_prompt_schedule(sched):
 
         # === STEP 3: DOWNLOAD & UPLOAD KE BLOB ===
         result['step'] = 'upload_blob'
-        video_dl = req_lib.get(output_url, timeout=180)
+        video_dl = req_lib.get(output_url, timeout=(30, 300))
         if video_dl.status_code != 200:
             result['error'] = f'Gagal download video: HTTP {video_dl.status_code}'
             return result
@@ -469,7 +508,7 @@ def execute_prompt_schedule(sched):
         return result
 
 
-# ==================== CRON: EXECUTE (UPDATED) ====================
+# ==================== CRON: EXECUTE ====================
 @app.route('/api/cron/execute-schedules', methods=['GET'])
 def cron_execute_schedules():
     cron_secret = os.environ.get('CRON_SECRET')
@@ -767,7 +806,7 @@ def post_schedule_now():
         return jsonify({'error': str(e)}), 500
 
 
-# ==================== AGNES AI VIDEO ====================
+# ==================== AGNES AI VIDEO (REVISED: timeout & retry) ====================
 @app.route('/api/edit-video', methods=['POST'])
 def edit_video_agnes():
     data = request.json
@@ -806,20 +845,34 @@ def edit_video_agnes():
             }
 
         headers = {"Authorization": f"Bearer {agnes_api_key}", "Content-Type": "application/json"}
-        submit_res = req_lib.post(submit_url, headers=headers, json=submit_payload, timeout=60)
-        submit_data = submit_res.json()
+        submit_data = None
+        for attempt in range(3):
+            try:
+                submit_res = req_lib.post(submit_url, headers=headers, json=submit_payload, timeout=(30, 180))
+                submit_data = submit_res.json()
+                break
+            except req_lib.exceptions.ReadTimeout:
+                if attempt < 2: time.sleep(5)
+            except Exception:
+                break
+
+        if not submit_data:
+            return jsonify({'error': 'Gagal submit ke Agnes (timeout)'}), 500
 
         video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
-        if (not submit_res.ok or not video_id) and is_video_input:
+        if (not video_id) and is_video_input:
             fallback = {
                 "model": "agnes-video-v2.0", "prompt": prompt,
                 "height": 768, "width": 1152,
                 "num_frames": 121, "frame_rate": 24,
                 "image": source_url
             }
-            submit_res = req_lib.post(submit_url, headers=headers, json=fallback, timeout=60)
-            submit_data = submit_res.json()
-            video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
+            try:
+                submit_res = req_lib.post(submit_url, headers=headers, json=fallback, timeout=(30, 180))
+                submit_data = submit_res.json()
+                video_id = submit_data.get('video_id') or submit_data.get('id') or submit_data.get('task_id')
+            except Exception:
+                pass
 
         if not video_id:
             return jsonify({'error': f'Gagal submit: {submit_data}'}), 500
@@ -829,11 +882,13 @@ def edit_video_agnes():
         for i in range(60):
             time.sleep(10)
             try:
-                r = req_lib.get(result_url, headers={"Authorization": f"Bearer {agnes_api_key}"}, timeout=30)
+                r = req_lib.get(result_url, headers={"Authorization": f"Bearer {agnes_api_key}"}, timeout=(10, 60))
                 result_data = r.json()
                 status = result_data.get('status') or result_data.get('data', {}).get('status')
                 if status == 'completed': break
                 elif status == 'failed': return jsonify({'error': f"Agnes gagal: {result_data}"}), 500
+            except req_lib.exceptions.ReadTimeout:
+                continue
             except: pass
 
         if not result_data or result_data.get('status') != 'completed':
@@ -845,7 +900,7 @@ def edit_video_agnes():
         if not output_url:
             return jsonify({'error': 'URL tidak ditemukan'}), 500
 
-        video_dl = req_lib.get(output_url, timeout=120)
+        video_dl = req_lib.get(output_url, timeout=(30, 300))
         filename = f"ai_edit_{int(time.time())}.mp4"
         blob_result = put(filename, video_dl.content, access='public', multipart=True)
 
@@ -857,7 +912,7 @@ def edit_video_agnes():
         return jsonify({'error': str(e)}), 500
 
 
-# ==================== AGNES IMAGE-TO-VIDEO ====================
+# ==================== AGNES IMAGE-TO-VIDEO (REVISED) ====================
 @app.route('/api/image-to-video', methods=['POST'])
 def image_to_video_agnes():
     data = request.json
@@ -881,8 +936,20 @@ def image_to_video_agnes():
         }
         headers = {"Authorization": f"Bearer {agnes_api_key}", "Content-Type": "application/json"}
 
-        res = req_lib.post(submit_url, headers=headers, json=payload, timeout=60)
-        res_data = res.json()
+        res_data = None
+        for attempt in range(3):
+            try:
+                res = req_lib.post(submit_url, headers=headers, json=payload, timeout=(30, 180))
+                res_data = res.json()
+                break
+            except req_lib.exceptions.ReadTimeout:
+                if attempt < 2: time.sleep(5)
+            except Exception:
+                break
+
+        if not res_data:
+            return jsonify({'error': 'Gagal submit ke Agnes (timeout)'}), 500
+
         video_id = res_data.get('video_id') or res_data.get('id') or res_data.get('task_id')
         if not video_id:
             return jsonify({'error': f'Gagal submit: {res_data}'}), 500
@@ -892,11 +959,13 @@ def image_to_video_agnes():
         for i in range(60):
             time.sleep(10)
             try:
-                r = req_lib.get(result_url, headers={"Authorization": f"Bearer {agnes_api_key}"}, timeout=30)
+                r = req_lib.get(result_url, headers={"Authorization": f"Bearer {agnes_api_key}"}, timeout=(10, 60))
                 result_data = r.json()
                 status = result_data.get('status') or result_data.get('data', {}).get('status')
                 if status == 'completed': break
                 elif status == 'failed': return jsonify({'error': 'Agnes gagal'}), 500
+            except req_lib.exceptions.ReadTimeout:
+                continue
             except: pass
 
         if not result_data or result_data.get('status') != 'completed':
@@ -908,7 +977,7 @@ def image_to_video_agnes():
         if not output_url:
             return jsonify({'error': 'URL tidak ditemukan'}), 500
 
-        video_dl = req_lib.get(output_url, timeout=120)
+        video_dl = req_lib.get(output_url, timeout=(30, 300))
         filename = f"ai_edit_{int(time.time())}.mp4"
         blob_result = put(filename, video_dl.content, access='public', multipart=True)
 
@@ -940,7 +1009,7 @@ def edit_image_agnes():
         }
         headers = {"Authorization": f"Bearer {agnes_api_key}", "Content-Type": "application/json"}
 
-        res = req_lib.post(url, headers=headers, json=payload, timeout=120)
+        res = req_lib.post(url, headers=headers, json=payload, timeout=(30, 180))
         res_data = res.json()
         if not res.ok:
             return jsonify({'error': f'Agnes error: {res_data}'}), 500
@@ -951,7 +1020,7 @@ def edit_image_agnes():
         if not image_result_url:
             return jsonify({'error': 'URL gambar tidak ditemukan'}), 500
 
-        img_dl = req_lib.get(image_result_url, timeout=60)
+        img_dl = req_lib.get(image_result_url, timeout=(30, 120))
         filename = f"ai_edit_image_{int(time.time())}.png"
         blob_result = put(filename, img_dl.content, access='public', multipart=True)
 
@@ -960,7 +1029,7 @@ def edit_image_agnes():
         return jsonify({'error': str(e)}), 500
 
 
-# ==================== BARU: PROMPT SCHEDULE CRUD ====================
+# ==================== PROMPT SCHEDULE CRUD ====================
 @app.route('/api/prompt-schedules/list', methods=['GET'])
 def list_prompt_schedules():
     try:
@@ -1618,7 +1687,7 @@ def rename_file():
         if safe_name == old_pathname:
             return jsonify({'success': True})
 
-        resp = req_lib.get(old_url)
+        resp = req_lib.get(old_url, timeout=(30, 300))
         if resp.status_code != 200:
             return jsonify({'error': 'Gagal download'}), 500
         result = put(safe_name, resp.content, access='public', multipart=True)
