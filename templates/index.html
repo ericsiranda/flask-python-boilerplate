@@ -130,6 +130,63 @@
             font-weight: 600;
             border: 1px solid;
         }
+
+        /* === BARU: TABLE STYLE === */
+        .resume-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 12px;
+        }
+        .resume-table thead th {
+            background: #1f2937;
+            color: #9ca3af;
+            font-weight: 600;
+            text-align: left;
+            padding: 10px 12px;
+            border-bottom: 1px solid #374151;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            white-space: nowrap;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .resume-table tbody td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #374151;
+            vertical-align: top;
+            color: #e5e7eb;
+        }
+        .resume-table tbody tr {
+            transition: background 0.15s;
+        }
+        .resume-table tbody tr:hover {
+            background: rgba(55, 65, 81, 0.4);
+        }
+        .resume-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .badge-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 10px;
+            font-weight: 600;
+            border: 1px solid;
+            white-space: nowrap;
+        }
+
+        .cell-truncate {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen font-sans">
@@ -196,176 +253,285 @@
             </div>
         </nav>
 
-        <main id="mainGrid" class="max-w-[1600px] mx-auto p-3 sm:p-4 grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4" style="min-height: calc(100vh - 60px);">
-            <!-- KOLOM 1: MEDIA LIST -->
-            <div id="videoListColumn" class="col-span-1 md:col-span-5 bg-gray-800 rounded-2xl border border-gray-700 flex flex-col overflow-hidden" style="max-height: 50vh; min-height: 300px;">
-                <div class="px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-700 flex justify-between items-center gap-2 flex-shrink-0">
-                    <h2 class="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
-                        📁 Media <span id="videoCountBadge" class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">0</span>
-                    </h2>
-                    <div class="flex items-center gap-1 sm:gap-1.5">
-                        <button onclick="openUploadModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 px-2 sm:px-3 rounded-lg flex items-center gap-1">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                            <span class="hidden sm:inline">Upload</span>
-                        </button>
-                        <button onclick="loadFiles()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1.5 rounded-lg" title="Refresh">🔄</button>
-                    </div>
-                </div>
-                <div class="flex border-b border-gray-700 text-xs flex-shrink-0 overflow-x-auto">
-                    <button onclick="setFilter('raw')" id="filter-raw" class="flex-1 py-2 px-2 text-blue-400 border-b-2 border-blue-400 font-medium whitespace-nowrap">Video</button>
-                    <button onclick="setFilter('video_ai')" id="filter-video_ai" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Video AI</button>
-                    <button onclick="setFilter('image')" id="filter-image" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Gambar</button>
-                    <button onclick="setFilter('image_ai')" id="filter-image_ai" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Gambar AI</button>
-                </div>
-                <div id="videoListContainer" class="flex-1 overflow-y-auto p-2 space-y-1">
-                    <div class="text-center text-gray-500 italic p-4 text-xs">Memuat data...</div>
-                </div>
+        <!-- === TAB NAVIGATION === -->
+        <div class="bg-gray-800 border-b border-gray-700 px-3 sm:px-4 sticky top-[52px] z-30">
+            <div class="max-w-[1600px] mx-auto flex gap-1 overflow-x-auto">
+                <button onclick="switchTab('media')" id="tab-media" 
+                        class="py-3 px-4 text-sm font-semibold border-b-2 border-blue-500 text-blue-400 whitespace-nowrap">
+                    📁 Media & Edit AI
+                </button>
+                <button onclick="switchTab('posting')" id="tab-posting" 
+                        class="py-3 px-4 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap">
+                    📤 Posting Instagram
+                </button>
+                <button onclick="switchTab('prompt_ai')" id="tab-prompt_ai" 
+                        class="py-3 px-4 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap">
+                    🤖 AI Prompt Scheduler
+                    <span id="tabPromptBadge" class="ml-1 text-xs px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 hidden">0</span>
+                </button>
             </div>
+        </div>
 
-            <!-- KOLOM 2: EDIT PANEL -->
-            <div id="aiEditColumn" class="col-span-1 md:col-span-3 bg-gray-800 rounded-2xl border border-purple-500/40 flex-col overflow-hidden hidden slide-in-right" style="max-height: calc(100vh - 90px);">
-                <div class="px-4 py-3 border-b border-purple-500/20 flex justify-between items-center bg-purple-500/5 flex-shrink-0">
-                    <h2 class="font-bold text-purple-400 text-sm flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
-                        Edit AI
-                        <span id="checkedCountBadge" class="text-xs px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-300">0</span>
-                    </h2>
-                    <button onclick="clearChecked()" class="text-xs text-gray-400 hover:text-white p-1" title="Bersihkan">✕</button>
-                </div>
-                <div class="p-3 space-y-3 flex-1 overflow-y-auto">
-                    <div class="bg-purple-500/10 border border-purple-500/20 rounded-lg p-2">
-                        <p class="text-xs text-purple-300 mb-1.5 font-medium">📋 Media yang akan diedit:</p>
-                        <div id="checkedVideosList" class="text-xs text-white space-y-1"></div>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Prompt / Instruksi Edit</label>
-                        <textarea id="promptInput" rows="5" placeholder="Contoh:&#10;- Buat cinematic dengan warna hangat&#10;- Ubah background jadi pantai" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-sm text-white outline-none resize-none"></textarea>
-                    </div>
-
-                    <div class="space-y-2">
-                        <button onclick="submitImageEdit()" id="submitImageEditBtn" class="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 hidden">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                            <span>🖼️ Edit Gambar (Agnes)</span>
-                        </button>
-
-                        <button onclick="submitImageToVideo()" id="submitImageToVideoBtn" class="w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 hidden">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                            <span>🎬 Gambar ke Video (Agnes)</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- KOLOM 3: PREVIEW + JADWAL -->
-            <div id="rightColumn" class="col-span-1 md:col-span-7 space-y-3 sm:space-y-4">
-                <div class="bg-gray-800 rounded-2xl border border-gray-700 p-3 sm:p-4">
-                    <div class="flex justify-between items-center mb-3">
-                        <h2 class="font-bold text-white text-sm">🎬 Preview</h2>
-                        <span id="previewBadge" class="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-400">Belum ada media</span>
-                    </div>
-                    <div id="rawVideoContainer" class="aspect-video bg-gray-900 rounded-lg flex items-center justify-center text-gray-600 text-sm overflow-hidden">
-                        Pilih media dari daftar
-                    </div>
-                </div>
-
-                <div class="bg-gray-800 rounded-2xl border border-blue-500/40 p-3 sm:p-4">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                            <h2 class="font-bold text-blue-400 text-sm">Jadwal Posting Medsos</h2>
-                        </div>
-                        <button onclick="triggerCronManual()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg flex items-center gap-1" title="Trigger cron manual untuk testing">
-                            ⚡ Test Cron
-                        </button>
-                    </div>
-                    <div class="space-y-3">
-                        <div class="relative">
-                            <label class="block text-xs font-medium text-gray-400 mb-1">🎬 Pilih Video</label>
-                            <button type="button" onclick="toggleCombo('video')" 
-                                    class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-left text-xs text-white flex justify-between items-center hover:border-blue-500 transition">
-                                <span id="comboVideoLabel" class="truncate text-gray-400">Pilih video...</span>
-                                <svg id="comboVideoArrow" class="w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+        <!-- ==================== TAB: MEDIA & EDIT AI ==================== -->
+        <div id="tabContent-media" class="tab-content">
+            <main id="mainGrid" class="max-w-[1600px] mx-auto p-3 sm:p-4 grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4" style="min-height: calc(100vh - 120px);">
+                <!-- KOLOM 1: MEDIA LIST -->
+                <div id="videoListColumn" class="col-span-1 md:col-span-5 bg-gray-800 rounded-2xl border border-gray-700 flex flex-col overflow-hidden" style="max-height: 50vh; min-height: 300px;">
+                    <div class="px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-700 flex justify-between items-center gap-2 flex-shrink-0">
+                        <h2 class="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                            📁 Media <span id="videoCountBadge" class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">0</span>
+                        </h2>
+                        <div class="flex items-center gap-1 sm:gap-1.5">
+                            <button onclick="openUploadModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 px-2 sm:px-3 rounded-lg flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                <span class="hidden sm:inline">Upload</span>
                             </button>
-                            <div id="comboVideoPanel" class="hidden absolute z-30 mt-1 w-full bg-gray-700 border border-gray-600 rounded-lg shadow-2xl combo-panel">
-                                <div id="comboVideoList" class="p-1.5 space-y-0.5">
-                                    <p class="text-xs text-gray-500 italic p-2">Memuat...</p>
-                                </div>
-                                <div class="border-t border-gray-600 p-1.5 flex justify-between text-xs">
-                                    <button onclick="clearComboSelection('video')" class="text-red-400 hover:underline px-2 py-1">Bersihkan</button>
-                                    <button onclick="toggleCombo('video')" class="text-blue-400 hover:underline px-2 py-1">Tutup</button>
-                                </div>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-1">Radio = video utama · Checkbox = ikut diposting</p>
+                            <button onclick="loadFiles()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1.5 rounded-lg" title="Refresh">🔄</button>
                         </div>
+                    </div>
+                    <div class="flex border-b border-gray-700 text-xs flex-shrink-0 overflow-x-auto">
+                        <button onclick="setFilter('raw')" id="filter-raw" class="flex-1 py-2 px-2 text-blue-400 border-b-2 border-blue-400 font-medium whitespace-nowrap">Video</button>
+                        <button onclick="setFilter('video_ai')" id="filter-video_ai" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Video AI</button>
+                        <button onclick="setFilter('image')" id="filter-image" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Gambar</button>
+                        <button onclick="setFilter('image_ai')" id="filter-image_ai" class="flex-1 py-2 px-2 text-gray-400 hover:text-white whitespace-nowrap">Gambar AI</button>
+                    </div>
+                    <div id="videoListContainer" class="flex-1 overflow-y-auto p-2 space-y-1">
+                        <div class="text-center text-gray-500 italic p-4 text-xs">Memuat data...</div>
+                    </div>
+                </div>
 
-                        <div class="relative">
-                            <label class="block text-xs font-medium text-gray-400 mb-1">🖼️ Pilih Gambar</label>
-                            <button type="button" onclick="toggleCombo('image')" 
-                                    class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-left text-xs text-white flex justify-between items-center hover:border-pink-500 transition">
-                                <span id="comboImageLabel" class="truncate text-gray-400">Pilih gambar...</span>
-                                <svg id="comboImageArrow" class="w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                            </button>
-                            <div id="comboImagePanel" class="hidden absolute z-30 mt-1 w-full bg-gray-700 border border-gray-600 rounded-lg shadow-2xl combo-panel">
-                                <div id="comboImageList" class="p-1.5 space-y-0.5">
-                                    <p class="text-xs text-gray-500 italic p-2">Memuat...</p>
-                                </div>
-                                <div class="border-t border-gray-600 p-1.5 flex justify-between text-xs">
-                                    <button onclick="clearComboSelection('image')" class="text-red-400 hover:underline px-2 py-1">Bersihkan</button>
-                                    <button onclick="toggleCombo('image')" class="text-blue-400 hover:underline px-2 py-1">Tutup</button>
-                                </div>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-1">Radio = gambar utama · Checkbox = ikut diposting</p>
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-medium text-gray-400 mb-1">Waktu Tayang</label>
-                                <input type="datetime-local" id="scheduleTime" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-xs text-white outline-none"/>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-gray-400 mb-1">Platform</label>
-                                <select id="schedulePlatform" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-xs text-white outline-none">
-                                    <option value="">- Pilih -</option>
-                                </select>
-                            </div>
+                <!-- KOLOM 2: EDIT PANEL -->
+                <div id="aiEditColumn" class="col-span-1 md:col-span-3 bg-gray-800 rounded-2xl border border-purple-500/40 flex-col overflow-hidden hidden slide-in-right" style="max-height: calc(100vh - 90px);">
+                    <div class="px-4 py-3 border-b border-purple-500/20 flex justify-between items-center bg-purple-500/5 flex-shrink-0">
+                        <h2 class="font-bold text-purple-400 text-sm flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                            Edit AI
+                            <span id="checkedCountBadge" class="text-xs px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-300">0</span>
+                        </h2>
+                        <button onclick="clearChecked()" class="text-xs text-gray-400 hover:text-white p-1" title="Bersihkan">✕</button>
+                    </div>
+                    <div class="p-3 space-y-3 flex-1 overflow-y-auto">
+                        <div class="bg-purple-500/10 border border-purple-500/20 rounded-lg p-2">
+                            <p class="text-xs text-purple-300 mb-1.5 font-medium">📋 Media yang akan diedit:</p>
+                            <div id="checkedVideosList" class="text-xs text-white space-y-1"></div>
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1">Caption Posting</label>
-                            <textarea id="scheduleCaption" rows="3" placeholder="Tulis caption..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none resize-none"></textarea>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">Prompt / Instruksi Edit</label>
+                            <textarea id="promptInput" rows="5" placeholder="Contoh:&#10;- Buat cinematic dengan warna hangat&#10;- Ubah background jadi pantai" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-sm text-white outline-none resize-none"></textarea>
                         </div>
-                        <button onclick="saveSchedule()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm">💾 Simpan Jadwal Posting</button>
-                        <div id="scheduleList" class="mt-3 space-y-2"></div>
-                    </div>
-                </div>
-            </div>
-        </main>
 
-        <!-- === BARU: SECTION PROMPT SCHEDULER === -->
-        <div id="promptSchedulerSection" class="max-w-[1600px] mx-auto px-3 sm:px-4 pb-6">
-            <div class="bg-gray-800 rounded-2xl border border-amber-500/40 overflow-hidden">
-                <div class="px-4 py-3 border-b border-amber-500/20 flex justify-between items-center bg-amber-500/5">
-                    <div class="flex items-center gap-2">
-                        <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        <h2 class="font-bold text-amber-400 text-sm">🤖 Scheduler Prompt AI (Agnes)</h2>
-                        <span id="promptSchedCountBadge" class="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">0</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="refreshPromptSchedules()" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1.5 rounded-lg" title="Refresh">🔄</button>
-                        <button onclick="openPromptSchedulerModal()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-1">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                            Tambah
-                        </button>
+                        <div class="space-y-2">
+                            <button onclick="submitImageEdit()" id="submitImageEditBtn" class="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 hidden">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                <span>🖼️ Edit Gambar (Agnes)</span>
+                            </button>
+
+                            <button onclick="submitImageToVideo()" id="submitImageToVideoBtn" class="w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 hidden">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                <span>🎬 Gambar ke Video (Agnes)</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
-                <div id="promptSchedulerList" class="p-3 space-y-2 max-h-[500px] overflow-y-auto">
-                    <p class="text-xs text-gray-500 italic text-center py-4">Memuat...</p>
+
+                <!-- KOLOM 3: PREVIEW + JADWAL -->
+                <div id="rightColumn" class="col-span-1 md:col-span-7 space-y-3 sm:space-y-4">
+                    <div class="bg-gray-800 rounded-2xl border border-gray-700 p-3 sm:p-4">
+                        <div class="flex justify-between items-center mb-3">
+                            <h2 class="font-bold text-white text-sm">🎬 Preview</h2>
+                            <span id="previewBadge" class="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-400">Belum ada media</span>
+                        </div>
+                        <div id="rawVideoContainer" class="aspect-video bg-gray-900 rounded-lg flex items-center justify-center text-gray-600 text-sm overflow-hidden">
+                            Pilih media dari daftar
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-800 rounded-2xl border border-blue-500/40 p-3 sm:p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                <h2 class="font-bold text-blue-400 text-sm">Buat Jadwal Posting Medsos</h2>
+                            </div>
+                            <button onclick="triggerCronManual()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg flex items-center gap-1" title="Trigger cron manual untuk testing">
+                                ⚡ Test Cron
+                            </button>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="relative">
+                                <label class="block text-xs font-medium text-gray-400 mb-1">🎬 Pilih Video</label>
+                                <button type="button" onclick="toggleCombo('video')" 
+                                        class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-left text-xs text-white flex justify-between items-center hover:border-blue-500 transition">
+                                    <span id="comboVideoLabel" class="truncate text-gray-400">Pilih video...</span>
+                                    <svg id="comboVideoArrow" class="w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+                                <div id="comboVideoPanel" class="hidden absolute z-30 mt-1 w-full bg-gray-700 border border-gray-600 rounded-lg shadow-2xl combo-panel">
+                                    <div id="comboVideoList" class="p-1.5 space-y-0.5">
+                                        <p class="text-xs text-gray-500 italic p-2">Memuat...</p>
+                                    </div>
+                                    <div class="border-t border-gray-600 p-1.5 flex justify-between text-xs">
+                                        <button onclick="clearComboSelection('video')" class="text-red-400 hover:underline px-2 py-1">Bersihkan</button>
+                                        <button onclick="toggleCombo('video')" class="text-blue-400 hover:underline px-2 py-1">Tutup</button>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Radio = video utama · Checkbox = ikut diposting</p>
+                            </div>
+
+                            <div class="relative">
+                                <label class="block text-xs font-medium text-gray-400 mb-1">🖼️ Pilih Gambar</label>
+                                <button type="button" onclick="toggleCombo('image')" 
+                                        class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-left text-xs text-white flex justify-between items-center hover:border-pink-500 transition">
+                                    <span id="comboImageLabel" class="truncate text-gray-400">Pilih gambar...</span>
+                                    <svg id="comboImageArrow" class="w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+                                <div id="comboImagePanel" class="hidden absolute z-30 mt-1 w-full bg-gray-700 border border-gray-600 rounded-lg shadow-2xl combo-panel">
+                                    <div id="comboImageList" class="p-1.5 space-y-0.5">
+                                        <p class="text-xs text-gray-500 italic p-2">Memuat...</p>
+                                    </div>
+                                    <div class="border-t border-gray-600 p-1.5 flex justify-between text-xs">
+                                        <button onclick="clearComboSelection('image')" class="text-red-400 hover:underline px-2 py-1">Bersihkan</button>
+                                        <button onclick="toggleCombo('image')" class="text-blue-400 hover:underline px-2 py-1">Tutup</button>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Radio = gambar utama · Checkbox = ikut diposting</p>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-400 mb-1">Waktu Tayang</label>
+                                    <input type="datetime-local" id="scheduleTime" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-xs text-white outline-none"/>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-400 mb-1">Platform</label>
+                                    <select id="schedulePlatform" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-xs text-white outline-none">
+                                        <option value="">- Pilih -</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1">Caption Posting</label>
+                                <textarea id="scheduleCaption" rows="3" placeholder="Tulis caption..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none resize-none"></textarea>
+                            </div>
+                            <button onclick="saveSchedule()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm">💾 Simpan Jadwal Posting</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- ==================== TAB: POSTING INSTAGRAM (TABEL RESUME) ==================== -->
+        <div id="tabContent-posting" class="tab-content hidden">
+            <div class="max-w-[1600px] mx-auto p-3 sm:p-4">
+                <div class="bg-gray-800 rounded-2xl border border-blue-500/40 overflow-hidden">
+                    <div class="px-4 py-3 border-b border-blue-500/20 flex justify-between items-center bg-blue-500/5 flex-wrap gap-2">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                            <h2 class="font-bold text-blue-400 text-sm">📤 Resume Posting Instagram</h2>
+                            <span id="postingCountBadge" class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300">0</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <select id="postingStatusFilter" onchange="renderPostingTable()" class="bg-gray-700 border border-gray-600 rounded-lg p-1.5 text-xs text-white outline-none">
+                                <option value="all">Semua Status</option>
+                                <option value="pending">⏳ Pending</option>
+                                <option value="processing">🔄 Processing</option>
+                                <option value="posted">✅ Terposting</option>
+                                <option value="failed">❌ Gagal</option>
+                            </select>
+                            <button onclick="renderPostingTable()" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg">🔄 Refresh</button>
+                            <button onclick="triggerCronManual()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg">⚡ Test Cron</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto" style="max-height: calc(100vh - 220px);">
+                        <table class="resume-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;">#</th>
+                                    <th style="width: 130px;">Waktu</th>
+                                    <th style="width: 100px;">Status</th>
+                                    <th style="width: 130px;">Platform</th>
+                                    <th>Media</th>
+                                    <th>Caption</th>
+                                    <th style="width: 120px;">Posted At</th>
+                                    <th style="width: 100px;">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="postingTableBody">
+                                <tr>
+                                    <td colspan="8" class="text-center text-gray-500 italic py-8">Memuat data...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Ringkasan Statistik -->
+                <div id="postingStats" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+                    <div class="bg-gray-800 rounded-lg border border-yellow-500/30 p-3">
+                        <p class="text-xs text-gray-400">⏳ Pending</p>
+                        <p id="statPending" class="text-2xl font-bold text-yellow-400 mt-1">0</p>
+                    </div>
+                    <div class="bg-gray-800 rounded-lg border border-blue-500/30 p-3">
+                        <p class="text-xs text-gray-400">🔄 Processing</p>
+                        <p id="statProcessing" class="text-2xl font-bold text-blue-400 mt-1">0</p>
+                    </div>
+                    <div class="bg-gray-800 rounded-lg border border-green-500/30 p-3">
+                        <p class="text-xs text-gray-400">✅ Terposting</p>
+                        <p id="statPosted" class="text-2xl font-bold text-green-400 mt-1">0</p>
+                    </div>
+                    <div class="bg-gray-800 rounded-lg border border-red-500/30 p-3">
+                        <p class="text-xs text-gray-400">❌ Gagal</p>
+                        <p id="statFailed" class="text-2xl font-bold text-red-400 mt-1">0</p>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- === BARU: MODAL PROMPT SCHEDULER === -->
+        <!-- ==================== TAB: AI PROMPT SCHEDULER ==================== -->
+        <div id="tabContent-prompt_ai" class="tab-content hidden">
+            <div class="max-w-[1600px] mx-auto p-3 sm:p-4 space-y-4">
+                <div class="bg-gray-800 rounded-2xl border border-amber-500/40 overflow-hidden">
+                    <div class="px-4 py-4 border-b border-amber-500/20 flex justify-between items-center bg-amber-500/5 flex-wrap gap-2">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div>
+                                <h2 class="font-bold text-amber-400 text-base">🤖 AI Prompt Scheduler</h2>
+                                <p class="text-xs text-gray-400">Otomatis generate video AI & posting ke Instagram</p>
+                            </div>
+                            <span id="promptSchedCountBadge" class="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 ml-2">0</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="refreshPromptSchedules()" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg" title="Refresh">🔄</button>
+                            <button onclick="openPromptSchedulerModal()" class="bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold py-2 px-4 rounded-lg flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                Tambah Scheduler
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Penjelasan alur -->
+                    <div class="p-4 bg-amber-500/5 border-b border-amber-500/20">
+                        <div class="flex flex-wrap items-center gap-2 text-xs text-gray-300">
+                            <span class="bg-gray-700/50 px-3 py-1.5 rounded-lg">⏰ Scheduler Jalan</span>
+                            <span class="text-amber-400">→</span>
+                            <span class="bg-gray-700/50 px-3 py-1.5 rounded-lg">🤖 Prompt ke Agnes AI</span>
+                            <span class="text-amber-400">→</span>
+                            <span class="bg-gray-700/50 px-3 py-1.5 rounded-lg">🎬 Video AI jadi</span>
+                            <span class="text-amber-400">→</span>
+                            <span class="bg-gray-700/50 px-3 py-1.5 rounded-lg">📤 Auto-post ke Instagram</span>
+                        </div>
+                    </div>
+
+                    <div id="promptSchedulerList" class="p-3 space-y-2 max-h-[600px] overflow-y-auto">
+                        <p class="text-xs text-gray-500 italic text-center py-4">Memuat...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- === MODAL PROMPT SCHEDULER === -->
         <div id="promptSchedulerModal" class="fixed inset-0 bg-black/70 modal-backdrop z-50 hidden items-center justify-center p-4">
             <div class="bg-gray-800 rounded-2xl border border-amber-500/40 w-full max-w-2xl overflow-hidden max-h-[92vh] flex flex-col">
                 <div class="p-4 border-b border-amber-500/20 flex justify-between items-center bg-amber-500/5 flex-shrink-0">
@@ -675,6 +841,7 @@
             if (!confirm('Yakin ingin logout?')) return;
             sessionStorage.removeItem(SESSION_KEY);
             sessionStorage.removeItem(CURRENT_USER_KEY);
+            sessionStorage.removeItem('activeTab');
             location.reload();
         }
 
@@ -692,6 +859,33 @@
                 const data = await res.json();
                 return data.success ? data.users : [];
             } catch(e) { return []; }
+        }
+
+        // ==================== TAB SWITCHING ===
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            const target = document.getElementById(`tabContent-${tabName}`);
+            if (target) target.classList.remove('hidden');
+
+            ['media', 'posting', 'prompt_ai'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                if (!btn) return;
+                if (t === tabName) {
+                    btn.className = 'py-3 px-4 text-sm font-semibold border-b-2 border-blue-500 text-blue-400 whitespace-nowrap';
+                } else {
+                    btn.className = 'py-3 px-4 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap';
+                }
+            });
+
+            if (tabName === 'posting') {
+                renderPostingTable();
+            } else if (tabName === 'prompt_ai') {
+                refreshPromptSchedules();
+            } else if (tabName === 'media') {
+                updateGridLayout();
+            }
+
+            sessionStorage.setItem('activeTab', tabName);
         }
 
         // ==================== LOGIN GATE ====================
@@ -787,11 +981,33 @@
             document.getElementById('appContainer').classList.remove('hidden');
             await loadFiles();
             await updateUserButton();
-            await renderScheduleList();
             await renderConnectedAccounts();
             await refreshPromptSchedules();
             updateGridLayout();
             setDefaultScheduleTime();
+
+            const lastTab = sessionStorage.getItem('activeTab') || 'media';
+            switchTab(lastTab);
+            updatePromptTabBadge();
+        }
+
+        async function updatePromptTabBadge() {
+            try {
+                const res = await fetch('/api/prompt-schedules/list');
+                const data = await res.json();
+                if (data.success) {
+                    const count = (data.items || []).length;
+                    const badge = document.getElementById('tabPromptBadge');
+                    if (badge) {
+                        if (count > 0) {
+                            badge.textContent = count;
+                            badge.classList.remove('hidden');
+                        } else {
+                            badge.classList.add('hidden');
+                        }
+                    }
+                }
+            } catch(e) {}
         }
 
         window.addEventListener('DOMContentLoaded', function() {
@@ -1149,11 +1365,8 @@
             }
 
             const hasImage = checkedVideos.some(v => v.media_type === 'image');
-            const hasVideo = checkedVideos.some(v => v.media_type === 'video');
-
             const imgEditBtn = document.getElementById('submitImageEditBtn');
             const imgToVidBtn = document.getElementById('submitImageToVideoBtn');
-
             if (imgEditBtn) imgEditBtn.classList.toggle('hidden', !hasImage);
             if (imgToVidBtn) imgToVidBtn.classList.toggle('hidden', !hasImage);
         }
@@ -1408,7 +1621,6 @@
                 }
                 updateCheckedUI();
                 updateGridLayout();
-                await renderScheduleList();
                 loadFiles();
             } catch (error) {
                 alert(`❌ Gagal hapus: ${error.message}`);
@@ -1435,10 +1647,7 @@
             if (!file) { alert('Pilih file dulu!'); return; }
             const ext = file.name.toLowerCase().split('.').pop();
             const IMAGE_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
-            if (IMAGE_EXT.includes(ext)) {
-                doUpload('direct');
-                return;
-            }
+            if (IMAGE_EXT.includes(ext)) { doUpload('direct'); return; }
             const sizeMB = file.size / 1024 / 1024;
             if (sizeMB > 4.5) {
                 document.getElementById('uploadMethodChoice').classList.remove('hidden');
@@ -1786,74 +1995,68 @@
             populateMediaDropdowns();
         }
 
-        function setPrimaryVideo(url) {
-            schedulePrimaryVideo = url;
-            populateMediaDropdowns();
-        }
-
-        function setPrimaryImage(url) {
-            schedulePrimaryImage = url;
-            populateMediaDropdowns();
-        }
+        function setPrimaryVideo(url) { schedulePrimaryVideo = url; populateMediaDropdowns(); }
+        function setPrimaryImage(url) { schedulePrimaryImage = url; populateMediaDropdowns(); }
 
         async function populateMediaDropdowns() {
             const videoList = document.getElementById('comboVideoList');
-            const videoFiles = allFiles.filter(f => f.media_type === 'video');
-
-            if (videoFiles.length === 0) {
-                videoList.innerHTML = '<p class="text-xs text-gray-500 italic p-2">Belum ada video</p>';
-            } else {
-                videoList.innerHTML = videoFiles.map(f => {
-                    const checked = scheduleSelectedVideos.some(v => v.url === f.url);
-                    const isPrimary = schedulePrimaryVideo === f.url;
-                    const icon = f.type === 'raw' ? '📹' : '✨';
-                    const safeName = f.displayName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                    const safeUrl = f.url.replace(/'/g, "\\'");
-                    return `
-                        <div class="flex items-center gap-2 py-1.5 px-2 hover:bg-gray-600/50 rounded cursor-pointer" onclick="event.stopPropagation();">
-                            <input type="checkbox" ${checked ? 'checked' : ''} 
-                                   onclick="event.stopPropagation(); toggleScheduleVideo('${safeUrl}', '${safeName}', this.checked)"
-                                   class="checkbox-custom"/>
-                            <input type="radio" name="primaryVideo" ${isPrimary ? 'checked' : ''} 
-                                   ${!checked ? 'disabled' : ''}
-                                   onclick="event.stopPropagation(); setPrimaryVideo('${safeUrl}')"
-                                   class="combo-radio"/>
-                            <span class="text-xs text-white truncate flex-1">${icon} ${f.displayName}</span>
-                        </div>
-                    `;
-                }).join('');
+            if (videoList) {
+                const videoFiles = allFiles.filter(f => f.media_type === 'video');
+                if (videoFiles.length === 0) {
+                    videoList.innerHTML = '<p class="text-xs text-gray-500 italic p-2">Belum ada video</p>';
+                } else {
+                    videoList.innerHTML = videoFiles.map(f => {
+                        const checked = scheduleSelectedVideos.some(v => v.url === f.url);
+                        const isPrimary = schedulePrimaryVideo === f.url;
+                        const icon = f.type === 'raw' ? '📹' : '✨';
+                        const safeName = f.displayName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        const safeUrl = f.url.replace(/'/g, "\\'");
+                        return `
+                            <div class="flex items-center gap-2 py-1.5 px-2 hover:bg-gray-600/50 rounded cursor-pointer" onclick="event.stopPropagation();">
+                                <input type="checkbox" ${checked ? 'checked' : ''} 
+                                       onclick="event.stopPropagation(); toggleScheduleVideo('${safeUrl}', '${safeName}', this.checked)"
+                                       class="checkbox-custom"/>
+                                <input type="radio" name="primaryVideo" ${isPrimary ? 'checked' : ''} 
+                                       ${!checked ? 'disabled' : ''}
+                                       onclick="event.stopPropagation(); setPrimaryVideo('${safeUrl}')"
+                                       class="combo-radio"/>
+                                <span class="text-xs text-white truncate flex-1">${icon} ${f.displayName}</span>
+                            </div>
+                        `;
+                    }).join('');
+                }
             }
 
             const imageList = document.getElementById('comboImageList');
-            const imageFiles = allFiles.filter(f => f.media_type === 'image');
-
-            if (imageFiles.length === 0) {
-                imageList.innerHTML = '<p class="text-xs text-gray-500 italic p-2">Belum ada gambar</p>';
-            } else {
-                imageList.innerHTML = imageFiles.map(f => {
-                    const checked = scheduleSelectedImages.some(v => v.url === f.url);
-                    const isPrimary = schedulePrimaryImage === f.url;
-                    const icon = f.type === 'image_ai' ? '✨' : '🖼️';
-                    const safeName = f.displayName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                    const safeUrl = f.url.replace(/'/g, "\\'");
-                    return `
-                        <div class="flex items-center gap-2 py-1.5 px-2 hover:bg-gray-600/50 rounded cursor-pointer" onclick="event.stopPropagation();">
-                            <input type="checkbox" ${checked ? 'checked' : ''} 
-                                   onclick="event.stopPropagation(); toggleScheduleImage('${safeUrl}', '${safeName}', this.checked)"
-                                   class="checkbox-custom"/>
-                            <input type="radio" name="primaryImage" ${isPrimary ? 'checked' : ''} 
-                                   ${!checked ? 'disabled' : ''}
-                                   onclick="event.stopPropagation(); setPrimaryImage('${safeUrl}')"
-                                   class="combo-radio"/>
-                            <span class="text-xs text-white truncate flex-1">${icon} ${f.displayName}</span>
-                        </div>
-                    `;
-                }).join('');
+            if (imageList) {
+                const imageFiles = allFiles.filter(f => f.media_type === 'image');
+                if (imageFiles.length === 0) {
+                    imageList.innerHTML = '<p class="text-xs text-gray-500 italic p-2">Belum ada gambar</p>';
+                } else {
+                    imageList.innerHTML = imageFiles.map(f => {
+                        const checked = scheduleSelectedImages.some(v => v.url === f.url);
+                        const isPrimary = schedulePrimaryImage === f.url;
+                        const icon = f.type === 'image_ai' ? '✨' : '🖼️';
+                        const safeName = f.displayName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        const safeUrl = f.url.replace(/'/g, "\\'");
+                        return `
+                            <div class="flex items-center gap-2 py-1.5 px-2 hover:bg-gray-600/50 rounded cursor-pointer" onclick="event.stopPropagation();">
+                                <input type="checkbox" ${checked ? 'checked' : ''} 
+                                       onclick="event.stopPropagation(); toggleScheduleImage('${safeUrl}', '${safeName}', this.checked)"
+                                       class="checkbox-custom"/>
+                                <input type="radio" name="primaryImage" ${isPrimary ? 'checked' : ''} 
+                                       ${!checked ? 'disabled' : ''}
+                                       onclick="event.stopPropagation(); setPrimaryImage('${safeUrl}')"
+                                       class="combo-radio"/>
+                                <span class="text-xs text-white truncate flex-1">${icon} ${f.displayName}</span>
+                            </div>
+                        `;
+                    }).join('');
+                }
             }
 
             updateComboLabels();
 
-            // Platform select untuk jadwal IG
             const platformSelect = document.getElementById('schedulePlatform');
             if (platformSelect) {
                 const currentVal = platformSelect.value;
@@ -1872,7 +2075,6 @@
                 if (currentVal) platformSelect.value = currentVal;
             }
 
-            // Platform select untuk prompt scheduler
             const psPlatform = document.getElementById('psPlatform');
             if (psPlatform) {
                 const currentPs = psPlatform.value;
@@ -1887,7 +2089,6 @@
                 if (currentPs) psPlatform.value = currentPs;
             }
 
-            // Source image dropdown untuk prompt scheduler
             const psSourceImg = document.getElementById('psSourceImageUrl');
             if (psSourceImg) {
                 const currentImg = psSourceImg.value;
@@ -1908,8 +2109,7 @@
             const caption = document.getElementById('scheduleCaption').value.trim();
 
             if (scheduleSelectedVideos.length === 0 && scheduleSelectedImages.length === 0) {
-                alert('Pilih minimal 1 video atau 1 gambar!');
-                return;
+                alert('Pilih minimal 1 video atau 1 gambar!'); return;
             }
             if (!time) { alert('Isi waktu tayang!'); return; }
             if (!platform) { alert('Pilih platform medsos!'); return; }
@@ -1949,92 +2149,106 @@
                 document.getElementById('scheduleCaption').value = '';
                 setDefaultScheduleTime();
                 await populateMediaDropdowns();
-                await renderScheduleList();
                 alert('✅ Jadwal tersimpan!');
             } catch(e) {
                 alert('❌ Gagal: ' + e.message);
             }
         }
 
-        async function renderScheduleList() {
-            const container = document.getElementById('scheduleList');
+        // ==================== RENDER TABEL POSTING (RESUME) ====================
+        async function renderPostingTable() {
+            const tbody = document.getElementById('postingTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-500 italic py-8">Memuat data...</td></tr>';
+
             const schedules = await loadSchedules();
+            const filter = document.getElementById('postingStatusFilter').value;
 
-            if (schedules.length === 0) { container.innerHTML = ''; return; }
+            // Statistik
+            const counts = { pending: 0, processing: 0, posted: 0, failed: 0 };
+            schedules.forEach(s => { if (counts[s.status] !== undefined) counts[s.status]++; });
+            document.getElementById('statPending').textContent = counts.pending;
+            document.getElementById('statProcessing').textContent = counts.processing;
+            document.getElementById('statPosted').textContent = counts.posted;
+            document.getElementById('statFailed').textContent = counts.failed;
+            document.getElementById('postingCountBadge').textContent = schedules.length;
 
-            container.innerHTML = `
-                <p class="text-xs font-medium text-gray-400 mb-2 mt-3">📅 Jadwal (${schedules.length}):</p>
-                ${schedules.map(s => {
-                    let timeStr = s.time;
+            const filtered = filter === 'all' ? schedules : schedules.filter(s => s.status === filter);
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-gray-500 italic py-8">${schedules.length === 0 ? 'Belum ada jadwal posting.' : 'Tidak ada data sesuai filter.'}</td></tr>`;
+                return;
+            }
+
+            const statusMap = {
+                'pending':    { label: '⏳ Pending',    cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+                'processing': { label: '🔄 Processing', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+                'posted':     { label: '✅ Terposting', cls: 'bg-green-500/20 text-green-400 border-green-500/30' },
+                'failed':     { label: '❌ Gagal',      cls: 'bg-red-500/20 text-red-400 border-red-500/30' }
+            };
+
+            tbody.innerHTML = filtered.map((s, idx) => {
+                const st = statusMap[s.status] || statusMap['pending'];
+
+                let timeStr = s.time;
+                try {
+                    const d = new Date(s.time);
+                    timeStr = d.toLocaleString('id-ID', {day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'});
+                } catch(e) {}
+
+                let postedStr = '-';
+                if (s.posted_at) {
                     try {
-                        const d = new Date(s.time);
-                        timeStr = d.toLocaleString('id-ID', {day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'});
+                        const d = new Date(s.posted_at);
+                        postedStr = d.toLocaleString('id-ID', {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'});
                     } catch(e) {}
-                    const isPast = new Date(s.time) < new Date();
+                }
 
-                    const statusMap = {
-                        'pending':    { label: '⏳ Pending',    cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
-                        'processing': { label: '🔄 Processing', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-                        'posted':     { label: '✅ Terposting', cls: 'bg-green-500/20 text-green-400 border-green-500/30' },
-                        'failed':     { label: '❌ Gagal',      cls: 'bg-red-500/20 text-red-400 border-red-500/30' }
-                    };
-                    const st = statusMap[s.status] || statusMap['pending'];
+                const videosList = (s.videos || []).length;
+                const imagesList = (s.images || []).length;
+                let mediaInfo = '';
+                if (videosList > 0) mediaInfo += `<span class="text-xs">🎬 ${videosList} video</span>`;
+                if (imagesList > 0) mediaInfo += `${mediaInfo ? '<br>' : ''}<span class="text-xs">🖼️ ${imagesList} gambar</span>`;
+                if (!mediaInfo) mediaInfo = '<span class="text-xs text-gray-500 italic">Tidak ada media</span>';
 
-                    let errorMsg = '';
-                    if (s.status === 'failed' && s.post_result) {
-                        try {
-                            const pr = JSON.parse(s.post_result);
-                            errorMsg = pr.error || '';
-                        } catch(e) {
-                            errorMsg = s.post_result.substring(0, 120);
-                        }
-                    }
+                let mediaTitles = [];
+                (s.videos || []).forEach(v => mediaTitles.push(`${v.is_primary ? '⭐' : '📹'} ${v.name}`));
+                (s.images || []).forEach(i => mediaTitles.push(`${i.is_primary ? '⭐' : '🖼️'} ${i.name}`));
 
-                    const videosList = (s.videos || []).map(v => 
-                        `<span class="text-xs">${v.is_primary ? '⭐' : '📹'} ${v.name}</span>`
-                    ).join('<br>') || '<span class="text-xs text-gray-500 italic">Tidak ada video</span>';
+                let errorMsg = '';
+                if (s.status === 'failed' && s.post_result) {
+                    try {
+                        const pr = JSON.parse(s.post_result);
+                        errorMsg = pr.error || '';
+                    } catch(e) { errorMsg = s.post_result.substring(0, 80); }
+                }
 
-                    const imagesList = (s.images || []).map(i => 
-                        `<span class="text-xs">${i.is_primary ? '⭐' : '🖼️'} ${i.name}</span>`
-                    ).join('<br>') || '<span class="text-xs text-gray-500 italic">Tidak ada gambar</span>';
-
-                    return `
-                        <div class="bg-gray-700/50 border ${isPast ? 'border-gray-600/50' : 'border-blue-500/30'} rounded-lg p-2">
-                            <div class="flex justify-between items-start gap-2">
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-2 flex-wrap mb-1">
-                                        <p class="text-xs text-blue-400 font-medium">🕐 ${timeStr}</p>
-                                        <span class="text-xs px-2 py-0.5 rounded border ${st.cls} whitespace-nowrap">${st.label}</span>
-                                        ${s.posted_at ? `<span class="text-xs text-gray-500">posted: ${new Date(s.posted_at).toLocaleString('id-ID', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})}</span>` : ''}
-                                    </div>
-                                    <p class="text-xs text-purple-400">${getPlatformIcon(s.platform)} ${s.platform} - @${s.account}</p>
-                                    <div class="mt-1.5 space-y-0.5">
-                                        <p class="text-xs text-gray-300 font-medium">🎬 Video:</p>
-                                        <div class="ml-2 text-gray-400">${videosList}</div>
-                                    </div>
-                                    <div class="mt-1.5 space-y-0.5">
-                                        <p class="text-xs text-gray-300 font-medium">🖼️ Gambar:</p>
-                                        <div class="ml-2 text-gray-400">${imagesList}</div>
-                                    </div>
-                                    ${s.caption ? `<p class="text-xs text-gray-400 italic mt-1.5 truncate">"${s.caption}"</p>` : ''}
-                                    ${errorMsg ? `
-                                        <div class="mt-2 bg-red-500/10 border border-red-500/30 rounded p-1.5">
-                                            <p class="text-xs text-red-300 font-medium">❌ Error:</p>
-                                            <p class="text-xs text-red-200 mt-0.5 break-words">${errorMsg}</p>
-                                        </div>
-                                    ` : ''}
-                                </div>
-                                <div class="flex flex-col gap-1 flex-shrink-0">
-                                    ${s.status === 'failed' ? `
-                                        <button onclick='retrySchedule("${s.id}")' class="text-xs text-yellow-400 hover:text-yellow-300 px-1.5 py-0.5 rounded hover:bg-yellow-500/20" title="Coba lagi">🔄</button>
-                                    ` : ''}
-                                    <button onclick='deleteSchedule("${s.id}")' class="text-red-400 hover:text-red-300 text-xs px-1.5 py-0.5 rounded hover:bg-red-500/20" title="Hapus">✕</button>
-                                </div>
+                return `
+                    <tr>
+                        <td class="text-gray-500 text-xs">${idx + 1}</td>
+                        <td class="text-blue-400 text-xs whitespace-nowrap">${timeStr}</td>
+                        <td><span class="badge-status ${st.cls}">${st.label}</span></td>
+                        <td class="text-xs">
+                            <div class="text-purple-400">${getPlatformIcon(s.platform)} ${s.platform || '-'}</div>
+                            <div class="text-gray-500">@${s.account || '-'}</div>
+                        </td>
+                        <td class="text-xs" title="${mediaTitles.join(' | ').replace(/"/g, '&quot;')}">
+                            ${mediaInfo}
+                            ${errorMsg ? `<div class="text-red-300 mt-1 text-xs cell-truncate" title="${errorMsg.replace(/"/g, '&quot;')}">❌ ${errorMsg}</div>` : ''}
+                        </td>
+                        <td class="text-xs text-gray-300 cell-truncate" title="${(s.caption || '').replace(/"/g, '&quot;')}">
+                            ${s.caption ? `"${s.caption}"` : '<span class="text-gray-500 italic">-</span>'}
+                        </td>
+                        <td class="text-xs text-gray-400 whitespace-nowrap">${postedStr}</td>
+                        <td>
+                            <div class="flex gap-1 flex-wrap">
+                                ${s.status === 'failed' ? `<button onclick='retrySchedule("${s.id}").then(()=>renderPostingTable())' class="text-xs text-yellow-400 hover:text-yellow-300 px-2 py-1 rounded hover:bg-yellow-500/20" title="Retry">🔄</button>` : ''}
+                                <button onclick='deleteSchedule("${s.id}").then(()=>renderPostingTable())' class="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-red-500/20" title="Hapus">🗑️</button>
                             </div>
-                        </div>
-                    `;
-                }).join('')}
-            `;
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
 
         async function deleteSchedule(id) {
@@ -2046,16 +2260,14 @@
                     body: JSON.stringify({ id: id })
                 });
                 if (!res.ok) throw new Error('Gagal hapus');
-                await renderScheduleList();
+                await renderPostingTable();
             } catch(e) { alert('❌ ' + e.message); }
         }
 
         async function retrySchedule(id) {
             if (!confirm('Coba posting ulang jadwal ini?')) return;
-
             const cronSecret = prompt('Masukkan CRON_SECRET (kalau ada):') || '';
             const url = `/api/schedules/post-now?secret=${encodeURIComponent(cronSecret)}`;
-
             try {
                 const res = await fetch(url, {
                     method: 'POST',
@@ -2063,16 +2275,10 @@
                     body: JSON.stringify({ id: id })
                 });
                 const data = await res.json();
-
-                if (data.success) {
-                    alert('✅ Berhasil diposting!');
-                } else {
-                    alert('❌ Gagal: ' + (data.error || 'Unknown error'));
-                }
-                await renderScheduleList();
-            } catch(e) {
-                alert('❌ Error: ' + e.message);
-            }
+                if (data.success) alert('✅ Berhasil diposting!');
+                else alert('❌ Gagal: ' + (data.error || 'Unknown error'));
+                await renderPostingTable();
+            } catch(e) { alert('❌ Error: ' + e.message); }
         }
 
         async function triggerCronManual() {
@@ -2082,11 +2288,9 @@
                 const res = await fetch(url);
                 const data = await res.json();
                 alert('Cron result:\n' + JSON.stringify(data, null, 2).substring(0, 1500));
-                await renderScheduleList();
+                await renderPostingTable();
                 await refreshPromptSchedules();
-            } catch(e) {
-                alert('Error: ' + e.message);
-            }
+            } catch(e) { alert('Error: ' + e.message); }
         }
 
         function getPlatformIcon(platform) {
@@ -2094,7 +2298,7 @@
             return icons[platform] || '🔗';
         }
 
-        // ==================== === BARU: PROMPT SCHEDULER ====================
+        // ==================== PROMPT SCHEDULER ====================
         async function refreshPromptSchedules() {
             const container = document.getElementById('promptSchedulerList');
             if (!container) return;
@@ -2107,6 +2311,7 @@
 
                 const items = data.items || [];
                 document.getElementById('promptSchedCountBadge').textContent = items.length;
+                updatePromptTabBadge();
 
                 if (items.length === 0) {
                     container.innerHTML = '<p class="text-xs text-gray-500 italic text-center py-6">Belum ada scheduler prompt. Klik "+ Tambah" untuk membuat.</p>';
@@ -2215,7 +2420,6 @@
             document.getElementById('psIsActive').checked = item ? (item.is_active !== false) : true;
             document.getElementById('psStartAt').value = '';
 
-            // Populate platform & source image
             await populateMediaDropdowns();
             if (item) {
                 if (item.platform && item.account) {
@@ -2378,7 +2582,6 @@
                 }
                 await refreshPromptSchedules();
                 await loadFiles();
-                await renderScheduleList();
             } catch(e) {
                 alert('❌ Error: ' + e.message);
                 container.innerHTML = old;
@@ -2392,8 +2595,7 @@
 
             const image = checkedVideos[0];
             if (!image || image.media_type !== 'image') {
-                alert('Pilih gambar dulu!');
-                return;
+                alert('Pilih gambar dulu!'); return;
             }
 
             openAIResultModal('image');
@@ -2443,8 +2645,7 @@
 
             const image = checkedVideos[0];
             if (!image || image.media_type !== 'image') {
-                alert('Pilih gambar dulu!');
-                return;
+                alert('Pilih gambar dulu!'); return;
             }
 
             openAIResultModal('video');
@@ -2660,7 +2861,8 @@
         window.setPrimaryImage = setPrimaryImage;
         window.toggleCombo = toggleCombo;
         window.clearComboSelection = clearComboSelection;
-        // BARU
+        window.switchTab = switchTab;
+        window.renderPostingTable = renderPostingTable;
         window.refreshPromptSchedules = refreshPromptSchedules;
         window.openPromptSchedulerModal = openPromptSchedulerModal;
         window.closePromptSchedulerModal = closePromptSchedulerModal;
