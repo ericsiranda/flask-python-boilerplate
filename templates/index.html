@@ -186,6 +186,34 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+
+        /* === STICKY HEADER UNTUK RESUME POSTING === */
+        .posting-sticky-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: #1f2937;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(8px);
+        }
+        .posting-sticky-thead {
+            position: sticky;
+            top: 60px;
+            z-index: 15;
+        }
+        .posting-scroll-area {
+            max-height: calc(100vh - 240px);
+            overflow-y: auto;
+            overflow-x: auto;
+        }
+        @media (max-width: 640px) {
+            .posting-scroll-area {
+                max-height: calc(100vh - 260px);
+            }
+            .posting-sticky-thead {
+                top: 100px;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen font-sans">
@@ -356,7 +384,8 @@
         <div id="tabContent-posting" class="tab-content hidden">
             <div class="max-w-[1600px] mx-auto p-3 sm:p-4">
                 <div class="bg-gray-800 rounded-2xl border border-blue-500/40 overflow-hidden">
-                    <div class="px-4 py-3 border-b border-blue-500/20 flex justify-between items-center bg-blue-500/5 flex-wrap gap-2">
+                    <!-- === STICKY HEADER === -->
+                    <div class="posting-sticky-header px-4 py-3 border-b border-blue-500/20 flex justify-between items-center bg-blue-500/5 flex-wrap gap-2">
                         <div class="flex items-center gap-2">
                             <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
@@ -364,7 +393,7 @@
                             <h2 class="font-bold text-blue-400 text-sm">📤 Resume Posting Instagram</h2>
                             <span id="postingCountBadge" class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300">0</span>
                         </div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 flex-wrap">
                             <select id="postingStatusFilter" onchange="renderPostingTable()" class="bg-gray-700 border border-gray-600 rounded-lg p-1.5 text-xs text-white outline-none">
                                 <option value="all">Semua Status</option>
                                 <option value="pending">⏳ Pending</option>
@@ -377,9 +406,11 @@
                             <button onclick="triggerCronManual()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg">⚡ Test Cron</button>
                         </div>
                     </div>
-                    <div class="overflow-x-auto" style="max-height: calc(100vh - 220px);">
+
+                    <!-- === SCROLL AREA (tabel) === -->
+                    <div class="posting-scroll-area">
                         <table class="resume-table">
-                            <thead>
+                            <thead class="posting-sticky-thead">
                                 <tr>
                                     <th style="width: 40px;">#</th>
                                     <th style="width: 130px;">Waktu</th>
@@ -429,7 +460,7 @@
 
         <!-- ==================== TAB: BUAT JADWAL POSTING ==================== -->
         <div id="tabContent-buat_jadwal" class="tab-content hidden">
-            <div class="max-w-[900px] mx-auto p-3 sm:p-4">
+            <div class="max-w-[1600px] mx-auto p-3 sm:p-4">
                 <div class="bg-gray-800 rounded-2xl border border-blue-500/40 overflow-hidden">
                     <div class="px-4 py-4 border-b border-blue-500/20 flex justify-between items-center bg-blue-500/5 flex-wrap gap-2">
                         <div class="flex items-center gap-2">
