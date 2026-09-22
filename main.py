@@ -277,10 +277,6 @@ def post_to_instagram(media_url, caption, media_type, ig_user_id, access_token, 
 
 # ==================== ANTI-DUPLIKAT: CEK MEDIA SUDAH PERNAH DIPOSTING ====================
 def media_already_posted(media_url, within_hours=24):
-    """
-    Cek apakah media_url yang sama sudah pernah diposting dalam X jam terakhir.
-    Return: dict info posting lama, atau None kalau belum pernah.
-    """
     try:
         conn = get_db()
         if not conn:
@@ -304,7 +300,6 @@ def media_already_posted(media_url, within_hours=24):
 
 def record_posting_history(schedule_id, media_url, media_name, platform, account,
                             caption, media_id, container_id, source='cron'):
-    """Catat posting yang berhasil ke tabel posting_history."""
     try:
         conn = get_db()
         if not conn:
@@ -326,10 +321,6 @@ def record_posting_history(schedule_id, media_url, media_name, platform, account
 
 # ==================== HITUNG NEXT RUN ====================
 def calculate_next_run(sched, from_time=None):
-    """
-    Hitung kapan prompt schedule berikutnya harus jalan.
-    Return: datetime (WIB naive) atau None kalau 'once' dan sudah selesai.
-    """
     now = from_time or datetime.now(WIB).replace(tzinfo=None)
     repeat_type = (sched.get('repeat_type') or 'once').lower()
 
@@ -383,13 +374,78 @@ def calculate_next_run(sched, from_time=None):
     return None
 
 
+# ==================== AGNES TEXT-TO-IMAGE ====================
+def generate_image_agnes(prompt, agnes_api_key):
+    """
+    Generate gambar dari text prompt via Agnes AI.
+    Return: dict { success, image_url, pathname, filename } atau { success: False, error }
+    """
+    try:
+        url = "https://apihub.agnes-ai.com/v1/images/generations"
+        payload = {
+            "model": "agnes-image-2.1-flash",
+            "prompt": prompt,
+            "size": "1024x1024",
+            "extra_body": {"response_format": "url"}
+        }
+        headers = {"Authorization": f"Bearer {agnes_api_key}", "Content-Type": "application/json"}
+
+        res_data = None
+        last_err = None
+        for attempt in range(3):
+            try:
+                print(f"[Text2Img] Submit attempt {attempt+1}/3...")
+                res = req_lib.post(url, headers=headers, json=payload, timeout=(30, 180))
+                res_data = res.json()
+                break
+            except req_lib.exceptions.ReadTimeout as e:
+                last_err = f"Timeout attempt {attempt+1}: {e}"
+                print(f"[Text2Img] ⚠️ {last_err}")
+                if attempt < 2:
+                    time.sleep(5 + attempt * 5)
+            except Exception as e:
+                last_err = str(e)
+                print(f"[Text2Img] ⚠️ {last_err}")
+                break
+
+        if not res_data:
+            return {'success': False, 'error': f'Gagal submit ke Agnes: {last_err}'}
+
+        if res_data.get('error'):
+            return {'success': False, 'error': f"Agnes error: {res_data['error']}"}
+
+        image_result_url = None
+        if res_data.get('data') and len(res_data['data']) > 0:
+            image_result_url = res_data['data'][0].get('url')
+        if not image_result_url:
+            return {'success': False, 'error': f'URL gambar tidak ditemukan: {res_data}'}
+
+        # Download & upload ke Blob
+        img_dl = req_lib.get(image_result_url, timeout=(30, 180))
+        if img_dl.status_code != 200:
+            return {'success': False, 'error': f'Gagal download gambar: HTTP {img_dl.status_code}'}
+
+        filename = f"ai_edit_image_{int(time.time())}.png"
+        blob_result = put(filename, img_dl.content, access='public', multipart=True)
+
+        return {
+            'success': True,
+            'image_url': blob_result.url,
+            'pathname': blob_result.pathname,
+            'filename': filename
+        }
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return {'success': False, 'error': str(e)}
+
+
 # ==================== CORE EKSEKUSI PROMPT SCHEDULE ====================
 def execute_prompt_schedule(sched):
     """
-    1. Kirim prompt ke Agnes AI (dengan retry + timeout lebih panjang)
-    2. Tunggu sampai selesai
-    3. Simpan hasil ke Vercel Blob (Video AI)
-    4. Kalau auto_post: buat entry baru di tabel schedules untuk posting IG
+    Mendukung 3 mode:
+    - text          : Text-to-Video via Agnes
+    - text_to_image : Text-to-Image via Agnes
+    - image         : Image-to-Video via Agnes
     """
     result = {
         'prompt_schedule_id': sched['id'],
@@ -408,7 +464,67 @@ def execute_prompt_schedule(sched):
         source_type = (sched.get('source_type') or 'text').lower()
         source_image_url = sched.get('source_image_url') or ''
 
-        # === STEP 1: SUBMIT KE AGNES (DENGAN RETRY) ===
+        # === BRANCH: TEXT-TO-IMAGE ===
+        if source_type == 'text_to_image':
+            result['step'] = 'generate_image'
+            print(f"[PromptSched] Mode TEXT-TO-IMAGE untuk id={sched['id']}")
+            img_result = generate_image_agnes(prompt, agnes_api_key)
+
+            if not img_result['success']:
+                result['error'] = img_result.get('error', 'Gagal generate gambar')
+                return result
+
+            result['image_url'] = img_result['image_url']
+            result['pathname'] = img_result['pathname']
+            result['success'] = True
+
+            # === AUTO-POST KE SCHEDULES (IG) - sebagai IMAGE ===
+            if sched.get('auto_post'):
+                result['step'] = 'schedule_ig'
+                try:
+                    conn = get_db()
+                    if conn:
+                        delay = int(sched.get('post_delay_min') or 5)
+                        post_time = datetime.now(WIB).replace(tzinfo=None) + timedelta(minutes=delay)
+                        post_time_str = post_time.strftime('%Y-%m-%dT%H:%M')
+
+                        images_json = json.dumps([{
+                            'url': img_result['image_url'],
+                            'name': img_result['filename'],
+                            'is_primary': True
+                        }])
+
+                        cur = conn.cursor()
+                        cur.execute("""
+                            INSERT INTO schedules
+                            (session_id, video_name, video_url, videos_json, images_json,
+                             time, platform, account, caption, status)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending') RETURNING id
+                        """, (
+                            f"promptsched_{sched['id']}_{int(time.time())}",
+                            img_result['filename'],
+                            img_result['image_url'],
+                            json.dumps([]),
+                            images_json,
+                            post_time_str,
+                            sched.get('platform') or '',
+                            sched.get('account') or '',
+                            sched.get('caption') or ''
+                        ))
+                        new_sched_id = cur.fetchone()[0]
+                        cur.execute("UPDATE prompt_schedules SET posted_schedule_id = %s WHERE id = %s",
+                                    (new_sched_id, sched['id']))
+                        conn.commit(); cur.close(); conn.close()
+
+                        result['posted_schedule_id'] = new_sched_id
+                        result['post_at'] = post_time_str
+                except Exception as e:
+                    print(f"[PromptSched] Auto-post text2img error: {e}")
+                    result['auto_post_error'] = str(e)
+
+            return result
+
+        # === STEP 1 (VIDEO): SUBMIT KE AGNES (DENGAN RETRY) ===
         result['step'] = 'submit_agnes'
         submit_url = "https://apihub.agnes-ai.com/v1/videos"
         headers = {"Authorization": f"Bearer {agnes_api_key}", "Content-Type": "application/json"}
@@ -1617,7 +1733,6 @@ def delete_schedule():
 # ==================== POSTING HISTORY ====================
 @app.route('/api/posting-history', methods=['GET'])
 def get_posting_history():
-    """Ambil history posting untuk cek duplikat & audit."""
     try:
         limit = int(request.args.get('limit', 100))
         conn = get_db()

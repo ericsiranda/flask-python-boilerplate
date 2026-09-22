@@ -535,7 +535,7 @@
                             </svg>
                             <div>
                                 <h2 class="font-bold text-amber-400 text-base">🤖 AI Prompt Scheduler</h2>
-                                <p class="text-xs text-gray-400">Otomatis generate video AI & posting ke Instagram</p>
+                                <p class="text-xs text-gray-400">Otomatis generate video/gambar AI & posting ke Instagram</p>
                             </div>
                             <span id="promptSchedCountBadge" class="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 ml-2">0</span>
                         </div>
@@ -555,7 +555,7 @@
                             <span class="text-amber-400">→</span>
                             <span class="bg-gray-700/50 px-3 py-1.5 rounded-lg">🤖 Prompt ke Agnes AI</span>
                             <span class="text-amber-400">→</span>
-                            <span class="bg-gray-700/50 px-3 py-1.5 rounded-lg">🎬 Video AI jadi</span>
+                            <span class="bg-gray-700/50 px-3 py-1.5 rounded-lg">🎬 Video / 🎨 Gambar AI jadi</span>
                             <span class="text-amber-400">→</span>
                             <span class="bg-gray-700/50 px-3 py-1.5 rounded-lg">📤 Auto-post ke Instagram</span>
                         </div>
@@ -595,6 +595,7 @@
                             <label class="block text-xs text-gray-400 mb-1">Tipe Sumber</label>
                             <select id="psSourceType" onchange="togglePsSourceImage()" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none">
                                 <option value="text">📝 Text-to-Video</option>
+                                <option value="text_to_image">🎨 Text-to-Image</option>
                                 <option value="image">🖼️ Image-to-Video</option>
                             </select>
                         </div>
@@ -657,7 +658,7 @@
                     <hr class="border-gray-700"/>
                     <div class="flex items-center gap-2">
                         <input type="checkbox" id="psAutoPost" checked onchange="togglePsAutoPost()" class="checkbox-custom"/>
-                        <label for="psAutoPost" class="text-xs text-gray-300 font-medium cursor-pointer">Auto-post ke Instagram setelah video jadi</label>
+                        <label for="psAutoPost" class="text-xs text-gray-300 font-medium cursor-pointer">Auto-post ke Instagram setelah media jadi</label>
                     </div>
 
                     <div id="psAutoPostFields" class="space-y-3">
@@ -672,7 +673,7 @@
                             <textarea id="psCaption" rows="2" placeholder="Caption untuk posting IG..." class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none resize-none"></textarea>
                         </div>
                         <div>
-                            <label class="block text-xs text-gray-400 mb-1">Delay Posting (menit setelah video jadi)</label>
+                            <label class="block text-xs text-gray-400 mb-1">Delay Posting (menit setelah media jadi)</label>
                             <input type="number" id="psPostDelay" value="5" min="0" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white outline-none"/>
                         </div>
                     </div>
@@ -2422,13 +2423,22 @@
                         try {
                             const lr = JSON.parse(item.last_result);
                             lastResultOk = lr.success === true;
-                            lastResultMsg = lr.error || (lr.video_url ? 'Video AI berhasil dibuat' : '');
+                            if (lr.error) lastResultMsg = lr.error;
+                            else if (lr.video_url) lastResultMsg = 'Video AI berhasil dibuat';
+                            else if (lr.image_url) lastResultMsg = 'Gambar AI berhasil dibuat';
+                            else lastResultMsg = '';
                         } catch(e) { lastResultMsg = item.last_result.substring(0, 100); }
                     }
 
                     const activeBadge = item.is_active 
                         ? '<span class="text-xs px-2 py-0.5 rounded border bg-green-500/20 text-green-400 border-green-500/30">✅ Aktif</span>'
                         : '<span class="text-xs px-2 py-0.5 rounded border bg-gray-500/20 text-gray-400 border-gray-500/30">⏸️ Non-aktif</span>';
+
+                    const sourceTypeBadge = item.source_type === 'text_to_image'
+                        ? '<span class="text-xs px-2 py-0.5 rounded border bg-pink-500/20 text-pink-400 border-pink-500/30">🎨 Text-to-Image</span>'
+                        : item.source_type === 'image'
+                        ? '<span class="text-xs px-2 py-0.5 rounded border bg-purple-500/20 text-purple-400 border-purple-500/30">🖼️ Image-to-Video</span>'
+                        : '<span class="text-xs px-2 py-0.5 rounded border bg-blue-500/20 text-blue-400 border-blue-500/30">📝 Text-to-Video</span>';
 
                     const autoPostBadge = item.auto_post
                         ? `<span class="text-xs px-2 py-0.5 rounded border bg-blue-500/20 text-blue-400 border-blue-500/30">📤 Auto-post</span>`
@@ -2441,6 +2451,7 @@
                                     <div class="flex items-center gap-2 flex-wrap mb-1">
                                         <p class="text-sm font-bold text-amber-300">${item.title || 'Untitled Scheduler'}</p>
                                         ${activeBadge}
+                                        ${sourceTypeBadge}
                                         ${autoPostBadge}
                                     </div>
                                     <p class="text-xs text-gray-300 mb-1.5 line-clamp-2" title="${item.prompt}">📝 ${item.prompt}</p>
@@ -2636,7 +2647,7 @@
         }
 
         async function runPromptScheduleNow(id) {
-            if (!confirm('Jalankan sekarang? Proses generate video AI bisa makan 1-3 menit.')) return;
+            if (!confirm('Jalankan sekarang? Proses generate AI bisa makan 1-3 menit.')) return;
             const container = document.getElementById('promptSchedulerList');
             const old = container.innerHTML;
             container.innerHTML = '<div class="text-center py-6"><div class="spinner mx-auto mb-3"></div><p class="text-xs text-amber-400">Menjalankan scheduler... Mohon tunggu 1-3 menit...</p></div>';
@@ -2649,7 +2660,11 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    alert('✅ Berhasil! Video AI sudah dibuat.' + (data.posted_schedule_id ? `\nAuto-post dijadwalkan (schedule ID: ${data.posted_schedule_id}).` : ''));
+                    let msg = '✅ Berhasil! ';
+                    if (data.video_url) msg += 'Video AI sudah dibuat.';
+                    else if (data.image_url) msg += 'Gambar AI sudah dibuat.';
+                    if (data.posted_schedule_id) msg += `\nAuto-post dijadwalkan (schedule ID: ${data.posted_schedule_id}).`;
+                    alert(msg);
                 } else {
                     alert('❌ Gagal: ' + (data.error || 'Unknown error'));
                 }
